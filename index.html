@@ -4,13 +4,18 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>TMI Marcas — Acceso</title>
+  <meta name="theme-color" content="#1e88e5"/>
+  <link rel="icon" href="logo.png" type="image/png"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
     :root{--bg:#f6f7f9;--card:#fff;--text:#111827;--muted:#6b7280;--primary:#1e88e5;}
     *{box-sizing:border-box}
     html,body{height:100%}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;padding:16px}
-    .wrap{width:min(92vw,560px);margin:24px auto}
+    .app{width:min(92vw,640px);margin:24px auto}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .brand img{width:40px;height:40px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);background:#fff}
+    .brand .title{font-size:18px;font-weight:700;color:var(--text)}
     .card{background:var(--card);border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:16px}
     h1,h2{margin:0 0 14px;color:var(--text)}
     label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
@@ -22,11 +27,17 @@
     .muted{color:var(--muted);font-size:13px}
     .big{font-size:20px;font-weight:700}
     #msg,#msg2{margin-top:8px;color:#b42318;min-height:18px}
-    @media (max-width:380px){ body{padding:8px} .wrap{width:96vw} }
+    @media (max-width:380px){ body{padding:8px} .app{width:96vw} }
   </style>
 </head>
 <body>
-<div class="wrap">
+<div class="app">
+
+  <!-- Cabecera con logo -->
+  <div class="brand">
+    <img src="logo.png" alt="Logo TMI" onerror="this.style.display='none'">
+    <div class="title">TMI · Marcas</div>
+  </div>
 
   <!-- Login -->
   <div class="card" id="authCard">
@@ -42,7 +53,7 @@
     <div id="msg" class="muted"></div>
   </div>
 
-  <!-- Reset password (cuando se abre el link del email) -->
+  <!-- Reset password (cuando llega desde el email) -->
   <div class="card" id="resetCard" style="display:none;">
     <h2>Define una nueva contraseña</h2>
     <label for="newPassword">Nueva contraseña</label>
@@ -54,7 +65,7 @@
     <div id="msg2" class="muted"></div>
   </div>
 
-  <!-- Info del empleado al entrar -->
+  <!-- Info del empleado -->
   <div class="card" id="mainCard" style="display:none;">
     <div class="row">
       <div>
@@ -81,23 +92,31 @@ const resetCard = document.getElementById('resetCard');
 const msg  = document.getElementById('msg');
 const msg2 = document.getElementById('msg2');
 
+/* Flag para permanecer en modo recuperación */
+let isRecovery = false;
+
 function show(view){
   authCard.style.display  = (view==='auth')  ? 'block':'none';
   mainCard.style.display  = (view==='main')  ? 'block':'none';
   resetCard.style.display = (view==='reset') ? 'block':'none';
 }
 
-/* Detecta si venimos del enlace de recuperación */
-(function checkRecovery(){
+/* Detectar si venimos del enlace de recuperación */
+function detectRecoveryFromUrl(){
   const hash = window.location.hash || '';
   const qs = new URLSearchParams(window.location.search);
   if (hash.includes('type=recovery') || qs.get('type') === 'recovery') {
+    isRecovery = true;
     show('reset');
   }
-})();
+}
+window.addEventListener('hashchange', detectRecoveryFromUrl);
+detectRecoveryFromUrl();
 
-/* Render principal */
+/* Render principal (evita salir del reset) */
 async function render() {
+  if (isRecovery) { show('reset'); return; }
+
   const { data:{ user } } = await supabase.auth.getUser();
   if (!user) { show('auth'); return; }
 
@@ -127,18 +146,18 @@ document.getElementById('btnLogin').onclick = async ()=>{
   render();
 };
 
-/* Forgot password: envía email con enlace */
+/* Forgot password: envía email y vuelve a este sitio */
 document.getElementById('btnForgot').onclick = async ()=>{
   msg.textContent = '';
   const email = document.getElementById('email').value.trim();
   if (!email) { msg.textContent = 'Escribe tu correo y vuelve a pulsar.'; return; }
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin  // https://nominatmi.netlify.app
+    redirectTo: window.location.origin   // https://nominatmi.netlify.app
   });
   msg.textContent = error ? error.message : 'Te envié un correo para restablecer la contraseña.';
 };
 
-/* Guardar nueva contraseña al venir del correo */
+/* Guardar nueva contraseña */
 document.getElementById('btnSetNew').onclick = async ()=>{
   msg2.textContent = '';
   const np = document.getElementById('newPassword').value;
@@ -146,22 +165,31 @@ document.getElementById('btnSetNew').onclick = async ()=>{
   const { error } = await supabase.auth.updateUser({ password: np });
   if (error) { msg2.textContent = error.message; return; }
   msg2.textContent = 'Contraseña actualizada. Ahora puedes iniciar sesión.';
-  // limpiar token de la URL y volver al login
   history.replaceState(null, '', window.location.pathname);
+  isRecovery = false;
+  await supabase.auth.signOut();
   show('auth');
 };
 
+/* Cancelar recuperación */
 document.getElementById('btnCancelReset').onclick = ()=>{
   history.replaceState(null, '', window.location.pathname);
+  isRecovery = false;
   show('auth');
 };
 
-/* Cerrar sesión */
-document.getElementById('btnLogout').onclick = async ()=>{
-  await supabase.auth.signOut(); show('auth');
-};
+/* Mantener 'reset' si llega evento de recuperación */
+supabase.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    isRecovery = true;
+    show('reset');
+    return;
+  }
+  if (isRecovery) { show('reset'); return; }
+  render();
+});
 
-supabase.auth.onAuthStateChange(()=>render());
+/* Primera carga */
 render();
 </script>
 </body>
