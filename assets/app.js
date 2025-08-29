@@ -15,76 +15,62 @@ const views = {
   '/comprobantes': 'payslipsCard',
   '/reset': 'resetCard'
 };
-
-// Ocultar TODAS las tarjetas, incluido login
 const ALL_CARDS = ['authCard','resetCard','homeCard','punchCard','projectsCard','leaveCard','payslipsCard'];
 function showOnly(id){
   ALL_CARDS.forEach(v => document.getElementById(v).style.display = 'none');
   document.getElementById(id).style.display = 'block';
 }
-
-// Navegación SPA
-function navigate(path){
-  if (!views[path]) path = '/app';
-  history.pushState({}, '', path);
-  route();
-}
+function navigate(path){ if(!views[path]) path='/app'; history.pushState({},'',path); route(); }
 addEventListener('popstate', route);
-document.addEventListener('click', (e)=>{
-  const nav = e.target?.closest('[data-nav]');
-  if (nav){ e.preventDefault(); navigate(nav.getAttribute('data-nav')); }
-});
+document.addEventListener('click',(e)=>{ const n=e.target?.closest('[data-nav]'); if(n){ e.preventDefault(); navigate(n.getAttribute('data-nav')); }});
 
-// Estado global
+// === Estado global ===
 let IS_RECOVERY = false;
 let CURRENT_EMP_UID = null;
+let CURRENT_EMP_CODE = null;
 
-// Helpers
-const $ = (id) => document.getElementById(id);
+// === Helpers ===
+const $ = (id)=>document.getElementById(id);
 
-// Detectar modo recuperación (/reset o type=recovery)
+// === Detección reset ===
 function detectRecovery(){
-  const pathIsReset = location.pathname === '/reset';
-  const hash = location.hash || '';
   const qs = new URLSearchParams(location.search);
-  if (pathIsReset || hash.includes('type=recovery') || qs.get('type') === 'recovery') {
-    IS_RECOVERY = true;
-    showOnly('resetCard');
+  if (location.pathname==='/reset' || (location.hash||'').includes('type=recovery') || qs.get('type')==='recovery'){
+    IS_RECOVERY = true; showOnly('resetCard');
   }
 }
 addEventListener('hashchange', detectRecovery);
 detectRecovery();
 
-// Router protegido: exige sesión para mostrar vistas
+// === Router protegido ===
 async function route(){
-  if (IS_RECOVERY) { showOnly('resetCard'); return; }
+  if (IS_RECOVERY){ showOnly('resetCard'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
-  if (!user) { showOnly('authCard'); return; }
+  if (!user){ showOnly('authCard'); return; }
   const id = views[location.pathname] || 'homeCard';
   showOnly(id);
 }
 
-// Render principal (carga empleado y menú)
-async function render() {
-  if (IS_RECOVERY) { showOnly('resetCard'); return; }
-
+// === Render (carga datos empleado) ===
+async function render(){
+  if (IS_RECOVERY){ showOnly('resetCard'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
-  if (!user) { showOnly('authCard'); return; }
+  if (!user){ showOnly('authCard'); return; }
 
   const { data: emp, error } = await supabase
     .from('employees')
-    .select('employee_uid, full_name, login_enabled, status')
+    .select('employee_uid, employee_code, full_name, login_enabled, status')
     .eq('user_id', user.id)
     .maybeSingle();
 
-  if (error || !emp) {
+  if (error || !emp){
     $('msg') && ($('msg').textContent = error ? error.message : 'Sin vínculo en employees.user_id o login deshabilitado.');
-    await supabase.auth.signOut();
-    showOnly('authCard'); 
-    return;
+    await supabase.auth.signOut(); showOnly('authCard'); return;
   }
 
-  CURRENT_EMP_UID = emp.employee_uid;
+  CURRENT_EMP_UID  = emp.employee_uid;
+  CURRENT_EMP_CODE = emp.employee_code || null;
+
   $('empName')  && ($('empName').textContent  = emp.full_name || '(sin nombre)');
   $('empUid')   && ($('empUid').textContent   = 'employee_uid: ' + emp.employee_uid);
   $('empName2') && ($('empName2').textContent = emp.full_name || '(sin nombre)');
@@ -94,114 +80,98 @@ async function render() {
   navigate('/app');
 }
 
-// === Auth: login / reset / logout ===
+// === Auth ===
 $('btnLogin').onclick = async ()=>{
   $('msg').textContent = '';
   const email = $('email').value.trim();
   const password = $('password').value;
   if (!email || !password){ $('msg').textContent = 'Escribe correo y contraseña.'; return; }
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) { $('msg').textContent = error.message; return; }
+  if (error){ $('msg').textContent = error.message; return; }
   render();
 };
-
 $('btnForgot').onclick = async ()=>{
   $('msg').textContent = '';
   const email = $('email').value.trim();
-  if (!email) { $('msg').textContent = 'Escribe tu correo y vuelve a pulsar.'; return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: location.origin + '/reset'
-  });
+  if (!email){ $('msg').textContent = 'Escribe tu correo y vuelve a pulsar.'; return; }
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/reset' });
   $('msg').textContent = error ? error.message : 'Te envié un correo para restablecer la contraseña.';
 };
-
 $('btnSetNew').onclick = async ()=>{
   $('msg2').textContent = '';
   const np = $('newPassword').value;
-  if (!np || np.length < 6) { $('msg2').textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+  if (!np || np.length<6){ $('msg2').textContent='La contraseña debe tener al menos 6 caracteres.'; return; }
   const { error } = await supabase.auth.updateUser({ password: np });
-  if (error) { $('msg2').textContent = error.message; return; }
+  if (error){ $('msg2').textContent = error.message; return; }
   $('msg2').textContent = 'Contraseña actualizada. Ahora puedes iniciar sesión.';
-  IS_RECOVERY = false;
-  await supabase.auth.signOut();
-  history.replaceState({}, '', '/');
-  showOnly('authCard');
+  IS_RECOVERY=false; await supabase.auth.signOut(); history.replaceState({},'','/'); showOnly('authCard');
 };
+$('btnCancelReset').onclick = ()=>{ history.replaceState({},'','/'); IS_RECOVERY=false; showOnly('authCard'); };
 
-$('btnCancelReset').onclick = ()=>{
-  history.replaceState({}, '', '/'); 
-  IS_RECOVERY=false; 
-  showOnly('authCard');
-};
-
-// Logout sólido (borra sesión y vuelve al login)
+// Logout
 async function logout(){
-  try {
-    await supabase.auth.signOut();
-  } finally {
-    IS_RECOVERY = false;
-    CURRENT_EMP_UID = null;
-    history.replaceState({}, '', '/');
-    showOnly('authCard');
-  }
+  try { await supabase.auth.signOut(); }
+  finally { IS_RECOVERY=false; CURRENT_EMP_UID=null; CURRENT_EMP_CODE=null; history.replaceState({},'','/'); showOnly('authCard'); }
 }
 document.getElementById('btnLogout').onclick  = logout;
 document.getElementById('btnLogout2').onclick = logout;
 
-// Reaccionar a cambios de sesión
-supabase.auth.onAuthStateChange((event) => {
-  if (event === 'PASSWORD_RECOVERY') { IS_RECOVERY = true; showOnly('resetCard'); return; }
-  if (IS_RECOVERY) { showOnly('resetCard'); return; }
-  render();
-});
+supabase.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY'){ IS_RECOVERY=true; showOnly('resetCard'); return; } if(IS_RECOVERY){ showOnly('resetCard'); return; } render(); });
 
 // === Marcas IN/OUT con GPS ===
-function getGeo(timeoutMs = 10000) {
-  return new Promise((resolve) => {
-    if (!('geolocation' in navigator)) return resolve({ lat:null, lon:null });
+function getGeo(timeoutMs=10000){
+  return new Promise((resolve)=>{
+    if(!('geolocation' in navigator)) return resolve({lat:null,lon:null});
     let done=false; const finish=(a,b)=>{ if(!done){ done=true; resolve({lat:a,lon:b}); } };
-    const t=setTimeout(()=>finish(null,null), timeoutMs);
+    const t=setTimeout(()=>finish(null,null),timeoutMs);
     navigator.geolocation.getCurrentPosition(
-      p=>{ clearTimeout(t); finish(p.coords.latitude, p.coords.longitude); },
+      p=>{ clearTimeout(t); finish(p.coords.latitude,p.coords.longitude); },
       _=>{ clearTimeout(t); finish(null,null); },
       { enableHighAccuracy:true, maximumAge:0, timeout:timeoutMs }
     );
   });
 }
 
-async function punch(type) {
-  const info = $('punchMsg');
-  info.textContent = '';
-  if (!CURRENT_EMP_UID) { info.textContent = 'No hay empleado cargado.'; return; }
+async function punch(type){
+  const info = $('punchMsg'); info.textContent='';
+  if (!CURRENT_EMP_UID){ info.textContent='No hay empleado cargado.'; return; }
+  if (!CURRENT_EMP_CODE){ info.textContent='Tu ficha no tiene employee_code. Contacta al administrador.'; return; }
+
   const { lat, lon } = await getGeo();
-  const { data, error } = await supabase
-    .from('time_punches')
-    .insert({ employee_uid: CURRENT_EMP_UID, punch_type: type, latitude: lat, longitude: lon })
-    .select().maybeSingle();
-  if (error) { info.textContent = 'Error al marcar: ' + error.message; return; }
+  const payload = {
+    employee_uid:  CURRENT_EMP_UID,
+    employee_code: CURRENT_EMP_CODE,
+    punch_type:    type,
+    latitude:      lat,
+    longitude:     lon
+  };
+
+  const { data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle();
+  if (error){ info.textContent = 'Error al marcar: ' + error.message; return; }
+
   const at = new Date(data.punch_at).toLocaleString();
   info.textContent = `Marca ${type} registrada a las ${at}`;
   await loadRecentPunches();
 }
 
-async function loadRecentPunches() {
+async function loadRecentPunches(){
   const box = $('recentPunches');
-  if (!CURRENT_EMP_UID) { box.textContent = '—'; return; }
+  if (!CURRENT_EMP_UID){ box.textContent='—'; return; }
   const { data, error } = await supabase
     .from('time_punches')
     .select('punch_at, punch_type, latitude, longitude')
     .eq('employee_uid', CURRENT_EMP_UID)
     .order('punch_at', { ascending:false })
     .limit(5);
-  if (error) { box.textContent = 'Error cargando historial'; return; }
-  if (!data || data.length===0) { box.textContent = 'Sin marcas aún.'; return; }
+  if (error){ box.textContent='Error cargando historial'; return; }
+  if (!data || data.length===0){ box.textContent='Sin marcas aún.'; return; }
   box.innerHTML = data.map(r=>{
     const when = new Date(r.punch_at).toLocaleString();
     const gps = (r.latitude && r.longitude) ? ` (${Number(r.latitude).toFixed(5)}, ${Number(r.longitude).toFixed(5)})` : '';
     return `<div><strong>${r.punch_type}</strong> – ${when}${gps}</div>`;
   }).join('');
 }
-$('btnIn').onclick  = ()=>punch('IN');
+$('btnIn').onclick = ()=>punch('IN');
 $('btnOut').onclick = ()=>punch('OUT');
 
 // Iniciar
