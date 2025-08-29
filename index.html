@@ -3,29 +3,31 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <title>TMI Marcas — Acceso</title>
+  <title>Acceso · Tecnomedica Montajes Industriales S.A.</title>
   <meta name="theme-color" content="#1e88e5"/>
   <link rel="icon" href="Logo.png" type="image/png"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
     :root{
       --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
-      --logo-size:96px;             /* ← tamaño del logo en desktop */
-      --logo-size-sm:72px;          /* ← tamaño del logo en móvil */
+      --logo-max-h:72px;            /* altura máxima del logo (desktop) */
+      --logo-max-h-sm:56px;         /* altura máxima del logo (móvil)   */
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;padding:16px}
-    .app{width:min(92vw,820px);margin:24px auto}
+    .app{width:min(92vw,860px);margin:24px auto}
     .card{background:var(--card);border-radius:24px;padding:24px 28px;box-shadow:0 16px 48px rgba(0,0,0,.10);margin-bottom:18px}
-    /* Marca dentro de la tarjeta (centrada y grande) */
-    .brand-stack{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px}
-    .brand-stack img{
-      width:var(--logo-size);height:var(--logo-size);object-fit:contain;border-radius:22px;
-      box-shadow:0 8px 28px rgba(0,0,0,.15);background:#fff
+
+    /* Marca en fila: logo no cuadrado, mantiene proporción (max-height) */
+    .brand-row{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+    .brand-row img{
+      max-height:var(--logo-max-h); width:auto; height:auto; object-fit:contain;
+      border-radius:12px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.12);
     }
-    .brand-stack .title{font-size:28px;font-weight:800;color:var(--text);letter-spacing:.2px}
-    h1,h2{margin:0 0 14px;color:var(--text);font-size:34px}
+    .brand-row .title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px}
+
+    h2{margin:8px 0 14px;color:var(--text);font-size:30px}
     label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
     input{width:100%;padding:14px 16px;border-radius:14px;border:1px solid #d8dee8;background:#fff;font-size:16px}
     .row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
@@ -35,11 +37,12 @@
     .muted{color:var(--muted);font-size:13px}
     .big{font-size:22px;font-weight:800}
     #msg,#msg2{margin-top:8px;color:#b42318;min-height:18px}
+
     @media (max-width:540px){
       .app{width:96vw}
-      .brand-stack img{width:var(--logo-size-sm);height:var(--logo-size-sm);border-radius:18px}
-      .brand-stack .title{font-size:22px}
-      h1,h2{font-size:28px}
+      .brand-row img{max-height:var(--logo-max-h-sm)}
+      .brand-row .title{font-size:20px}
+      h2{font-size:24px}
     }
   </style>
 </head>
@@ -48,10 +51,11 @@
 
   <!-- LOGIN -->
   <div class="card" id="authCard">
-    <div class="brand-stack">
-      <img src="Logo.png" alt="Logo TMI">
-      <div class="title">TMI · Marcas</div>
+    <div class="brand-row">
+      <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
+      <div class="title">Tecnomedica Montajes Industriales S.A.</div>
     </div>
+
     <h2>Iniciar sesión</h2>
     <label for="email">Correo</label>
     <input id="email" type="email" placeholder="correo@dominio.com" autocomplete="username" inputmode="email">
@@ -66,10 +70,11 @@
 
   <!-- RESET PASSWORD -->
   <div class="card" id="resetCard" style="display:none;">
-    <div class="brand-stack">
-      <img src="Logo.png" alt="Logo TMI">
-      <div class="title">TMI · Marcas</div>
+    <div class="brand-row">
+      <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
+      <div class="title">Tecnomedica Montajes Industriales S.A.</div>
     </div>
+
     <h2>Define una nueva contraseña</h2>
     <label for="newPassword">Nueva contraseña</label>
     <input id="newPassword" type="password" placeholder="••••••••" autocomplete="new-password">
@@ -82,10 +87,11 @@
 
   <!-- HOME DEL EMPLEADO -->
   <div class="card" id="mainCard" style="display:none;">
-    <div class="brand-stack" style="margin-bottom:6px">
-      <img src="Logo.png" alt="Logo TMI">
-      <div class="title">TMI · Marcas</div>
+    <div class="brand-row" style="margin-bottom:6px">
+      <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
+      <div class="title">Tecnomedica Montajes Industriales S.A.</div>
     </div>
+
     <div class="row">
       <div>
         <div class="muted">Empleado</div>
@@ -99,7 +105,7 @@
 </div>
 
 <script>
-/* ====== SUPABASE ====== */
+/* ====== SUPABASE (tus valores actuales) ====== */
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -117,7 +123,7 @@ function show(view){
   resetCard.style.display = (view==='reset') ? 'block':'none';
 }
 
-/* Detectar recuperación desde URL */
+/* Detecta recuperación desde URL */
 function detectRecoveryFromUrl(){
   const hash = window.location.hash || '';
   const qs = new URLSearchParams(window.location.search);
@@ -128,7 +134,7 @@ function detectRecoveryFromUrl(){
 window.addEventListener('hashchange', detectRecoveryFromUrl);
 detectRecoveryFromUrl();
 
-/* Render (no salir del reset hasta guardar) */
+/* Render (sin salir del reset hasta guardar) */
 async function render() {
   if (isRecovery) { show('reset'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
