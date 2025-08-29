@@ -5,68 +5,87 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>TMI Marcas — Acceso</title>
   <meta name="theme-color" content="#1e88e5"/>
-  <link rel="icon" href="logo.png" type="image/png"/>
+  <link rel="icon" href="Logo.png" type="image/png"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
-    :root{--bg:#f6f7f9;--card:#fff;--text:#111827;--muted:#6b7280;--primary:#1e88e5;}
+    :root{
+      --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
+      --logo-size:96px;             /* ← tamaño del logo en desktop */
+      --logo-size-sm:72px;          /* ← tamaño del logo en móvil */
+    }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);margin:0;padding:16px}
-    .app{width:min(92vw,640px);margin:24px auto}
-    .brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-    .brand img{width:40px;height:40px;object-fit:contain;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);background:#fff}
-    .brand .title{font-size:18px;font-weight:700;color:var(--text)}
-    .card{background:var(--card);border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:16px}
-    h1,h2{margin:0 0 14px;color:var(--text)}
+    .app{width:min(92vw,820px);margin:24px auto}
+    .card{background:var(--card);border-radius:24px;padding:24px 28px;box-shadow:0 16px 48px rgba(0,0,0,.10);margin-bottom:18px}
+    /* Marca dentro de la tarjeta (centrada y grande) */
+    .brand-stack{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px}
+    .brand-stack img{
+      width:var(--logo-size);height:var(--logo-size);object-fit:contain;border-radius:22px;
+      box-shadow:0 8px 28px rgba(0,0,0,.15);background:#fff
+    }
+    .brand-stack .title{font-size:28px;font-weight:800;color:var(--text);letter-spacing:.2px}
+    h1,h2{margin:0 0 14px;color:var(--text);font-size:34px}
     label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
-    input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #d8dee8;background:#fff;font-size:16px}
+    input{width:100%;padding:14px 16px;border-radius:14px;border:1px solid #d8dee8;background:#fff;font-size:16px}
     .row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    .btn{padding:12px 16px;border:0;border-radius:12px;background:var(--primary);color:#fff;font-weight:600;cursor:pointer}
+    .btn{padding:13px 18px;border:0;border-radius:14px;background:var(--primary);color:#fff;font-weight:700;cursor:pointer}
     .btn.light{background:#e9eef5;color:#333}
     .link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
     .muted{color:var(--muted);font-size:13px}
-    .big{font-size:20px;font-weight:700}
+    .big{font-size:22px;font-weight:800}
     #msg,#msg2{margin-top:8px;color:#b42318;min-height:18px}
-    @media (max-width:380px){ body{padding:8px} .app{width:96vw} }
+    @media (max-width:540px){
+      .app{width:96vw}
+      .brand-stack img{width:var(--logo-size-sm);height:var(--logo-size-sm);border-radius:18px}
+      .brand-stack .title{font-size:22px}
+      h1,h2{font-size:28px}
+    }
   </style>
 </head>
 <body>
 <div class="app">
 
-  <!-- Cabecera con logo -->
-  <div class="brand">
-    <img src="logo.png" alt="Logo TMI" onerror="this.style.display='none'">
-    <div class="title">TMI · Marcas</div>
-  </div>
-
-  <!-- Login -->
+  <!-- LOGIN -->
   <div class="card" id="authCard">
+    <div class="brand-stack">
+      <img src="Logo.png" alt="Logo TMI">
+      <div class="title">TMI · Marcas</div>
+    </div>
     <h2>Iniciar sesión</h2>
     <label for="email">Correo</label>
     <input id="email" type="email" placeholder="correo@dominio.com" autocomplete="username" inputmode="email">
     <label for="password">Contraseña</label>
     <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin-top:12px">
       <button class="btn" id="btnLogin">Entrar</button>
       <button class="link" id="btnForgot">¿Olvidaste tu contraseña?</button>
     </div>
     <div id="msg" class="muted"></div>
   </div>
 
-  <!-- Reset password (cuando llega desde el email) -->
+  <!-- RESET PASSWORD -->
   <div class="card" id="resetCard" style="display:none;">
+    <div class="brand-stack">
+      <img src="Logo.png" alt="Logo TMI">
+      <div class="title">TMI · Marcas</div>
+    </div>
     <h2>Define una nueva contraseña</h2>
     <label for="newPassword">Nueva contraseña</label>
     <input id="newPassword" type="password" placeholder="••••••••" autocomplete="new-password">
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin-top:12px">
       <button class="btn" id="btnSetNew">Guardar nueva contraseña</button>
       <button class="link" id="btnCancelReset">Cancelar</button>
     </div>
     <div id="msg2" class="muted"></div>
   </div>
 
-  <!-- Info del empleado -->
+  <!-- HOME DEL EMPLEADO -->
   <div class="card" id="mainCard" style="display:none;">
+    <div class="brand-stack" style="margin-bottom:6px">
+      <img src="Logo.png" alt="Logo TMI">
+      <div class="title">TMI · Marcas</div>
+    </div>
     <div class="row">
       <div>
         <div class="muted">Empleado</div>
@@ -80,19 +99,16 @@
 </div>
 
 <script>
-/* ====== CREDENCIALES SUPABASE ====== */
+/* ====== SUPABASE ====== */
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ====== ELEMENTOS ====== */
 const authCard  = document.getElementById('authCard');
 const mainCard  = document.getElementById('mainCard');
 const resetCard = document.getElementById('resetCard');
 const msg  = document.getElementById('msg');
 const msg2 = document.getElementById('msg2');
-
-/* Flag para permanecer en modo recuperación */
 let isRecovery = false;
 
 function show(view){
@@ -101,31 +117,27 @@ function show(view){
   resetCard.style.display = (view==='reset') ? 'block':'none';
 }
 
-/* Detectar si venimos del enlace de recuperación */
+/* Detectar recuperación desde URL */
 function detectRecoveryFromUrl(){
   const hash = window.location.hash || '';
   const qs = new URLSearchParams(window.location.search);
   if (hash.includes('type=recovery') || qs.get('type') === 'recovery') {
-    isRecovery = true;
-    show('reset');
+    isRecovery = true; show('reset');
   }
 }
 window.addEventListener('hashchange', detectRecoveryFromUrl);
 detectRecoveryFromUrl();
 
-/* Render principal (evita salir del reset) */
+/* Render (no salir del reset hasta guardar) */
 async function render() {
   if (isRecovery) { show('reset'); return; }
-
   const { data:{ user } } = await supabase.auth.getUser();
   if (!user) { show('auth'); return; }
-
   const { data: emp, error } = await supabase
     .from('employees')
     .select('employee_uid, full_name, login_enabled, status')
     .eq('user_id', user.id)
     .maybeSingle();
-
   if (error || !emp) {
     msg.textContent = error ? error.message : 'Sin vínculo en employees.user_id o login deshabilitado.';
     await supabase.auth.signOut(); show('auth'); return;
@@ -146,14 +158,12 @@ document.getElementById('btnLogin').onclick = async ()=>{
   render();
 };
 
-/* Forgot password: envía email y vuelve a este sitio */
+/* Forgot password */
 document.getElementById('btnForgot').onclick = async ()=>{
   msg.textContent = '';
   const email = document.getElementById('email').value.trim();
   if (!email) { msg.textContent = 'Escribe tu correo y vuelve a pulsar.'; return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin   // https://nominatmi.netlify.app
-  });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
   msg.textContent = error ? error.message : 'Te envié un correo para restablecer la contraseña.';
 };
 
@@ -166,30 +176,21 @@ document.getElementById('btnSetNew').onclick = async ()=>{
   if (error) { msg2.textContent = error.message; return; }
   msg2.textContent = 'Contraseña actualizada. Ahora puedes iniciar sesión.';
   history.replaceState(null, '', window.location.pathname);
-  isRecovery = false;
-  await supabase.auth.signOut();
-  show('auth');
+  isRecovery = false; await supabase.auth.signOut(); show('auth');
 };
 
 /* Cancelar recuperación */
 document.getElementById('btnCancelReset').onclick = ()=>{
   history.replaceState(null, '', window.location.pathname);
-  isRecovery = false;
-  show('auth');
+  isRecovery = false; show('auth');
 };
 
-/* Mantener 'reset' si llega evento de recuperación */
+/* Mantener reset si llega el evento de recuperación */
 supabase.auth.onAuthStateChange((event) => {
-  if (event === 'PASSWORD_RECOVERY') {
-    isRecovery = true;
-    show('reset');
-    return;
-  }
+  if (event === 'PASSWORD_RECOVERY') { isRecovery = true; show('reset'); return; }
   if (isRecovery) { show('reset'); return; }
   render();
 });
-
-/* Primera carga */
 render();
 </script>
 </body>
