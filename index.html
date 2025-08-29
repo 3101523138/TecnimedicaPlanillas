@@ -10,8 +10,8 @@
   <style>
     :root{
       --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
-      --logo-max-h:100px;            /* altura máxima del logo (desktop) */
-      --logo-max-h-sm:70px;         /* altura máxima del logo (móvil)   */
+      --logo-max-h:72px;           /* altura máxima del logo (desktop) */
+      --logo-max-h-sm:56px;        /* altura máxima del logo (móvil)   */
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -19,11 +19,11 @@
     .app{width:min(92vw,860px);margin:24px auto}
     .card{background:var(--card);border-radius:24px;padding:24px 28px;box-shadow:0 16px 48px rgba(0,0,0,.10);margin-bottom:18px}
 
-    /* Marca en fila: logo no cuadrado, mantiene proporción (max-height) */
-    .brand-row{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+    /* Marca en fila: respeta proporción del logo (max-height, ancho auto) */
+    .brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
     .brand-row img{
-      max-height:var(--logo-max-h); width:auto; height:auto; object-fit:contain;
-      border-radius:12px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.12);
+      max-height:var(--logo-max-h); height:auto; width:auto; object-fit:contain;
+      border-radius:14px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.12);
     }
     .brand-row .title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px}
 
@@ -68,7 +68,7 @@
     <div id="msg" class="muted"></div>
   </div>
 
-  <!-- RESET PASSWORD -->
+  <!-- RESET PASSWORD (ruta /reset o link con type=recovery) -->
   <div class="card" id="resetCard" style="display:none;">
     <div class="brand-row">
       <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
@@ -105,11 +105,12 @@
 </div>
 
 <script>
-/* ====== SUPABASE (tus valores actuales) ====== */
+/* === SUPABASE (tus valores actuales) === */
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* === ELEMENTOS === */
 const authCard  = document.getElementById('authCard');
 const mainCard  = document.getElementById('mainCard');
 const resetCard = document.getElementById('resetCard');
@@ -123,27 +124,35 @@ function show(view){
   resetCard.style.display = (view==='reset') ? 'block':'none';
 }
 
-/* Detecta recuperación desde URL */
+/* Detectar modo recuperación:
+   - si la ruta es /reset (redirect del email)
+   - o si llega #type=recovery (hash)
+*/
 function detectRecoveryFromUrl(){
+  const pathIsReset = window.location.pathname === '/reset';
   const hash = window.location.hash || '';
   const qs = new URLSearchParams(window.location.search);
-  if (hash.includes('type=recovery') || qs.get('type') === 'recovery') {
-    isRecovery = true; show('reset');
+  if (pathIsReset || hash.includes('type=recovery') || qs.get('type') === 'recovery') {
+    isRecovery = true;
+    show('reset');
   }
 }
 window.addEventListener('hashchange', detectRecoveryFromUrl);
 detectRecoveryFromUrl();
 
-/* Render (sin salir del reset hasta guardar) */
+/* Render principal (no salir del reset hasta terminar) */
 async function render() {
   if (isRecovery) { show('reset'); return; }
+
   const { data:{ user } } = await supabase.auth.getUser();
   if (!user) { show('auth'); return; }
+
   const { data: emp, error } = await supabase
     .from('employees')
     .select('employee_uid, full_name, login_enabled, status')
     .eq('user_id', user.id)
     .maybeSingle();
+
   if (error || !emp) {
     msg.textContent = error ? error.message : 'Sin vínculo en employees.user_id o login deshabilitado.';
     await supabase.auth.signOut(); show('auth'); return;
@@ -164,12 +173,14 @@ document.getElementById('btnLogin').onclick = async ()=>{
   render();
 };
 
-/* Forgot password */
+/* Forgot password: envía email que vuelve a /reset */
 document.getElementById('btnForgot').onclick = async ()=>{
   msg.textContent = '';
   const email = document.getElementById('email').value.trim();
   if (!email) { msg.textContent = 'Escribe tu correo y vuelve a pulsar.'; return; }
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset'
+  });
   msg.textContent = error ? error.message : 'Te envié un correo para restablecer la contraseña.';
 };
 
@@ -181,22 +192,28 @@ document.getElementById('btnSetNew').onclick = async ()=>{
   const { error } = await supabase.auth.updateUser({ password: np });
   if (error) { msg2.textContent = error.message; return; }
   msg2.textContent = 'Contraseña actualizada. Ahora puedes iniciar sesión.';
-  history.replaceState(null, '', window.location.pathname);
-  isRecovery = false; await supabase.auth.signOut(); show('auth');
+  // salir de /reset y del estado recovery
+  history.replaceState(null, '', '/');
+  isRecovery = false;
+  await supabase.auth.signOut();
+  show('auth');
 };
 
 /* Cancelar recuperación */
 document.getElementById('btnCancelReset').onclick = ()=>{
-  history.replaceState(null, '', window.location.pathname);
-  isRecovery = false; show('auth');
+  history.replaceState(null, '', '/');
+  isRecovery = false;
+  show('auth');
 };
 
-/* Mantener reset si llega el evento de recuperación */
+/* Mantener 'reset' si Supabase emite PASSWORD_RECOVERY */
 supabase.auth.onAuthStateChange((event) => {
   if (event === 'PASSWORD_RECOVERY') { isRecovery = true; show('reset'); return; }
   if (isRecovery) { show('reset'); return; }
   render();
 });
+
+/* Primera carga */
 render();
 </script>
 </body>
