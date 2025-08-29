@@ -1,9 +1,12 @@
-// === CONFIG SUPABASE (tus valores) ===
+// === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// === VISTAS y Router SPA ===
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+});
+
+// === VISTAS (SPA) ===
 const views = {
   '/app': 'homeCard',
   '/marcas': 'punchCard',
@@ -12,19 +15,19 @@ const views = {
   '/comprobantes': 'payslipsCard',
   '/reset': 'resetCard'
 };
+
+// Ocultar TODAS las tarjetas, incluido login
+const ALL_CARDS = ['authCard','resetCard','homeCard','punchCard','projectsCard','leaveCard','payslipsCard'];
 function showOnly(id){
-  Object.values(views).forEach(v => document.getElementById(v).style.display = 'none');
+  ALL_CARDS.forEach(v => document.getElementById(v).style.display = 'none');
   document.getElementById(id).style.display = 'block';
 }
+
+// Navegación SPA
 function navigate(path){
   if (!views[path]) path = '/app';
   history.pushState({}, '', path);
   route();
-}
-function route(){
-  if (IS_RECOVERY) { showOnly('resetCard'); return; }
-  const id = views[location.pathname] || 'homeCard';
-  showOnly(id);
 }
 addEventListener('popstate', route);
 document.addEventListener('click', (e)=>{
@@ -32,14 +35,14 @@ document.addEventListener('click', (e)=>{
   if (nav){ e.preventDefault(); navigate(nav.getAttribute('data-nav')); }
 });
 
-// === Estado ===
+// Estado global
 let IS_RECOVERY = false;
 let CURRENT_EMP_UID = null;
 
-// === Helpers DOM ===
+// Helpers
 const $ = (id) => document.getElementById(id);
 
-// === Detección de modo recuperación (/reset o type=recovery) ===
+// Detectar modo recuperación (/reset o type=recovery)
 function detectRecovery(){
   const pathIsReset = location.pathname === '/reset';
   const hash = location.hash || '';
@@ -52,7 +55,16 @@ function detectRecovery(){
 addEventListener('hashchange', detectRecovery);
 detectRecovery();
 
-// === Render principal (carga datos empleado / menú) ===
+// Router protegido: exige sesión para mostrar vistas
+async function route(){
+  if (IS_RECOVERY) { showOnly('resetCard'); return; }
+  const { data:{ user } } = await supabase.auth.getUser();
+  if (!user) { showOnly('authCard'); return; }
+  const id = views[location.pathname] || 'homeCard';
+  showOnly(id);
+}
+
+// Render principal (carga empleado y menú)
 async function render() {
   if (IS_RECOVERY) { showOnly('resetCard'); return; }
 
@@ -66,22 +78,23 @@ async function render() {
     .maybeSingle();
 
   if (error || !emp) {
-    $('msg').textContent = error ? error.message : 'Sin vínculo en employees.user_id o login deshabilitado.';
+    $('msg') && ($('msg').textContent = error ? error.message : 'Sin vínculo en employees.user_id o login deshabilitado.');
     await supabase.auth.signOut();
-    showOnly('authCard'); return;
+    showOnly('authCard'); 
+    return;
   }
 
   CURRENT_EMP_UID = emp.employee_uid;
-  $('empName').textContent  = emp.full_name || '(sin nombre)';
-  $('empUid').textContent   = 'employee_uid: ' + emp.employee_uid;
-  $('empName2').textContent = emp.full_name || '(sin nombre)';
-  $('empUid2').textContent  = 'employee_uid: ' + emp.employee_uid;
+  $('empName')  && ($('empName').textContent  = emp.full_name || '(sin nombre)');
+  $('empUid')   && ($('empUid').textContent   = 'employee_uid: ' + emp.employee_uid);
+  $('empName2') && ($('empName2').textContent = emp.full_name || '(sin nombre)');
+  $('empUid2')  && ($('empUid2').textContent  = 'employee_uid: ' + emp.employee_uid);
 
   await loadRecentPunches();
   navigate('/app');
 }
 
-// === Auth ===
+// === Auth: login / reset / logout ===
 $('btnLogin').onclick = async ()=>{
   $('msg').textContent = '';
   const email = $('email').value.trim();
@@ -91,6 +104,7 @@ $('btnLogin').onclick = async ()=>{
   if (error) { $('msg').textContent = error.message; return; }
   render();
 };
+
 $('btnForgot').onclick = async ()=>{
   $('msg').textContent = '';
   const email = $('email').value.trim();
@@ -100,6 +114,7 @@ $('btnForgot').onclick = async ()=>{
   });
   $('msg').textContent = error ? error.message : 'Te envié un correo para restablecer la contraseña.';
 };
+
 $('btnSetNew').onclick = async ()=>{
   $('msg2').textContent = '';
   const np = $('newPassword').value;
@@ -107,17 +122,33 @@ $('btnSetNew').onclick = async ()=>{
   const { error } = await supabase.auth.updateUser({ password: np });
   if (error) { $('msg2').textContent = error.message; return; }
   $('msg2').textContent = 'Contraseña actualizada. Ahora puedes iniciar sesión.';
-  history.replaceState(null, '', '/');
   IS_RECOVERY = false;
   await supabase.auth.signOut();
+  history.replaceState({}, '', '/');
   showOnly('authCard');
 };
-$('btnCancelReset').onclick = ()=>{
-  history.replaceState(null, '', '/'); IS_RECOVERY=false; showOnly('authCard');
-};
-$('btnLogout').onclick  = async ()=>{ await supabase.auth.signOut(); location.replace('/'); };
-$('btnLogout2').onclick = async ()=>{ await supabase.auth.signOut(); location.replace('/'); };
 
+$('btnCancelReset').onclick = ()=>{
+  history.replaceState({}, '', '/'); 
+  IS_RECOVERY=false; 
+  showOnly('authCard');
+};
+
+// Logout sólido (borra sesión y vuelve al login)
+async function logout(){
+  try {
+    await supabase.auth.signOut();
+  } finally {
+    IS_RECOVERY = false;
+    CURRENT_EMP_UID = null;
+    history.replaceState({}, '', '/');
+    showOnly('authCard');
+  }
+}
+document.getElementById('btnLogout').onclick  = logout;
+document.getElementById('btnLogout2').onclick = logout;
+
+// Reaccionar a cambios de sesión
 supabase.auth.onAuthStateChange((event) => {
   if (event === 'PASSWORD_RECOVERY') { IS_RECOVERY = true; showOnly('resetCard'); return; }
   if (IS_RECOVERY) { showOnly('resetCard'); return; }
@@ -137,6 +168,7 @@ function getGeo(timeoutMs = 10000) {
     );
   });
 }
+
 async function punch(type) {
   const info = $('punchMsg');
   info.textContent = '';
@@ -151,6 +183,7 @@ async function punch(type) {
   info.textContent = `Marca ${type} registrada a las ${at}`;
   await loadRecentPunches();
 }
+
 async function loadRecentPunches() {
   const box = $('recentPunches');
   if (!CURRENT_EMP_UID) { box.textContent = '—'; return; }
@@ -171,5 +204,5 @@ async function loadRecentPunches() {
 $('btnIn').onclick  = ()=>punch('IN');
 $('btnOut').onclick = ()=>punch('OUT');
 
-// start
+// Iniciar
 render(); route();
