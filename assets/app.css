@@ -39,3 +39,30 @@ input{width:100%;padding:14px 16px;border-radius:14px;border:1px solid #d8dee8;b
   h1{font-size:26px} h2{font-size:22px}
   .grid{grid-template-columns:1fr}
 }
+/* --- Asignación de proyectos --- */
+.allocRow {
+  display: grid;
+  grid-template-columns: 1fr 100px auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.allocSelect {
+  width: 100%;
+}
+
+.allocMinutes {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d8dee9;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.btn.small {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 12px;
+}
