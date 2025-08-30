@@ -86,14 +86,23 @@
           <button class="btn light" id="btnLogout2">Salir</button>
         </div>
       </div>
+
       <div class="muted">Empleado</div>
       <div id="empName2" class="big">—</div>
       <div id="empUid2" class="muted">—</div>
+
+      <!-- Estado actual + horas de hoy -->
+      <div class="card inner" style="margin-top:12px;">
+        <div><strong>Estado actual:</strong> <span id="estadoActual">—</span></div>
+        <div class="muted">Horas de hoy: <span id="horasHoy">—</span></div>
+      </div>
+
       <div class="row gap m-t">
         <button class="btn" id="btnIn">Marcar ENTRADA</button>
         <button class="btn light" id="btnOut">Marcar SALIDA</button>
       </div>
       <div id="punchMsg" class="muted m-t"></div>
+
       <div class="card inner">
         <div class="muted m-b-sm">Últimas marcas</div>
         <div id="recentPunches" class="muted">—</div>
