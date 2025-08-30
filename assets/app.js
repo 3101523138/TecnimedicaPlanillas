@@ -1,448 +1,420 @@
 // === CONFIG SUPABASE ===
-const SUPABASE_URL  = 'https://xducrljbdyneyihjcjvo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL  = 'https://xducrljbdyneyihjcjvo.supabase.co'; // tu URL
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';  // tu anon key
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // === STATE ===
-let currentUser = null;
-let currentEmployee = null; // { employee_uid, full_name, ... }
-let openSession = null;     // work_sessions OPEN row or null
-let sessionMinutes = 0;     // duración en minutos de la sesión abierta
-let statusTimer = null;
+let currentUser   = null;
+let currentEmp    = null; // {employee_uid, full_name, email}
+let openSession   = null; // row de work_sessions con status OPEN (si existe)
+let allProjects   = [];   // [{project_code, client_name, project_number, description}, ...]
+let allocRows     = [];   // estado de filas UI [{project_code, minutes}]
+let requiredMins  = 0;    // minutos requeridos = duración de sesión
+let refreshTimer  = null; // para refrescar horas
 
-// Projects cache
-let allProjects = [];       // [{project_code, client, description, number, label}]
-let clientsList = [];       // ['Cliente A', 'Cliente B', ...]
+// === DOM ===
+const $ = (sel) => document.querySelector(sel);
 
-// === HELPERS UI ===
-const qs  = (sel) => document.querySelector(sel);
-const qsa = (sel) => Array.from(document.querySelectorAll(sel));
-const fmt2 = (n) => n < 10 ? '0'+n : ''+n;
-const show = (el) => el.style.display = '';
-const hide = (el) => el.style.display = 'none';
-const setText = (sel, txt) => { qs(sel).textContent = txt; };
+// Cards
+const authCard   = $('#authCard');
+const resetCard  = $('#resetCard');
+const homeCard   = $('#homeCard');
+const punchCard  = $('#punchCard');
 
-// Location helper
-async function getCoords() {
-  return new Promise((res) => {
-    if (!navigator.geolocation) return res({ latitude: null, longitude: null });
-    navigator.geolocation.getCurrentPosition(
-      (pos) => res({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      () => res({ latitude: null, longitude: null }),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-    );
-  });
-}
+// Login/reset
+$('#btnLogin')?.addEventListener('click', login);
+$('#btnForgot')?.addEventListener('click', sendReset);
+$('#btnSetNew')?.addEventListener('click', setNewPassword);
+$('#btnCancelReset')?.addEventListener('click', () => go('/auth'));
 
-// Minutes between two dates (rounded)
-function diffMinutes(d1, d2) {
-  const ms = Math.max(0, d2 - d1);
-  return Math.round(ms / 60000);
-}
+// Home
+$('#btnLogout')?.addEventListener('click', logout);
+$('#btnLogout2')?.addEventListener('click', logout);
 
-// === NAV ===
-function gotoCard(id) {
-  ['authCard','resetCard','homeCard','punchCard','projectsCard','leaveCard','payslipsCard']
-    .forEach(cid => hide(qs('#'+cid)));
-  show(qs('#'+id));
-}
-
-function route() {
-  const p = location.pathname;
-  if (p.startsWith('/reset')) return gotoCard('resetCard');
-  if (p.startsWith('/marcas')) return gotoCard('punchCard');
-  if (p.startsWith('/proyectos')) return gotoCard('projectsCard');
-  if (p.startsWith('/licencias')) return gotoCard('leaveCard');
-  if (p.startsWith('/comprobantes')) return gotoCard('payslipsCard');
-  return gotoCard('homeCard');
-}
-
-window.addEventListener('click', (e) => {
-  const nav = e.target.closest('[data-nav]');
-  if (nav) {
-    e.preventDefault();
-    history.pushState({}, '', nav.dataset.nav);
-    route();
-    // cargar datos contextuales
-    if (nav.dataset.nav === '/marcas') onEnterPunch();
-  }
+// Navegación tiles
+document.querySelectorAll('[data-nav]').forEach(el => {
+  el.addEventListener('click', () => go(el.getAttribute('data-nav')));
 });
-window.addEventListener('popstate', route);
 
-// === AUTH ===
-async function loadSession() {
+// Marcas
+$('#btnIn')?.addEventListener('click', () => doPunch('IN'));
+$('#btnOut')?.addEventListener('click', handleSalida);
+
+// Asignación proyectos
+$('#btnAddAlloc')?.addEventListener('click', addAllocRow);
+$('#btnSaveAlloc')?.addEventListener('click', saveAllocations);
+
+// --- ROUTER ---
+async function boot() {
   const { data: { session } } = await supabase.auth.getSession();
-  currentUser = session?.user ?? null;
-  return currentUser;
+  currentUser = session?.user || null;
+
+  // ¿/reset? (enlace de recuperación)
+  const p = new URLSearchParams(location.hash.replace('#',''));
+  if (p.get('type') === 'recovery') return go('/reset');
+
+  if (!currentUser) return go('/auth');
+
+  // Cargar empleado
+  const emp = await loadEmployeeForUser(currentUser);
+  if (!emp) {
+    showMsg('#msg', 'No estás habilitado para ingresar (consulta RRHH).');
+    await supabase.auth.signOut();
+    return go('/auth');
+  }
+  currentEmp = emp;
+
+  // Ir a home
+  go('/app');
+}
+window.addEventListener('load', boot);
+
+// --- NAV ---
+function show(card) {
+  [authCard, resetCard, homeCard, punchCard].forEach(c => c.style.display='none');
+  card.style.display = 'block';
+}
+function go(path) {
+  if (path==='/auth') {
+    show(authCard);
+  } else if (path==='/reset') {
+    show(resetCard);
+  } else if (path==='/app') {
+    show(homeCard);
+    paintHome();
+  } else if (path==='/marcas') {
+    show(punchCard);
+    paintPunch();
+  } else {
+    show(homeCard);
+  }
 }
 
-async function fetchEmployeeByEmail(email) {
+// --- AUTH ---
+async function login() {
+  const email = $('#email').value.trim();
+  const password = $('#password').value;
+  showMsg('#msg', '');
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return showMsg('#msg', error.message || 'Error de inicio de sesión');
+  boot();
+}
+async function sendReset() {
+  const email = $('#email').value.trim();
+  showMsg('#msg', '');
+  if (!email) return showMsg('#msg', 'Escribe tu correo y vuelve a presionar “¿Olvidaste tu contraseña?”.');
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: location.origin + '/#/type=recovery'
+  });
+  showMsg('#msg', error ? error.message : 'Te enviamos un correo con el enlace de recuperación.');
+}
+async function setNewPassword() {
+  const newPassword = $('#newPassword').value;
+  const { data: { session }, error } = await supabase.auth.updateUser({ password: newPassword });
+  showMsg('#msg2', error ? error.message : 'Contraseña actualizada. Ya puedes iniciar sesión.');
+  if (!error) setTimeout(()=>go('/auth'), 1500);
+}
+async function logout() {
+  await supabase.auth.signOut();
+  currentUser = null;
+  currentEmp  = null;
+  clearInterval(refreshTimer);
+  showMsg('#msg', '');
+  go('/auth');
+}
+
+// --- HELPERS ---
+function showMsg(sel, txt) {
+  const el = $(sel);
+  if (el) el.textContent = txt || '';
+}
+function fmtHM(mins) {
+  const h = Math.floor(mins/60);
+  const m = Math.max(0, mins%60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function nowTz() { return new Date(); } // usamos hora del dispositivo
+
+// --- DATA LOADERS ---
+async function loadEmployeeForUser(user) {
+  // Buscamos por email (tu flujo actual)
   const { data, error } = await supabase
     .from('employees')
-    .select('*')
-    .eq('email', email)
+    .select('employee_uid, full_name, email, login_enabled')
+    .eq('email', user.email)
     .maybeSingle();
-  if (error) throw error;
-  return data;
+  if (error) return null;
+  if (!data || data.login_enabled === false) return null;
+  return { employee_uid: data.employee_uid, full_name: data.full_name, email: data.email };
 }
 
-// === STATUS & PUNCHES ===
-async function refreshStatusAndPunches() {
-  if (!currentEmployee) return;
-
-  // Datos generales en cabecera
-  setText('#empName',  currentEmployee.full_name || '');
-  setText('#empUid',   currentEmployee.employee_uid || '');
-  setText('#empName2', currentEmployee.full_name || '');
-  setText('#empUid2',  currentEmployee.employee_uid || '');
-
-  // 1) Estado: sesión abierta?
-  const { data: ws } = await supabase
+async function loadOpenSession() {
+  const { data, error } = await supabase
     .from('work_sessions')
     .select('*')
-    .eq('employee_uid', currentEmployee.employee_uid)
+    .eq('employee_uid', currentEmp.employee_uid)
+    .eq('status', 'OPEN')
     .order('start_at', { ascending: false })
-    .limit(1);
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  return data || null;
+}
 
-  openSession = null;
-  if (ws && ws.length && ws[0].status === 'OPEN') {
-    openSession = ws[0];
-  }
-
-  if (openSession) {
-    setText('#statusTxt', 'Dentro');
-    const start = new Date(openSession.start_at);
-    const now   = new Date();
-    sessionMinutes = Math.max(1, diffMinutes(start, now));
-    setText('#hoursToday', `${fmt2(Math.floor(sessionMinutes/60))}:${fmt2(sessionMinutes%60)}`);
-    // Actualiza cada minuto
-    if (statusTimer) clearInterval(statusTimer);
-    statusTimer = setInterval(() => {
-      const now2 = new Date();
-      sessionMinutes = Math.max(1, diffMinutes(start, now2));
-      setText('#hoursToday', `${fmt2(Math.floor(sessionMinutes/60))}:${fmt2(sessionMinutes%60)}`);
-    }, 60000);
-  } else {
-    setText('#statusTxt', 'Fuera');
-    setText('#hoursToday', '00:00');
-    if (statusTimer) clearInterval(statusTimer);
-  }
-
-  // 2) Habilitar/deshabilitar botones visualmente
-  qs('#btnIn').disabled  = !!openSession;    // si está dentro, no puede IN
-  qs('#btnOut').disabled = !openSession;     // si está fuera, no puede OUT
-
-  // 3) Ocultar panel de asignación siempre al refrescar
-  hide(qs('#allocPanel'));
-  qs('#allocRows').innerHTML = '';
-  setText('#allocMsg', '');
-  setText('#allocRemaining', '0 min');
-
-  // 4) Últimas marcas
-  const { data: punches } = await supabase
+async function loadLastPunches(limit=5) {
+  const { data } = await supabase
     .from('time_punches')
-    .select('direction,punch_at,latitude,longitude')
-    .eq('employee_uid', currentEmployee.employee_uid)
+    .select('punch_at, direction, latitude, longitude')
+    .eq('employee_uid', currentEmp.employee_uid)
     .order('punch_at', { ascending: false })
-    .limit(10);
-
-  const cont = qs('#recentPunches');
-  if (!punches || punches.length === 0) {
-    cont.textContent = 'Sin marcas aún.';
-  } else {
-    cont.innerHTML = punches.map(p => {
-      const d = new Date(p.punch_at);
-      const loc = (p.latitude && p.longitude) ? ` (${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)})` : '';
-      return `<div><b>${p.direction}</b> – ${d.toLocaleString()}${loc}</div>`;
-    }).join('');
-  }
+    .limit(limit);
+  return data || [];
 }
 
-// === PROYECTOS (catálogo) ===
-async function loadProjectsCatalog() {
-  // Traemos '*' para adaptarnos a tu tabla real
-  const { data, error } = await supabase.from('projects').select('*').order('project_code', { ascending: true });
-  if (error) {
-    console.error(error);
-    allProjects = [];
-    clientsList = [];
+async function loadProjects() {
+  // Traemos catálogo general. Puedes añadir filtros por cliente más adelante.
+  const { data, error } = await supabase
+    .from('projects')
+    .select('project_code, client_name, project_number, description')
+    .order('client_name', { ascending: true });
+  if (error) return [];
+  return data || [];
+}
+
+async function loadAllocations(sessionId) {
+  const { data } = await supabase
+    .from('work_session_allocations')
+    .select('id, project_code, minutes_alloc')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+  return data || [];
+}
+
+// --- HOME ---
+function paintHome() {
+  $('#empName').textContent = currentEmp.full_name;
+  $('#empUid').textContent  = `employee_uid: ${currentEmp.employee_uid}`;
+}
+
+// --- MARCAS + PROYECTOS ---
+async function paintPunch() {
+  // Pintar encabezado
+  $('#empName2').textContent = currentEmp.full_name;
+  $('#empUid2').textContent  = `employee_uid: ${currentEmp.employee_uid}`;
+
+  // Cargar sesión abierta
+  openSession = await loadOpenSession();
+
+  // Estado / horas
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshPunchState();           // calcula requiredMins y actualiza UI
+  refreshTimer = setInterval(refreshPunchState, 30_000); // cada 30s
+
+  // Últimas marcas
+  paintLastPunches();
+
+  // Proyectos (catálogo) + asignaciones existentes
+  allProjects = await loadProjects();
+  await loadAndPaintAllocations();
+  updateSalidaEnabled();
+}
+
+async function paintLastPunches() {
+  const rows = await loadLastPunches();
+  const box  = $('#recentPunches');
+  if (!rows.length) { box.textContent = 'Sin marcas aún.'; return; }
+  box.innerHTML = rows.map(r => {
+    const d = new Date(r.punch_at);
+    const pos = (r.latitude!=null && r.longitude!=null) ? ` (${r.latitude.toFixed(5)}, ${r.longitude.toFixed(5)})` : '';
+    return `<div><strong>${r.direction}</strong> – ${d.toLocaleString()}${pos}</div>`;
+  }).join('');
+}
+
+function refreshPunchState() {
+  if (!openSession) {
+    $('#punchMsg').textContent = 'Estado actual: Fuera';
+    requiredMins = 0;
+    $('#allocRequired').textContent = '0';
+    $('#allocInfo').textContent = 'Asigna minutos cuando tengas una sesión abierta.';
+    disableEntrada(false);
+    disableSalida(true);
     return;
   }
-
-  allProjects = (data || []).map(p => {
-    const code = p.project_code ?? p.code ?? p.number ?? p.id ?? p.pk ?? null;
-    const client = p.client_name ?? p.client ?? p.customer ?? '';
-    const number = p.project_number ?? p.number ?? p.code ?? code ?? '';
-    const desc   = p.description ?? p.name ?? '';
-    const label  = [number, desc].filter(Boolean).join(' — ');
-    return { project_code: code, client, description: desc, number, label };
-  }).filter(x => !!x.project_code);
-
-  const setClients = new Set(allProjects.map(p => p.client || '').filter(Boolean));
-  clientsList = ['(Todos)'].concat(Array.from(setClients).sort());
-
-  // pinta el filtro
-  const cf = qs('#clientFilter');
-  cf.innerHTML = clientsList.map(c => `<option value="${c}">${c}</option>`).join('');
-  cf.value = '(Todos)';
+  const start = new Date(openSession.start_at);
+  const mins  = Math.max(0, Math.floor((nowTz() - start) / 60000));
+  requiredMins = mins;
+  $('#punchMsg').innerHTML = `Estado actual: <strong>Dentro</strong><br>Horas de hoy: ${fmtHM(mins)}`;
+  $('#allocRequired').textContent = String(requiredMins);
+  disableEntrada(true);  // si hay OPEN, ENTRADA deshabilitada
+  // salida se habilita sólo si asignación >= requiredMins (updateSalidaEnabled)
 }
 
-function filteredProjectsByClient() {
-  const cf = qs('#clientFilter').value;
-  if (!cf || cf === '(Todos)') return allProjects;
-  return allProjects.filter(p => (p.client || '') === cf);
+function disableEntrada(disabled) {
+  const b = $('#btnIn'); if (b) { b.disabled = disabled; b.classList.toggle('light', disabled); }
+}
+function disableSalida(disabled) {
+  const b = $('#btnOut'); if (b) { b.disabled = disabled; b.classList.toggle('light', disabled); }
 }
 
-// === UI asignación proyectos ===
-function renderAllocRows() {
-  const rows = qsa('.alloc-row');
-  rows.forEach(row => row.remove());
-
-  const projects = filteredProjectsByClient();
-  const container = qs('#allocRows');
-
-  // Si no hay ninguna fila, crea 1 por defecto
-  if (container.children.length === 0) {
-    addAllocRow();
-    return;
+async function getGeo() {
+  try {
+    const pos = await new Promise((res, rej) =>
+      navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 5000 })
+    );
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch {
+    return { latitude: null, longitude: null };
   }
 }
 
-function addAllocRow() {
-  const projects = filteredProjectsByClient();
-  const container = qs('#allocRows');
-
-  // Máximo 5 filas para no complicar
-  if (container.children.length >= 5) return;
-
-  const row = document.createElement('div');
-  row.className = 'alloc-row row gap';
-  row.style.alignItems = 'center';
-
-  const sel = document.createElement('select');
-  sel.className = 'alloc-project';
-  sel.innerHTML = `<option value="">— Selecciona proyecto —</option>` +
-    projects.map(p => `<option value="${p.project_code}">${p.label}${p.client ? ' · '+p.client : ''}</option>`).join('');
-
-  const inp = document.createElement('input');
-  inp.className = 'alloc-mins';
-  inp.type = 'number';
-  inp.min = '1';
-  inp.step = '1';
-  inp.placeholder = 'min';
-
-  const btnDel = document.createElement('button');
-  btnDel.className = 'link';
-  btnDel.textContent = 'Quitar';
-  btnDel.addEventListener('click', () => {
-    row.remove();
-    updateAllocRemaining();
-  });
-
-  sel.addEventListener('change', updateAllocRemaining);
-  inp.addEventListener('input', updateAllocRemaining);
-
-  row.appendChild(sel);
-  row.appendChild(inp);
-  row.appendChild(btnDel);
-  container.appendChild(row);
-
-  updateAllocRemaining();
-}
-
-function updateAllocRemaining() {
-  const mins = qsa('.alloc-mins').map(i => parseInt(i.value || '0', 10)).reduce((a,b)=>a+b,0);
-  const remain = Math.max(0, sessionMinutes - mins);
-  setText('#allocRemaining', `${remain} min`);
-}
-
-// === PUNCH ACTIONS ===
 async function doPunch(direction) {
-  const coords = await getCoords();
-  const { error } = await supabase.from('time_punches').insert({
-    employee_uid: currentEmployee.employee_uid,
+  if (!currentEmp) return;
+  const geo = await getGeo();
+  const payload = {
+    employee_uid: currentEmp.employee_uid,
     direction,
-    latitude: coords.latitude,
-    longitude: coords.longitude,
-    // punch_at lo rellena default now(); punch_date/time lo rellenan triggers si los tienes
-  });
-  if (error) throw error;
-}
+    punch_at: new Date().toISOString(),
+    latitude: geo.latitude,
+    longitude: geo.longitude
+  };
+  const { error } = await supabase.from('time_punches').insert(payload).single();
 
-async function handleIn() {
-  try {
-    qs('#punchMsg').textContent = 'Marcando ENTRADA...';
-    await doPunch('IN');
-    qs('#punchMsg').textContent = 'Entrada registrada.';
-    await refreshStatusAndPunches();
-  } catch (e) {
-    console.error(e);
-    qs('#punchMsg').textContent = `Error al marcar: ${e.message}`;
-  }
-}
-
-// Flujo SALIDA con asignación obligatoria
-async function handleOutStart() {
-  if (!openSession) return; // no debería pasar
-  // Mostrar panel con filas de asignación
-  await loadProjectsCatalog();
-  qs('#allocRows').innerHTML = '';
-  addAllocRow();
-  setText('#allocMsg', 'Distribuye el tiempo de la jornada en uno o varios proyectos.');
-  updateAllocRemaining();
-  show(qs('#allocPanel'));
-}
-
-// Confirmar SALIDA: valida asignación, inserta OUT, agrega allocations
-async function handleOutConfirm() {
-  try {
-    // Validación
-    const rows = qsa('#allocRows .alloc-row');
-    if (rows.length === 0) {
-      setText('#allocMsg', 'Agrega al menos un proyecto.');
-      return;
-    }
-    let total = 0;
-    const allocs = [];
-    for (const r of rows) {
-      const proj = r.querySelector('.alloc-project').value;
-      const mins = parseInt(r.querySelector('.alloc-mins').value || '0', 10);
-      if (!proj) {
-        setText('#allocMsg', 'Hay una fila sin proyecto seleccionado.');
-        return;
-      }
-      if (!mins || mins <= 0) {
-        setText('#allocMsg', 'Hay una fila con minutos inválidos.');
-        return;
-      }
-      allocs.push({ project_code: proj, minutes_alloc: mins });
-      total += mins;
-    }
-    if (total !== sessionMinutes) {
-      const diff = sessionMinutes - total;
-      setText('#allocMsg', `La suma de minutos debe ser igual a la duración de la jornada (${sessionMinutes} min). Te ${diff>0?'faltan':'sobran'} ${Math.abs(diff)} min.`);
-      return;
-    }
-
-    // 1) Inserta OUT (cerrará la sesión por trigger)
-    qs('#punchMsg').textContent = 'Registrando SALIDA...';
-    await doPunch('OUT');
-
-    // 2) Busca la sesión recién cerrada
-    const { data: wsList, error: e1 } = await supabase
-      .from('work_sessions')
-      .select('*')
-      .eq('employee_uid', currentEmployee.employee_uid)
-      .order('end_at', { ascending: false })
-      .limit(1);
-    if (e1) throw e1;
-    const closed = (wsList && wsList[0]) ? wsList[0] : null;
-    if (!closed || closed.status !== 'CLOSED') {
-      // Si no quedó cerrada aún, reintenta una vez tras breve espera
-      await new Promise(r => setTimeout(r, 800));
-      const { data: wsList2 } = await supabase
-        .from('work_sessions')
-        .select('*')
-        .eq('employee_uid', currentEmployee.employee_uid)
-        .order('end_at', { ascending: false })
-        .limit(1);
-      if (wsList2 && wsList2[0] && wsList2[0].status === 'CLOSED') {
-        // ok
-      } else {
-        throw new Error('No fue posible identificar la jornada cerrada para asignar proyectos.');
-      }
-    }
-    const sessionId = (closed && closed.id) || (wsList2 && wsList2[0].id);
-
-    // 3) Inserta allocations
-    const payload = allocs.map(a => ({
-      session_id: sessionId,
-      project_code: a.project_code,
-      minutes_alloc: a.minutes_alloc
-    }));
-    const { error: e2 } = await supabase
-      .from('work_session_allocations')
-      .insert(payload);
-    if (e2) throw e2;
-
-    qs('#punchMsg').textContent = 'Salida registrada y proyectos asignados.';
-    hide(qs('#allocPanel'));
-    await refreshStatusAndPunches();
-  } catch (e) {
-    console.error(e);
-    setText('#allocMsg', `Error al confirmar: ${e.message}`);
-  }
-}
-
-// === FLOW ===
-async function onEnterPunch() {
-  await ensureUserAndEmployee();
-  await refreshStatusAndPunches();
-  // precargar catálogo de proyectos una vez
-  await loadProjectsCatalog();
-}
-
-// asegura login & empleado vinculado
-async function ensureUserAndEmployee() {
-  await loadSession();
-  if (!currentUser) {
-    history.pushState({}, '', '/');
-    route();
-    return;
-  }
-  // Empleado por email del usuario
-  if (!currentEmployee) {
-    const emp = await fetchEmployeeByEmail(currentUser.email);
-    currentEmployee = emp;
-    // pinta nombres
-    setText('#empName', emp?.full_name || '');
-    setText('#empUid',  emp?.employee_uid || '');
-    setText('#empName2', emp?.full_name || '');
-    setText('#empUid2',  emp?.employee_uid || '');
-  }
-}
-
-// === EVENTOS ===
-qs('#btnLogin').addEventListener('click', async () => {
-  setText('#msg', 'Verificando...');
-  const email = qs('#email').value.trim();
-  const pass  = qs('#password').value;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
   if (error) {
-    setText('#msg', error.message);
+    // Mensaje especial si faltan asignaciones (regla de BD)
+    if (error?.hint === 'ALLOCATIONS_MISSING') {
+      showMsg('#punchMsg', error.message);
+    } else {
+      showMsg('#punchMsg', `Error al marcar: ${error.message || 'Desconocido'}`);
+    }
+  } else {
+    // Refrescar todo
+    openSession = await loadOpenSession();
+    refreshPunchState();
+    paintLastPunches();
+  }
+}
+
+// --- SALIDA con validación previa ---
+async function handleSalida() {
+  if (!openSession) {
+    showMsg('#punchMsg','No existe una jornada abierta. Marca ENTRADA primero.');
     return;
   }
-  // Vincula empleado por email
-  currentUser = data.user;
-  currentEmployee = await fetchEmployeeByEmail(email);
-  setText('#empName', currentEmployee?.full_name || '');
-  setText('#empUid',  currentEmployee?.employee_uid || '');
-  history.pushState({}, '', '/app');
-  route();
-});
+  // Comprobar que los minutos estén cubiertos
+  const total = sumAllocUI();
+  if (total < requiredMins) {
+    showMsg('#punchMsg', `Aún faltan minutos por asignar: ${requiredMins - total} min.`);
+    return;
+  }
+  // Guardar y luego marcar OUT
+  const ok = await saveAllocations();
+  if (!ok) return;
+  await doPunch('OUT');
+  // Tras OUT correctamente, recargar estado/ UI
+  openSession = await loadOpenSession();
+  refreshPunchState();
+  updateSalidaEnabled();
+}
 
-qs('#btnForgot').addEventListener('click', async () => {
-  const email = qs('#email').value.trim();
-  if (!email) { setText('#msg', 'Escribe tu correo.'); return; }
-  const url = location.origin + '/reset';
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: url });
-  setText('#msg', error ? error.message : 'Te enviamos un correo para restablecer tu contraseña.');
-});
+// --- ASIGNACIONES: UI ---
+async function loadAndPaintAllocations() {
+  // Si no hay sesión abierta, vaciamos UI
+  if (!openSession) {
+    allocRows = [];
+    renderAllocRows();
+    updateSalidaEnabled();
+    return;
+  }
+  // Cargar de DB
+  const rows = await loadAllocations(openSession.id);
+  allocRows = (rows.length ? rows.map(r => ({ project_code: r.project_code, minutes: r.minutes_alloc })) : []);
+  // Si no hay filas, añadimos una vacía para animar al usuario
+  if (allocRows.length === 0) allocRows.push({ project_code: '', minutes: 0 });
+  renderAllocRows();
+  updateSalidaEnabled();
+}
 
-// Reset password page
-qs('#btnSetNew').addEventListener('click', async () => {
-  const pass = qs('#newPassword').value;
-  const { error } = await supabase.auth.updateUser({ password: pass });
-  setText('#msg2', error ? error.message : 'Contraseña actualizada. Ya puedes iniciar sesión.');
-});
-qs('#btnCancelReset').addEventListener('click', () => { history.pushState({}, '', '/'); route(); });
+function renderAllocRows() {
+  const cont = $('#allocContainer');
+  if (!cont) return;
 
-// Top-level logout
-qs('#btnLogout').addEventListener('click', async () => {
-  await supabase.auth.signOut();
-  currentUser = null; currentEmployee = null;
-  history.pushState({}, '', '/');
-  route();
-});
-qs('#btnLogout2').addEventListener('click', async () => {
- 
+  cont.innerHTML = allocRows.map((row, idx) => {
+    const minutes = row.minutes ?? 0;
+    const opts = allProjects.map(p => {
+      const label = `${p.client_name || ''} ${p.project_number ? ('· ' + p.project_number) : ''} — ${p.description || p.project_code}`;
+      const sel   = (p.project_code === row.project_code) ? 'selected' : '';
+      return `<option value="${p.project_code}" ${sel}>${label}</option>`;
+    }).join('');
+    return `
+      <div class="row m-b-sm alloc-row" data-idx="${idx}">
+        <select class="alloc-project" style="flex:1; min-width:240px;">
+          <option value="">— Selecciona proyecto —</option>
+          ${opts}
+        </select>
+        <input class="alloc-min" type="number" min="0" step="5" value="${minutes}" style="width:110px; margin-left:8px;">
+        <button class="btn light alloc-del" style="margin-left:8px;">Quitar</button>
+      </div>
+    `;
+  }).join('');
+
+  // Eventos por fila
+  cont.querySelectorAll('.alloc-row').forEach(rowEl => {
+    const idx = Number(rowEl.getAttribute('data-idx'));
+    rowEl.querySelector('.alloc-project').addEventListener('change', (e) => {
+      allocRows[idx].project_code = e.target.value;
+      updateSalidaEnabled();
+    });
+    rowEl.querySelector('.alloc-min').addEventListener('input', (e) => {
+      allocRows[idx].minutes = Math.max(0, Number(e.target.value||0));
+      updateSalidaEnabled();
+    });
+    rowEl.querySelector('.alloc-del').addEventListener('click', () => {
+      allocRows.splice(idx,1);
+      if (allocRows.length===0) allocRows.push({ project_code:'', minutes:0 });
+      renderAllocRows();
+      updateSalidaEnabled();
+    });
+  });
+
+  // Totales
+  $('#allocTotal').textContent = String(sumAllocUI());
+}
+
+function sumAllocUI() {
+  return allocRows.reduce((acc, r) => acc + (Number(r.minutes)||0), 0);
+}
+function addAllocRow() {
+  allocRows.push({ project_code:'', minutes:0 });
+  renderAllocRows();
+  updateSalidaEnabled();
+}
+function updateSalidaEnabled() {
+  $('#allocTotal').textContent = String(sumAllocUI());
+  const canClose = (sumAllocUI() >= requiredMins) && requiredMins > 0;
+  disableSalida(!canClose);
+}
+
+// Guardar en DB: borramos asignaciones existentes y reinsertamos las visibles
+async function saveAllocations() {
+  if (!openSession) return false;
+
+  // Filas válidas (con proyecto y minutos > 0)
+  const rows = allocRows
+    .filter(r => r.project_code && Number(r.minutes) > 0)
+    .map(r => ({ session_id: openSession.id, project_code: r.project_code, minutes_alloc: Number(r.minutes) }));
+
+  try {
+    // Limpia actuales
+    await supabase.from('work_session_allocations').delete().eq('session_id', openSession.id);
+    if (rows.length) {
+      const { error } = await supabase.from('work_session_allocations').insert(rows);
+      if (error) throw error;
+    }
+    showMsg('#punchMsg', 'Asignación guardada.');
+    return true;
+  } catch (e) {
+    showMsg('#punchMsg', `Error guardando asignación: ${e.message || e}`);
+    return false;
+  }
+}
+
