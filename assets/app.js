@@ -1,12 +1,11 @@
-// === CONFIG SUPABASE ===
+// === SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
-
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 
-// === VISTAS (SPA) ===
+// === SPA ===
 const views = {
   '/app': 'homeCard',
   '/marcas': 'punchCard',
@@ -16,42 +15,36 @@ const views = {
   '/reset': 'resetCard'
 };
 const ALL_CARDS = ['authCard','resetCard','homeCard','punchCard','projectsCard','leaveCard','payslipsCard'];
-function showOnly(id){
-  ALL_CARDS.forEach(v => document.getElementById(v).style.display = 'none');
-  document.getElementById(id).style.display = 'block';
-}
+function showOnly(id){ ALL_CARDS.forEach(v=>document.getElementById(v).style.display='none'); document.getElementById(id).style.display='block'; }
 function navigate(path){ if(!views[path]) path='/app'; history.pushState({},'',path); route(); }
 addEventListener('popstate', route);
-document.addEventListener('click',(e)=>{ const n=e.target?.closest('[data-nav]'); if(n){ e.preventDefault(); navigate(n.getAttribute('data-nav')); }});
+document.addEventListener('click', e => { const n=e.target?.closest('[data-nav]'); if(n){ e.preventDefault(); navigate(n.getAttribute('data-nav')); }});
 
-// === Estado global ===
-let IS_RECOVERY = false;
-let CURRENT_EMP_UID = null;
-let CURRENT_EMP_CODE = null;
+// === ESTADO ===
+let IS_RECOVERY=false;
+let CURRENT_EMP_UID=null;
+let CURRENT_EMP_CODE=null;
 
-// === Helpers ===
-const $ = (id)=>document.getElementById(id);
+// === HELPERS ===
+const $ = id => document.getElementById(id);
+function todayLocalDateString(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
-// === Detección reset ===
 function detectRecovery(){
-  const qs = new URLSearchParams(location.search);
+  const qs=new URLSearchParams(location.search);
   if (location.pathname==='/reset' || (location.hash||'').includes('type=recovery') || qs.get('type')==='recovery'){
-    IS_RECOVERY = true; showOnly('resetCard');
+    IS_RECOVERY=true; showOnly('resetCard');
   }
 }
 addEventListener('hashchange', detectRecovery);
 detectRecovery();
 
-// === Router protegido ===
 async function route(){
   if (IS_RECOVERY){ showOnly('resetCard'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
   if (!user){ showOnly('authCard'); return; }
-  const id = views[location.pathname] || 'homeCard';
-  showOnly(id);
+  showOnly(views[location.pathname] || 'homeCard');
 }
 
-// === Render (carga datos empleado) ===
 async function render(){
   if (IS_RECOVERY){ showOnly('resetCard'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
@@ -59,13 +52,15 @@ async function render(){
 
   const { data: emp, error } = await supabase
     .from('employees')
-    .select('employee_uid, employee_code, full_name, login_enabled, status')
+    .select('employee_uid, employee_code, full_name')
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (error || !emp){
-    $('msg') && ($('msg').textContent = error ? error.message : 'Sin vínculo en employees.user_id o login deshabilitado.');
-    await supabase.auth.signOut(); showOnly('authCard'); return;
+    $('msg') && ($('msg').textContent = error ? error.message : 'Tu usuario no está vinculado a employees.');
+    await supabase.auth.signOut();
+    showOnly('authCard'); 
+    return;
   }
 
   CURRENT_EMP_UID  = emp.employee_uid;
@@ -80,47 +75,49 @@ async function render(){
   navigate('/app');
 }
 
-// === Auth ===
+// === AUTH ===
 $('btnLogin').onclick = async ()=>{
-  $('msg').textContent = '';
-  const email = $('email').value.trim();
-  const password = $('password').value;
-  if (!email || !password){ $('msg').textContent = 'Escribe correo y contraseña.'; return; }
+  $('msg').textContent='';
+  const email=$('email').value.trim(), password=$('password').value;
+  if(!email||!password){ $('msg').textContent='Escribe correo y contraseña.'; return; }
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error){ $('msg').textContent = error.message; return; }
+  if (error){ $('msg').textContent=error.message; return; }
   render();
 };
 $('btnForgot').onclick = async ()=>{
-  $('msg').textContent = '';
-  const email = $('email').value.trim();
-  if (!email){ $('msg').textContent = 'Escribe tu correo y vuelve a pulsar.'; return; }
+  $('msg').textContent='';
+  const email=$('email').value.trim();
+  if(!email){ $('msg').textContent='Escribe tu correo y vuelve a pulsar.'; return; }
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/reset' });
   $('msg').textContent = error ? error.message : 'Te envié un correo para restablecer la contraseña.';
 };
 $('btnSetNew').onclick = async ()=>{
-  $('msg2').textContent = '';
-  const np = $('newPassword').value;
-  if (!np || np.length<6){ $('msg2').textContent='La contraseña debe tener al menos 6 caracteres.'; return; }
+  $('msg2').textContent='';
+  const np=$('newPassword').value;
+  if(!np||np.length<6){ $('msg2').textContent='La contraseña debe tener al menos 6 caracteres.'; return; }
   const { error } = await supabase.auth.updateUser({ password: np });
-  if (error){ $('msg2').textContent = error.message; return; }
-  $('msg2').textContent = 'Contraseña actualizada. Ahora puedes iniciar sesión.';
+  if(error){ $('msg2').textContent=error.message; return; }
+  $('msg2').textContent='Contraseña actualizada. Ahora puedes iniciar sesión.';
   IS_RECOVERY=false; await supabase.auth.signOut(); history.replaceState({},'','/'); showOnly('authCard');
 };
 $('btnCancelReset').onclick = ()=>{ history.replaceState({},'','/'); IS_RECOVERY=false; showOnly('authCard'); };
 
-// Logout
 async function logout(){
-  try { await supabase.auth.signOut(); }
-  finally { IS_RECOVERY=false; CURRENT_EMP_UID=null; CURRENT_EMP_CODE=null; history.replaceState({},'','/'); showOnly('authCard'); }
+  try{ await supabase.auth.signOut(); }
+  finally{ IS_RECOVERY=false; CURRENT_EMP_UID=null; CURRENT_EMP_CODE=null; history.replaceState({},'','/'); showOnly('authCard'); }
 }
-document.getElementById('btnLogout').onclick  = logout;
-document.getElementById('btnLogout2').onclick = logout;
+$('btnLogout').onclick = logout;
+$('btnLogout2').onclick = logout;
 
-supabase.auth.onAuthStateChange((event)=>{ if(event==='PASSWORD_RECOVERY'){ IS_RECOVERY=true; showOnly('resetCard'); return; } if(IS_RECOVERY){ showOnly('resetCard'); return; } render(); });
+supabase.auth.onAuthStateChange((event)=>{ 
+  if(event==='PASSWORD_RECOVERY'){ IS_RECOVERY=true; showOnly('resetCard'); return; } 
+  if(IS_RECOVERY){ showOnly('resetCard'); return; } 
+  render(); 
+});
 
-// === Marcas IN/OUT con GPS ===
+// === MARCAS ===
 function getGeo(timeoutMs=10000){
-  return new Promise((resolve)=>{
+  return new Promise(resolve=>{
     if(!('geolocation' in navigator)) return resolve({lat:null,lon:null});
     let done=false; const finish=(a,b)=>{ if(!done){ done=true; resolve({lat:a,lon:b}); } };
     const t=setTimeout(()=>finish(null,null),timeoutMs);
@@ -133,46 +130,50 @@ function getGeo(timeoutMs=10000){
 }
 
 async function punch(type){
-  const info = $('punchMsg'); info.textContent='';
-  if (!CURRENT_EMP_UID){ info.textContent='No hay empleado cargado.'; return; }
-  if (!CURRENT_EMP_CODE){ info.textContent='Tu ficha no tiene employee_code. Contacta al administrador.'; return; }
+  const info=$('punchMsg'); info.textContent='';
 
-  const { lat, lon } = await getGeo();
+  if(!CURRENT_EMP_UID){ info.textContent='No hay empleado cargado.'; return; }
+  if(!CURRENT_EMP_CODE){ info.textContent='Falta employee_code en tu ficha. Contacta al admin.'; return; }
+
+  const { lat, lon } = await getGeo();  // si falla, manda null y no bloquea
+
+  // >>> Aquí enviamos punch_date y employee_code <<<
   const payload = {
     employee_uid:  CURRENT_EMP_UID,
     employee_code: CURRENT_EMP_CODE,
     punch_type:    type,
+    punch_date:    todayLocalDateString(),   // YYYY-MM-DD (evita NOT NULL)
     latitude:      lat,
     longitude:     lon
   };
 
   const { data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle();
-  if (error){ info.textContent = 'Error al marcar: ' + error.message; return; }
+  if(error){ info.textContent='Error al marcar: ' + error.message; return; }
 
-  const at = new Date(data.punch_at).toLocaleString();
-  info.textContent = `Marca ${type} registrada a las ${at}`;
+  const at=new Date(data.punch_at).toLocaleString();
+  info.textContent=`Marca ${type} registrada a las ${at}`;
   await loadRecentPunches();
 }
 
 async function loadRecentPunches(){
-  const box = $('recentPunches');
-  if (!CURRENT_EMP_UID){ box.textContent='—'; return; }
+  const box=$('recentPunches');
+  if(!CURRENT_EMP_UID){ box.textContent='—'; return; }
   const { data, error } = await supabase
     .from('time_punches')
     .select('punch_at, punch_type, latitude, longitude')
     .eq('employee_uid', CURRENT_EMP_UID)
-    .order('punch_at', { ascending:false })
+    .order('punch_at',{ascending:false})
     .limit(5);
-  if (error){ box.textContent='Error cargando historial'; return; }
-  if (!data || data.length===0){ box.textContent='Sin marcas aún.'; return; }
+  if(error){ box.textContent='Error cargando historial'; return; }
+  if(!data||data.length===0){ box.textContent='Sin marcas aún.'; return; }
   box.innerHTML = data.map(r=>{
-    const when = new Date(r.punch_at).toLocaleString();
-    const gps = (r.latitude && r.longitude) ? ` (${Number(r.latitude).toFixed(5)}, ${Number(r.longitude).toFixed(5)})` : '';
+    const when=new Date(r.punch_at).toLocaleString();
+    const gps=(r.latitude&&r.longitude)?` (${Number(r.latitude).toFixed(5)}, ${Number(r.longitude).toFixed(5)})`:'';
     return `<div><strong>${r.punch_type}</strong> – ${when}${gps}</div>`;
   }).join('');
 }
-$('btnIn').onclick = ()=>punch('IN');
+$('btnIn').onclick  = ()=>punch('IN');
 $('btnOut').onclick = ()=>punch('OUT');
 
-// Iniciar
+// Inicio
 render(); route();
