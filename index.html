@@ -93,7 +93,7 @@
 
       <div class="row gap m-t">
         <button class="btn" id="btnIn">Marcar ENTRADA</button>
-        <button class="btn light" id="btnOut">Marcar SALIDA</button>
+        <button class="btn light" id="btnOut" disabled>Marcar SALIDA</button>
       </div>
 
       <div id="punchMsg" class="muted m-t"></div>
@@ -141,7 +141,7 @@
 
   </div>
 
-  <!-- App -->
-  <script type="module" src="./assets/app.js"></script>
+  <!-- App (cache-bust para forzar el JS nuevo) -->
+  <script type="module" src="./assets/app.js?v=3"></script>
 </body>
 </html>
