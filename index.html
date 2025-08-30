@@ -77,7 +77,7 @@
       </div>
     </div>
 
-    <!-- MARCAS -->
+    <!-- MARCAS + ASIGNACIÓN A PROYECTOS -->
     <div class="card" id="punchCard" style="display:none;">
       <div class="topbar">
         <h1>Marcar IN/OUT</h1>
@@ -91,10 +91,13 @@
       <div id="empName2" class="big">—</div>
       <div id="empUid2" class="muted">—</div>
 
-      <!-- Estado actual + horas de hoy -->
-      <div class="card inner" style="margin-top:12px;">
-        <div><strong>Estado actual:</strong> <span id="estadoActual">—</span></div>
-        <div class="muted">Horas de hoy: <span id="horasHoy">—</span></div>
+      <div class="card inner m-t">
+        <div class="row between">
+          <div>
+            <div><b>Estado actual:</b> <span id="statusTxt">—</span></div>
+            <div>Horas de hoy: <span id="hoursToday">00:00</span></div>
+          </div>
+        </div>
       </div>
 
       <div class="row gap m-t">
@@ -103,7 +106,28 @@
       </div>
       <div id="punchMsg" class="muted m-t"></div>
 
-      <div class="card inner">
+      <!-- Asignación de proyectos (se muestra al presionar SALIDA con sesión abierta) -->
+      <div class="card inner m-t" id="allocPanel" style="display:none;">
+        <div class="row between">
+          <h3>Asignar tiempo a proyectos</h3>
+          <div class="muted">Por distribuir: <span id="allocRemaining">0 min</span></div>
+        </div>
+
+        <div class="row m-t">
+          <label style="min-width:100px">Cliente</label>
+          <select id="clientFilter"></select>
+        </div>
+
+        <div id="allocRows" class="m-t"></div>
+
+        <div class="row gap m-t">
+          <button class="btn light" id="btnAddAlloc">+ Agregar proyecto</button>
+          <button class="btn" id="btnConfirmOut">Confirmar y SALIR</button>
+        </div>
+        <div id="allocMsg" class="muted m-t"></div>
+      </div>
+
+      <div class="card inner m-t">
         <div class="muted m-b-sm">Últimas marcas</div>
         <div id="recentPunches" class="muted">—</div>
       </div>
