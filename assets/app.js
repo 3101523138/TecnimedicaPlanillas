@@ -14,37 +14,27 @@ const st = {
   user: null,
   employee: null,           // { uid, code, full_name }
   sessionOpen: null,        // work_sessions con status OPEN
-  requiredMinutes: 0,       // minutos trabajados a asignar
+  requiredMinutes: 0,       // minutos trabajados a asignar (con margen aplicado)
   allocRows: [],            // [{project_code, minutes}]
   projects: [],             // catálogo (activos)
-  clients: [],              // lista única de clientes
-  clientFilter: '',
+  clientFilter: '',         // filtro de cliente para el select
   lastOverWarnAt: 0,        // anti-spam aviso “te pasaste”
 };
+
 // === REGLAS Y UTILIDADES DE TIEMPO ===
 const GRACE_MINUTES = 10; // margen para poder cerrar (±10 min)
-
-// Usa tu fmt2 existente si ya lo tienes definido arriba; si no, déjalo:
 const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
-
-// Convierte minutos -> "HH:MM"
-const minToHM = (mins) => `${fmt2(Math.floor((mins||0)/60))}:${fmt2(Math.abs(mins||0)%60)}`;
-
-// Convierte "HH:MM" -> minutos
-const hmToMin = (hhmm) => {
-  if (!hhmm) return 0;
-  const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10));
-  return (h*60 + (m||0)) | 0;
-};
+const minToHM = (mins) => `${fmt2(Math.floor((mins||0)/60))}:${fmt2(Math.abs(mins||0)%60)}`; // 90 -> 01:30
+const hmToMin = (hhmm) => { if(!hhmm) return 0; const [h,m]=hhmm.split(':').map(v=>parseInt(v||'0',10)); return (h*60+(m||0))|0; };
 
 // === HELPERS UI ===
-const $   = (s) => document.querySelector(s);
-const show= (el)=> el && (el.style.display = '');
-const hide= (el)=> el && (el.style.display = 'none');
+const $ = (s) => document.querySelector(s);
+const show = (el)=> el && (el.style.display = '');
+const hide = (el)=> el && (el.style.display = 'none');
 const todayStr = () => new Date().toISOString().slice(0,10);
-function toast(el, msg){ if(!el) return; el.textContent = msg||''; if(!msg) return; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; },6000);}
+function toast(el, msg){ if(!el) return; el.textContent = msg||''; if(!msg) return; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; },6000); }
 
-// "8" => 480, "8:30" => 510, inválido => null
+// Texto libre “8” => 480, “8:30” => 510 (si lo llegaras a usar en algún input de texto)
 function parseHM(str){
   if(!str) return null;
   const s = String(str).trim();
@@ -166,51 +156,32 @@ async function loadStatusAndRecent(){
       return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
     }).join('');
 
-  // requeridos
- // requeridos (aplicando margen de gracia)
-if (st.sessionOpen) {
-  const diffMin = Math.max(
-    0,
-    Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000)
-  );
-  st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
-} else {
-  st.requiredMinutes = 0;
-}
-$('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
-
+  // requeridos (aplicando margen de gracia)
+  if (st.sessionOpen) {
+    const diffMin = Math.max(
+      0,
+      Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000)
+    );
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+  } else {
+    st.requiredMinutes = 0;
+  }
+  $('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
 
   // UI asignaciones
   await prepareAllocUI();
 }
 
-// === PROYECTOS / CLIENTES ===
-async function loadClients(){
-  const {data,error}=await supabase.from('projects').select('client_name').eq('is_active',true).order('client_name',{ascending:true});
-  if(error) return [];
-  return [...new Set((data||[]).map(r=>r.client_name).filter(Boolean))];
-}
+// === PROYECTOS ===
 async function loadProjects(client=null){
   let q = supabase.from('projects')
-    .select('project_code, name, description, client_name') // <— añade description
+    .select('project_code, name, description, client_name')
     .eq('is_active',true)
     .order('client_name',{ascending:true})
     .order('project_code',{ascending:true});
   if(client) q=q.eq('client_name',client);
   const {data,error}=await q;
   return error ? [] : (data||[]);
-}
-
-function bindClientFilter(){
-  const sel = $('#clientFilter'); if(!sel) return;
-  sel.innerHTML = `<option value="">— Todos los clientes —</option>` + st.clients.map(c=>`<option value="${c}">${c}</option>`).join('');
-  sel.value = st.clientFilter || '';
-  sel.onchange = async ()=>{
-    st.clientFilter = sel.value || '';
-    st.projects = await loadProjects(st.clientFilter || null);
-    renderAllocContainer();
-    updateAllocTotals();
-  };
 }
 
 // === ASIGNACIONES existentes ===
@@ -224,11 +195,12 @@ async function loadExistingAllocations(){
 
 // === UI ASIGNACIONES (HH:MM) ===
 function bindMinutesInput(inp,row){
+  // si usas input text; con type="time" no es necesario
   inp.addEventListener('blur', ()=>{
     if(!inp.value.trim()){ row.minutes=0; inp.value=''; updateAllocTotals(); return; }
     const mins = parseHM(inp.value);
     if(mins===null){ row.minutes=0; inp.value=''; }
-    else { row.minutes=mins; inp.value=minToHM(mins); } // <— aquí
+    else { row.minutes=mins; inp.value=minToHM(mins); }
     updateAllocTotals();
   });
   inp.addEventListener('input', ()=>{
@@ -237,7 +209,6 @@ function bindMinutesInput(inp,row){
     updateAllocTotals();
   });
 }
-
 
 function renderAllocContainer() {
   const cont = $('#allocContainer');
@@ -260,8 +231,6 @@ function renderAllocContainer() {
     sel.appendChild(optEmpty);
 
     st.projects.forEach(p => {
-      // Si hay filtro y este proyecto NO pertenece al cliente filtrado,
-      // lo omitimos, salvo que sea el actualmente seleccionado.
       if (filter && p.client_name !== filter && p.project_code !== row.project_code) return;
       const o = document.createElement('option');
       o.value = p.project_code;
@@ -270,9 +239,7 @@ function renderAllocContainer() {
       sel.appendChild(o);
     });
 
-    sel.addEventListener('change', () => {
-      row.project_code = sel.value;
-    });
+    sel.addEventListener('change', () => { row.project_code = sel.value; });
 
     // INPUT HH:MM (step=60)
     const inp = document.createElement('input');
@@ -280,10 +247,7 @@ function renderAllocContainer() {
     inp.step = 60;
     inp.value = minToHM(row.minutes || 0);
     inp.className = 'allocMinutes';
-    inp.addEventListener('input', () => {
-      row.minutes = hmToMin(inp.value);
-      updateAllocTotals();
-    });
+    inp.addEventListener('input', () => { row.minutes = hmToMin(inp.value); updateAllocTotals(); });
 
     // Botón eliminar fila
     const del = document.createElement('button');
@@ -304,7 +268,6 @@ function renderAllocContainer() {
   });
 }
 
-
 function remainingMinutes(){
   const tot = st.allocRows.reduce((a,r)=>a+(r.minutes||0),0);
   return Math.max(0, st.requiredMinutes - tot);
@@ -314,11 +277,9 @@ function updateAllocTotals() {
   const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
   const req = st.requiredMinutes;
 
-  // Pinta resumen en HH:MM
   $('#allocTotalHM')?.textContent    = minToHM(tot);
   $('#allocRequiredHM')?.textContent = minToHM(req);
 
-  // Mensaje y habilitación de SALIDA
   const info = $('#allocInfo');
   let ok = false;
 
@@ -331,7 +292,6 @@ function updateAllocTotals() {
     ok = true;
   }
 
-  // SALIDA sólo si hay sesión y la asignación está dentro del rango permitido
   $('#btnOut').disabled = !(st.sessionOpen && ok);
 }
 
@@ -345,19 +305,17 @@ async function prepareAllocUI() {
       .order('project_number', { ascending: true });
     st.projects = data || [];
 
-    // Poblar filtro de clientes
+    // Poblar filtro de clientes (select #allocClient)
     const clients = [...new Set(st.projects.map(p => p.client_name).filter(Boolean))].sort();
     const selClient = $('#allocClient');
     if (selClient && selClient.options.length === 1) {
       clients.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c;
-        o.textContent = c;
-        selClient.appendChild(o);
+        const o = document.createElement('option'); o.value = c; o.textContent = c; selClient.appendChild(o);
       });
       selClient.addEventListener('change', () => {
         st.clientFilter = selClient.value || '';
-        renderAllocContainer(); // solo cambia las opciones del select, NO borra filas
+        renderAllocContainer(); // solo cambia el listado de opciones, NO borra filas existentes
+        updateAllocTotals();
       });
     }
   }
@@ -365,12 +323,11 @@ async function prepareAllocUI() {
   // Si hay sesión abierta, intenta prellenar con lo ya guardado
   if (st.sessionOpen) {
     if (st.allocRows.length === 0) {
-      const prev = await loadExistingAllocations(); // ← usa las asignaciones existentes
+      const prev = await loadExistingAllocations();
       if (prev.length) {
         st.allocRows = prev; // respeta lo guardado
       } else {
-        // Si no había nada guardado, precarga una fila con todo lo requerido
-        st.allocRows = [{ project_code: '', minutes: st.requiredMinutes }];
+        st.allocRows = [{ project_code: '', minutes: st.requiredMinutes }]; // precarga una fila con todo
       }
     }
   } else {
@@ -380,22 +337,6 @@ async function prepareAllocUI() {
   renderAllocContainer();
   updateAllocTotals();
 }
-
-
-  // Si hay sesión abierta, aseguramos al menos 1 fila
-  if (st.sessionOpen) {
-    if (st.allocRows.length === 0) {
-      // Precarga con el tiempo requerido (en una sola fila)
-      st.allocRows = [{ project_code: '', minutes: st.requiredMinutes }];
-    }
-  } else {
-    st.allocRows = [];
-  }
-
-  renderAllocContainer();
-  updateAllocTotals();
-}
-
 
 // === MARCAR IN/OUT ===
 async function mark(direction){
@@ -429,7 +370,6 @@ async function onMarkOut() {
     await loadStatusAndRecent();
   }
 }
-
 
 // + Proyecto: precarga con el tiempo restante
 function onAddAlloc(){
@@ -474,7 +414,6 @@ async function onSaveAlloc(silent = false) {
   }
 }
 
-
 // === NAV ===
 function setNavListeners(){
   document.querySelectorAll('[data-nav]').forEach(el=>{
@@ -490,7 +429,7 @@ function setNavListeners(){
 
 // === BOOT ===
 async function boot(){
-  console.log('APP JS v9 – HH:MM con precarga y restante');
+  console.log('APP JS v10 – HH:MM con margen y precarga');
   const hash=location.pathname;
   const params=new URLSearchParams(location.hash?.split('?')[1]||location.search);
   const type=params.get('type');
