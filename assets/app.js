@@ -5,7 +5,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 
-// === SPA ===
+// === SPA (vistas) ===
 const views = {
   '/app': 'homeCard',
   '/marcas': 'punchCard',
@@ -20,15 +20,14 @@ function navigate(path){ if(!views[path]) path='/app'; history.pushState({},'',p
 addEventListener('popstate', route);
 document.addEventListener('click', e => { const n=e.target?.closest('[data-nav]'); if(n){ e.preventDefault(); navigate(n.getAttribute('data-nav')); }});
 
-// === ESTADO ===
+// === Estado global ===
 let IS_RECOVERY=false;
 let CURRENT_EMP_UID=null;
-let CURRENT_EMP_CODE=null;
 
-// === HELPERS ===
+// === Helpers ===
 const $ = id => document.getElementById(id);
-function todayLocalDateString(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
+// detectar modo reset
 function detectRecovery(){
   const qs=new URLSearchParams(location.search);
   if (location.pathname==='/reset' || (location.hash||'').includes('type=recovery') || qs.get('type')==='recovery'){
@@ -38,6 +37,7 @@ function detectRecovery(){
 addEventListener('hashchange', detectRecovery);
 detectRecovery();
 
+// router protegido
 async function route(){
   if (IS_RECOVERY){ showOnly('resetCard'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
@@ -45,6 +45,7 @@ async function route(){
   showOnly(views[location.pathname] || 'homeCard');
 }
 
+// cargar datos del empleado
 async function render(){
   if (IS_RECOVERY){ showOnly('resetCard'); return; }
   const { data:{ user } } = await supabase.auth.getUser();
@@ -52,7 +53,7 @@ async function render(){
 
   const { data: emp, error } = await supabase
     .from('employees')
-    .select('employee_uid, employee_code, full_name')
+    .select('employee_uid, full_name')
     .eq('user_id', user.id)
     .maybeSingle();
 
@@ -63,9 +64,7 @@ async function render(){
     return;
   }
 
-  CURRENT_EMP_UID  = emp.employee_uid;
-  CURRENT_EMP_CODE = emp.employee_code || null;
-
+  CURRENT_EMP_UID = emp.employee_uid;
   $('empName')  && ($('empName').textContent  = emp.full_name || '(sin nombre)');
   $('empUid')   && ($('empUid').textContent   = 'employee_uid: ' + emp.employee_uid);
   $('empName2') && ($('empName2').textContent = emp.full_name || '(sin nombre)');
@@ -75,7 +74,7 @@ async function render(){
   navigate('/app');
 }
 
-// === AUTH ===
+// === Auth ===
 $('btnLogin').onclick = async ()=>{
   $('msg').textContent='';
   const email=$('email').value.trim(), password=$('password').value;
@@ -104,7 +103,7 @@ $('btnCancelReset').onclick = ()=>{ history.replaceState({},'','/'); IS_RECOVERY
 
 async function logout(){
   try{ await supabase.auth.signOut(); }
-  finally{ IS_RECOVERY=false; CURRENT_EMP_UID=null; CURRENT_EMP_CODE=null; history.replaceState({},'','/'); showOnly('authCard'); }
+  finally{ IS_RECOVERY=false; CURRENT_EMP_UID=null; history.replaceState({},'','/'); showOnly('authCard'); }
 }
 $('btnLogout').onclick = logout;
 $('btnLogout2').onclick = logout;
@@ -115,7 +114,7 @@ supabase.auth.onAuthStateChange((event)=>{
   render(); 
 });
 
-// === MARCAS ===
+// === Marcas (IN/OUT) ===
 function getGeo(timeoutMs=10000){
   return new Promise(resolve=>{
     if(!('geolocation' in navigator)) return resolve({lat:null,lon:null});
@@ -129,26 +128,78 @@ function getGeo(timeoutMs=10000){
   });
 }
 
-async function punch(type){
-  const info=$('punchMsg'); info.textContent='';
-
-  if(!CURRENT_EMP_UID){ info.textContent='No hay empleado cargado.'; return; }
-  if(!CURRENT_EMP_CODE){ info.textContent='Falta employee_code en tu ficha. Contacta al admin.'; return; }
-
-  const { lat, lon } = await getGeo();  // si falla, manda null y no bloquea
-
-  // >>> Aquí enviamos punch_date y employee_code <<<
-  const payload = {
-    employee_uid:  CURRENT_EMP_UID,
-    employee_code: CURRENT_EMP_CODE,
-    punch_type:    type,
-    punch_date:    todayLocalDateString(),   // YYYY-MM-DD (evita NOT NULL)
-    latitude:      lat,
-    longitude:     lon
+/**
+ * Inserta una marca con fallback automático:
+ * - Primero intenta con { direction, punch_type } (para esquemas mixtos)
+ * - Si la BD dice "column ... does not exist", reintenta con la variante válida
+ * - Si la BD dice "null value in column ..." para direction/punch_type, reintenta añadiéndola
+ */
+async function insertPunchWithFallback(base, type, infoNode){
+  // helper para crear payload sin incluir claves undefined
+  const withKeys = (obj) => {
+    const out = {};
+    Object.keys(obj).forEach(k => { if (obj[k] !== undefined) out[k] = obj[k]; });
+    return out;
   };
 
-  const { data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle();
-  if(error){ info.textContent='Error al marcar: ' + error.message; return; }
+  // intento 1: ambos (si existen los dos, perfecto)
+  let payload = withKeys({ ...base, direction: type, punch_type: type });
+
+  let { data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle();
+  if (!error) return { data };
+
+  const msg = (error.message || '').toLowerCase();
+
+  // si dice que "direction" no existe, prueba SOLO punch_type
+  if (msg.includes('column "direction"') && msg.includes('does not exist')){
+    payload = withKeys({ ...base, punch_type: type });
+    ({ data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle());
+    if (!error) return { data, error: null };
+  }
+
+  // si dice que "punch_type" no existe, prueba SOLO direction
+  if (msg.includes('column "punch_type"') && msg.includes('does not exist')){
+    payload = withKeys({ ...base, direction: type });
+    ({ data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle());
+    if (!error) return { data, error: null };
+  }
+
+  // si dice que "null value in column 'direction'", reintenta forzando direction
+  if (msg.includes('null value') && msg.includes('column "direction"')){
+    payload = withKeys({ ...base, direction: type });
+    ({ data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle());
+    if (!error) return { data, error: null };
+  }
+
+  // si dice que "null value in column 'punch_type'", reintenta forzando punch_type
+  if (msg.includes('null value') && msg.includes('column "punch_type"')){
+    payload = withKeys({ ...base, punch_type: type });
+    ({ data, error } = await supabase.from('time_punches').insert(payload).select().maybeSingle());
+    if (!error) return { data, error: null };
+  }
+
+  return { data: null, error };
+}
+
+async function punch(type){
+  const info=$('punchMsg'); info.textContent='';
+  if(!CURRENT_EMP_UID){ info.textContent='No hay empleado cargado.'; return; }
+
+  const { lat, lon } = await getGeo();  // si falla GPS, manda nulls y no bloquea
+
+  // payload mínimo (triggers en BD rellenan punch_at / punch_date / punch_time / employee_code)
+  const base = {
+    employee_uid: CURRENT_EMP_UID,
+    latitude:     lat,
+    longitude:    lon
+    // project_code: 'OPCIONAL'
+  };
+
+  const { data, error } = await insertPunchWithFallback(base, type, info);
+  if (error){
+    info.textContent = 'Error al marcar: ' + (error.message || 'desconocido');
+    return;
+  }
 
   const at=new Date(data.punch_at).toLocaleString();
   info.textContent=`Marca ${type} registrada a las ${at}`;
@@ -160,16 +211,18 @@ async function loadRecentPunches(){
   if(!CURRENT_EMP_UID){ box.textContent='—'; return; }
   const { data, error } = await supabase
     .from('time_punches')
-    .select('punch_at, punch_type, latitude, longitude')
+    .select('punch_at, latitude, longitude, direction, punch_type')
     .eq('employee_uid', CURRENT_EMP_UID)
     .order('punch_at',{ascending:false})
     .limit(5);
   if(error){ box.textContent='Error cargando historial'; return; }
   if(!data||data.length===0){ box.textContent='Sin marcas aún.'; return; }
+
   box.innerHTML = data.map(r=>{
     const when=new Date(r.punch_at).toLocaleString();
+    const label = r.direction || r.punch_type || '—';
     const gps=(r.latitude&&r.longitude)?` (${Number(r.latitude).toFixed(5)}, ${Number(r.longitude).toFixed(5)})`:'';
-    return `<div><strong>${r.punch_type}</strong> – ${when}${gps}</div>`;
+    return `<div><strong>${label}</strong> – ${when}${gps}</div>`;
   }).join('');
 }
 $('btnIn').onclick  = ()=>punch('IN');
