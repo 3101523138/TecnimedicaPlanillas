@@ -21,13 +21,26 @@ const st = {
   clientFilter: '',
   lastOverWarnAt: 0,        // anti-spam aviso “te pasaste”
 };
+// === REGLAS Y UTILIDADES DE TIEMPO ===
+const GRACE_MINUTES = 10; // margen para poder cerrar (±10 min)
+
+// Usa tu fmt2 existente si ya lo tienes definido arriba; si no, déjalo:
+const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
+
+// Convierte minutos -> "HH:MM"
+const minToHM = (mins) => `${fmt2(Math.floor((mins||0)/60))}:${fmt2(Math.abs(mins||0)%60)}`;
+
+// Convierte "HH:MM" -> minutos
+const hmToMin = (hhmm) => {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10));
+  return (h*60 + (m||0)) | 0;
+};
 
 // === HELPERS UI ===
 const $   = (s) => document.querySelector(s);
 const show= (el)=> el && (el.style.display = '');
 const hide= (el)=> el && (el.style.display = 'none');
-const fmt2   = (n) => (n < 10 ? `0${n}` : `${n}`);
-const fmtHM  = (mins) => `${fmt2(Math.floor((mins||0)/60))}:${fmt2((mins||0)%60)}`;
 const todayStr = () => new Date().toISOString().slice(0,10);
 function toast(el, msg){ if(!el) return; el.textContent = msg||''; if(!msg) return; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; },6000);}
 
@@ -132,7 +145,7 @@ async function loadStatusAndRecent(){
   const old = punch?.querySelector('.card.inner.statusHdr'); if(old) old.remove();
   const hdr = document.createElement('div');
   hdr.className='card inner statusHdr';
-  hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div><div class="muted">Horas de hoy: ${fmtHM(minsHoy)}</div>`;
+  hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div><div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>`;
   punch && punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
 
   // botones
@@ -154,12 +167,18 @@ async function loadStatusAndRecent(){
     }).join('');
 
   // requeridos
-  if(st.sessionOpen){
-    st.requiredMinutes = Math.max(0, Math.round((Date.now()-new Date(st.sessionOpen.start_at).getTime())/60000));
-  }else{
-    st.requiredMinutes = 0;
-  }
-  $('#allocRequired').textContent = fmtHM(st.requiredMinutes);
+ // requeridos (aplicando margen de gracia)
+if (st.sessionOpen) {
+  const diffMin = Math.max(
+    0,
+    Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000)
+  );
+  st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+} else {
+  st.requiredMinutes = 0;
+}
+$('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
+
 
   // UI asignaciones
   await prepareAllocUI();
@@ -173,7 +192,7 @@ async function loadClients(){
 }
 async function loadProjects(client=null){
   let q = supabase.from('projects')
-    .select('project_code, name, client_name')
+    .select('project_code, name, description, client_name') // <— añade description
     .eq('is_active',true)
     .order('client_name',{ascending:true})
     .order('project_code',{ascending:true});
@@ -181,6 +200,7 @@ async function loadProjects(client=null){
   const {data,error}=await q;
   return error ? [] : (data||[]);
 }
+
 function bindClientFilter(){
   const sel = $('#clientFilter'); if(!sel) return;
   sel.innerHTML = `<option value="">— Todos los clientes —</option>` + st.clients.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -204,15 +224,13 @@ async function loadExistingAllocations(){
 
 // === UI ASIGNACIONES (HH:MM) ===
 function bindMinutesInput(inp,row){
-  // normaliza al salir
   inp.addEventListener('blur', ()=>{
     if(!inp.value.trim()){ row.minutes=0; inp.value=''; updateAllocTotals(); return; }
     const mins = parseHM(inp.value);
     if(mins===null){ row.minutes=0; inp.value=''; }
-    else { row.minutes=mins; inp.value=fmtHM(mins); }
+    else { row.minutes=mins; inp.value=minToHM(mins); } // <— aquí
     updateAllocTotals();
   });
-  // feedback en vivo
   inp.addEventListener('input', ()=>{
     const mins = parseHM(inp.value);
     row.minutes = (mins ?? 0);
@@ -220,85 +238,164 @@ function bindMinutesInput(inp,row){
   });
 }
 
-function renderAllocContainer(){
-  const cont = $('#allocContainer'); cont.innerHTML='';
-  const visible = st.clientFilter ? st.projects.filter(p=>p.client_name===st.clientFilter) : st.projects;
 
-  st.allocRows.forEach((row,idx)=>{
-    const line = document.createElement('div'); line.className='allocRow';
+function renderAllocContainer() {
+  const cont = $('#allocContainer');
+  cont.innerHTML = '';
 
-    const sel = document.createElement('select'); sel.className='allocSelect';
-    sel.innerHTML = `<option value="">— Selecciona proyecto —</option>` +
-      visible.map(p=>`<option value="${p.project_code}" ${p.project_code===row.project_code?'selected':''}>${p.project_code} — ${p.name}</option>`).join('');
-    sel.onchange = ()=>{ row.project_code = sel.value; updateAllocTotals(); };
+  const filter = st.clientFilter || '';
 
-    const inp = document.createElement('input'); inp.type='text'; inp.inputMode='numeric';
-    inp.placeholder='hh:mm'; inp.pattern='^\\d{1,2}:[0-5]\\d$';
-    inp.value = row.minutes ? fmtHM(row.minutes) : '';
-    inp.className='allocMinutes'; bindMinutesInput(inp,row);
+  st.allocRows.forEach((row, idx) => {
+    const line = document.createElement('div');
+    line.className = 'allocRow';
 
-    const del = document.createElement('button'); del.type='button'; del.className='btn light small'; del.textContent='Quitar';
-    del.onclick = ()=>{
-      st.allocRows.splice(idx,1);
-      if(!st.allocRows.length) st.allocRows.push({project_code:'', minutes:0});
-      renderAllocContainer(); updateAllocTotals();
-    };
+    // SELECT de proyectos (filtrado por cliente, pero conservamos el seleccionado)
+    const sel = document.createElement('select');
+    sel.className = 'allocSelect';
 
-    line.appendChild(sel); line.appendChild(inp); line.appendChild(del);
+    // Opción vacía
+    const optEmpty = document.createElement('option');
+    optEmpty.value = '';
+    optEmpty.textContent = '— Selecciona proyecto —';
+    sel.appendChild(optEmpty);
+
+    st.projects.forEach(p => {
+      // Si hay filtro y este proyecto NO pertenece al cliente filtrado,
+      // lo omitimos, salvo que sea el actualmente seleccionado.
+      if (filter && p.client_name !== filter && p.project_code !== row.project_code) return;
+      const o = document.createElement('option');
+      o.value = p.project_code;
+      o.textContent = `${p.project_code} — ${p.name || p.description || ''}`;
+      if (p.project_code === row.project_code) o.selected = true;
+      sel.appendChild(o);
+    });
+
+    sel.addEventListener('change', () => {
+      row.project_code = sel.value;
+    });
+
+    // INPUT HH:MM (step=60)
+    const inp = document.createElement('input');
+    inp.type = 'time';
+    inp.step = 60;
+    inp.value = minToHM(row.minutes || 0);
+    inp.className = 'allocMinutes';
+    inp.addEventListener('input', () => {
+      row.minutes = hmToMin(inp.value);
+      updateAllocTotals();
+    });
+
+    // Botón eliminar fila
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn light small';
+    del.textContent = 'Quitar';
+    del.addEventListener('click', () => {
+      st.allocRows.splice(idx, 1);
+      renderAllocContainer();
+      updateAllocTotals();
+    });
+
+    line.appendChild(sel);
+    line.appendChild(inp);
+    line.appendChild(del);
+
     cont.appendChild(line);
   });
 }
+
 
 function remainingMinutes(){
   const tot = st.allocRows.reduce((a,r)=>a+(r.minutes||0),0);
   return Math.max(0, st.requiredMinutes - tot);
 }
 
-function updateAllocTotals(){
-  const tot = st.allocRows.reduce((a,r)=>a+(r.minutes||0),0);
+function updateAllocTotals() {
+  const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
   const req = st.requiredMinutes;
 
-  $('#allocTotal').textContent    = fmtHM(tot);
-  $('#allocRequired').textContent = fmtHM(req);
+  // Pinta resumen en HH:MM
+  $('#allocTotalHM')?.textContent    = minToHM(tot);
+  $('#allocRequiredHM')?.textContent = minToHM(req);
 
+  // Mensaje y habilitación de SALIDA
   const info = $('#allocInfo');
-  if(tot===req){
+  let ok = false;
+
+  if (tot < req) {
+    info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
+  } else if (tot > req + GRACE_MINUTES) {
+    info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`;
+  } else {
     info.textContent = 'Listo: cubre la jornada.';
-  }else if(tot<req){
-    info.textContent = `Restan ${fmtHM(req - tot)} por asignar.`;
-  }else{
-    info.textContent = `Te pasaste ${fmtHM(tot - req)}. Reduce algún proyecto.`;
-    const now = Date.now();
-    if(now - st.lastOverWarnAt > 1200){
-      toast($('#punchMsg'), `No puedes asignar más de ${fmtHM(req)} (trabajadas).`);
-      st.lastOverWarnAt = now;
-    }
+    ok = true;
   }
 
-  const ok = st.sessionOpen && tot===req && st.allocRows.every(r=>r.project_code);
-  $('#btnOut').disabled      = !ok;
-  $('#btnSaveAlloc').disabled= !ok;
+  // SALIDA sólo si hay sesión y la asignación está dentro del rango permitido
+  $('#btnOut').disabled = !(st.sessionOpen && ok);
 }
 
-async function prepareAllocUI(){
-  st.clients  = await loadClients();
-  st.projects = await loadProjects(st.clientFilter || null);
-  bindClientFilter();
+async function prepareAllocUI() {
+  // Catálogo de proyectos una vez
+  if (!st.projects.length) {
+    const { data } = await supabase
+      .from('projects')
+      .select('project_code, client_name, project_number, description')
+      .order('client_name', { ascending: true })
+      .order('project_number', { ascending: true });
+    st.projects = data || [];
 
-  if(st.sessionOpen){
-    const ex = await loadExistingAllocations();
-    if(ex.length){
-      st.allocRows = ex;                 // ya hay asignaciones
-    }else{
-      // precarga 1 fila con TODO el tiempo trabajado
-      st.allocRows = [{ project_code:'', minutes: st.requiredMinutes }];
+    // Poblar filtro de clientes
+    const clients = [...new Set(st.projects.map(p => p.client_name).filter(Boolean))].sort();
+    const selClient = $('#allocClient');
+    if (selClient && selClient.options.length === 1) {
+      clients.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c;
+        o.textContent = c;
+        selClient.appendChild(o);
+      });
+      selClient.addEventListener('change', () => {
+        st.clientFilter = selClient.value || '';
+        renderAllocContainer(); // solo cambia las opciones del select, NO borra filas
+      });
     }
-  }else{
+  }
+
+  // Si hay sesión abierta, intenta prellenar con lo ya guardado
+  if (st.sessionOpen) {
+    if (st.allocRows.length === 0) {
+      const prev = await loadExistingAllocations(); // ← usa las asignaciones existentes
+      if (prev.length) {
+        st.allocRows = prev; // respeta lo guardado
+      } else {
+        // Si no había nada guardado, precarga una fila con todo lo requerido
+        st.allocRows = [{ project_code: '', minutes: st.requiredMinutes }];
+      }
+    }
+  } else {
     st.allocRows = [];
   }
+
   renderAllocContainer();
   updateAllocTotals();
 }
+
+
+  // Si hay sesión abierta, aseguramos al menos 1 fila
+  if (st.sessionOpen) {
+    if (st.allocRows.length === 0) {
+      // Precarga con el tiempo requerido (en una sola fila)
+      st.allocRows = [{ project_code: '', minutes: st.requiredMinutes }];
+    }
+  } else {
+    st.allocRows = [];
+  }
+
+  renderAllocContainer();
+  updateAllocTotals();
+}
+
 
 // === MARCAR IN/OUT ===
 async function mark(direction){
@@ -316,27 +413,23 @@ async function onMarkIn(){
   finally{ await loadStatusAndRecent(); }
 }
 
-async function onMarkOut(){
-  try{
-    const tot = st.allocRows.reduce((a,r)=>a+(r.minutes||0),0), req=st.requiredMinutes;
-    if(tot!==req){
-      const diff = Math.abs(req-tot);
-      throw new Error(tot<req ? `Faltan ${fmtHM(diff)} por asignar.` : `Te pasaste ${fmtHM(diff)}. Ajusta antes de cerrar.`);
-    }
-    if(st.sessionOpen){
-      const sid=st.sessionOpen.id;
-      await supabase.from('work_session_allocations').delete().eq('session_id',sid);
-      const rows = st.allocRows.filter(r=>r.project_code && r.minutes>0)
-        .map(r=>({session_id:sid, project_code:r.project_code, minutes_alloc:r.minutes}));
-      if(!rows.length) throw new Error('No hay proyectos válidos.');
-      const {error} = await supabase.from('work_session_allocations').insert(rows);
-      if(error) throw error;
-    }
+async function onMarkOut() {
+  try {
+    // 1) Guarda asignación en silencio (validará tolerancia)
+    const ok = await onSaveAlloc(true);
+    if (!ok) return;
+
+    // 2) OUT
     $('#btnOut').disabled = true;
-    await mark('OUT'); toast($('#punchMsg'),'Salida registrada.');
-  }catch(e){ toast($('#punchMsg'),`Error al marcar: ${e.message}`); }
-  finally{ await loadStatusAndRecent(); }
+    await mark('OUT');
+    toast($('#punchMsg'), 'Salida registrada.');
+  } catch (e) {
+    toast($('#punchMsg'), `Error al marcar: ${e.message}`);
+  } finally {
+    await loadStatusAndRecent();
+  }
 }
+
 
 // + Proyecto: precarga con el tiempo restante
 function onAddAlloc(){
@@ -349,25 +442,38 @@ function onAddAlloc(){
 }
 
 // Guardar sin salir
-async function onSaveAlloc(){
-  try{
-    if(!st.sessionOpen) throw new Error('No hay jornada abierta.');
-    const tot=st.allocRows.reduce((a,r)=>a+(r.minutes||0),0), req=st.requiredMinutes;
-    if(tot!==req){
-      const diff=Math.abs(req-tot);
-      throw new Error(tot<req?`Faltan ${fmtHM(diff)} por asignar.`:`Te pasaste ${fmtHM(diff)}. Ajusta antes de guardar.`);
-    }
-    const sid=st.sessionOpen.id;
-    await supabase.from('work_session_allocations').delete().eq('session_id',sid);
-    const rows=st.allocRows.filter(r=>r.project_code && r.minutes>0)
-      .map(r=>({session_id:sid, project_code:r.project_code, minutes_alloc:r.minutes}));
-    if(!rows.length) throw new Error('No hay proyectos válidos.');
-    const {error}=await supabase.from('work_session_allocations').insert(rows);
-    if(error) throw error;
-    toast($('#punchMsg'),'Asignación guardada.');
+async function onSaveAlloc(silent = false) {
+  try {
+    if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
+    const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
+
+    // Aceptamos [req .. req+GRACE]
+    if (tot < st.requiredMinutes) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
+    if (tot > st.requiredMinutes + GRACE_MINUTES) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
+
+    const sid = st.sessionOpen.id;
+
+    // Limpia y sube
+    await supabase.from('work_session_allocations').delete().eq('session_id', sid);
+
+    const rows = st.allocRows
+      .filter(r => r.project_code && (parseInt(r.minutes, 10) > 0))
+      .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes, 10) }));
+
+    if (!rows.length) throw new Error('No hay proyectos válidos.');
+    const { error } = await supabase.from('work_session_allocations').insert(rows);
+    if (error) throw error;
+
+    if (!silent) toast($('#punchMsg'), 'Asignación guardada.');
+    return true;
+  } catch (e) {
+    if (!silent) toast($('#punchMsg'), `Error al guardar: ${e.message}`);
+    return false;
+  } finally {
     updateAllocTotals();
-  }catch(e){ toast($('#punchMsg'),`Error al guardar: ${e.message}`); }
+  }
 }
+
 
 // === NAV ===
 function setNavListeners(){
@@ -379,7 +485,7 @@ function setNavListeners(){
   $('#btnIn')?.addEventListener('click',onMarkIn);
   $('#btnOut')?.addEventListener('click',onMarkOut);
   $('#btnAddAlloc')?.addEventListener('click',onAddAlloc);
-  $('#btnSaveAlloc')?.addEventListener('click',onSaveAlloc);
+  $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false)); // mensajes visibles
 }
 
 // === BOOT ===
