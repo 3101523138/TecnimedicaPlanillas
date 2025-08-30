@@ -71,6 +71,52 @@ async function render(){
   await loadRecentPunches();
   navigate('/app');
 }
+function formatHHMM(totalMinutes){
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+async function loadEstadoYHorasHoy(){
+  const estadoEl = document.getElementById('estadoActual');
+  const horasEl  = document.getElementById('horasHoy');
+  if (!CURRENT_EMP_UID){ estadoEl.textContent='—'; horasEl.textContent='—'; return; }
+
+  // 1) Estado actual: si hay sesión OPEN => Dentro, si no => Fuera
+  const { data: openSess, error: errOpen } = await supabase
+    .from('work_sessions')
+    .select('id, start_at')
+    .eq('employee_uid', CURRENT_EMP_UID)
+    .eq('status', 'OPEN')
+    .order('start_at', { ascending:false })
+    .limit(1);
+
+  if (errOpen){ estadoEl.textContent = 'Error'; } 
+  else { estadoEl.textContent = (openSess && openSess.length) ? 'Dentro' : 'Fuera'; }
+
+  // 2) Horas de hoy (sumando sesiones de hoy; si hay una OPEN, cuenta hasta ahora)
+  const hoy = new Date(); const y=hoy.getFullYear(); const m=String(hoy.getMonth()+1).padStart(2,'0'); const d=String(hoy.getDate()).padStart(2,'0');
+  const hoyStr = `${y}-${m}-${d}`;
+
+  const { data: sessions, error: errS } = await supabase
+    .from('work_sessions')
+    .select('start_at, end_at, status, session_date')
+    .eq('employee_uid', CURRENT_EMP_UID)
+    .eq('session_date', hoyStr)
+    .order('start_at', { ascending:true });
+
+  if (errS || !sessions){ horasEl.textContent='—'; return; }
+
+  let totalMin = 0;
+  const nowMs = Date.now();
+  for (const s of sessions){
+    const startMs = new Date(s.start_at).getTime();
+    const endMs   = s.end_at ? new Date(s.end_at).getTime() : nowMs;
+    if (endMs > startMs) totalMin += (endMs - startMs) / 60000;
+  }
+  horasEl.textContent = formatHHMM(totalMin);
+}
+
 
 // Auth
 $('btnLogin').onclick = async ()=>{
