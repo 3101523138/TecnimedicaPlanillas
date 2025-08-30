@@ -1,6 +1,5 @@
 // === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
-// Usa tu anon key real; dejé el formato listo. Si ya la tenías, déjala igual.
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('AQUI') ) {
@@ -26,13 +25,29 @@ const st = {
 const $ = (s) => document.querySelector(s);
 const show = (el) => el && (el.style.display = '');
 const hide = (el) => el && (el.style.display = 'none');
+
 const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
-const fmtHM = (mins) => `${fmt2(Math.floor(mins/60))}:${fmt2(mins%60)}`;
+const fmtHM = (mins) => `${fmt2(Math.floor((mins||0)/60))}:${fmt2((mins||0)%60)}`;
+
+// hh:mm -> minutos. Acepta "H", "HH", "H:MM", "HH:MM". Si vacío o inválido => null
+function parseHM(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  if (/^\d+$/.test(s)) {                 // "8" => 8h
+    const h = parseInt(s, 10);
+    return (isFinite(h) && h >= 0) ? h*60 : null;
+  }
+  const m = s.match(/^(\d{1,2}):([0-5]\d)$/); // "8:30", "12:05"
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+  if (!isFinite(h) || !isFinite(mm)) return null;
+  return h*60 + mm;
+}
+
 const todayStr = () => new Date().toISOString().slice(0,10);
 
 function routeTo(path) {
   history.replaceState({}, '', path);
-  // cards
   hide($('#authCard'));
   hide($('#resetCard'));
   hide($('#homeCard'));
@@ -54,7 +69,6 @@ function toast(el, msg) {
   if (!el) return;
   el.textContent = msg || '';
   if (!msg) return;
-  // auto clear
   setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 6000);
 }
 
@@ -75,19 +89,15 @@ async function loadSession() {
   st.user = session?.user || null;
   return st.user;
 }
-
 async function signIn(email, password) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
 }
-
 async function sendReset(email) {
-  // Reemplaza la URL por tu /reset publicado en Netlify si usas subpath
   const redirectTo = `${location.origin}/reset`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
-
 async function signOut() {
   await supabase.auth.signOut();
   st.user = null;
@@ -97,14 +107,12 @@ async function signOut() {
 
 // === EMPLEADO ===
 async function loadEmployeeContext() {
-  // Primero intentamos por user_id
   let q = supabase.from('employees')
     .select('employee_uid, employee_code, full_name, login_enabled')
     .eq('user_id', st.user.id)
     .single();
   let { data, error } = await q;
 
-  // fallback por email si no existiera user_id
   if (error || !data) {
     const { data: e2 } = await supabase.from('employees')
       .select('employee_uid, employee_code, full_name, login_enabled')
@@ -122,17 +130,14 @@ async function loadEmployeeContext() {
     full_name: data.full_name || '(sin nombre)',
   };
 
-  // Pintar Home
   $('#empName').textContent = st.employee.full_name;
   $('#empUid').textContent = `employee_uid: ${st.employee.uid}`;
-  // Pintar encabezado de Marcas (por si ya navega)
   $('#empName2') && ($('#empName2').textContent = st.employee.full_name);
   $('#empUid2') && ($('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`);
 }
 
 // === MARCAS: estado, últimos, etc. ===
 async function loadStatusAndRecent() {
-  // Estado actual y minutos de hoy
   let estado = 'Fuera';
   let minsHoy = 0;
 
@@ -147,13 +152,10 @@ async function loadStatusAndRecent() {
 
     const ws = data && data[0];
     st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
-
-    if (st.sessionOpen) {
-      estado = 'Dentro';
-    }
+    if (st.sessionOpen) estado = 'Dentro';
   }
 
-  // 2) Minutos de hoy: sumar diferencias (coprocesado rápido)
+  // 2) Minutos de hoy
   {
     const { data } = await supabase
       .from('work_sessions')
@@ -172,26 +174,22 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // Pintar header de marcas
-  const hdr = document.createElement('div');
-  hdr.className = 'card inner';
-  hdr.innerHTML = `
-    <div><strong>Estado actual:</strong> ${estado}</div>
-    <div class="muted">Horas de hoy: ${fmtHM(minsHoy)}</div>
-  `;
-  // Insertarlo encima del bloque de botones (primer inner después del topbar)
+  // Header
   const punchCard = $('#punchCard');
   const oldHdr = punchCard?.querySelector('.card.inner.statusHdr');
   if (oldHdr) oldHdr.remove();
-  hdr.classList.add('statusHdr');
+  const hdr = document.createElement('div');
+  hdr.className = 'card inner statusHdr';
+  hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div>
+                   <div class="muted">Horas de hoy: ${fmtHM(minsHoy)}</div>`;
   punchCard && punchCard.insertBefore(hdr, punchCard.querySelector('.row.gap.m-t'));
 
-  // Botones ENTRADA/SALIDA según estado
+  // Botones
   $('#btnIn').disabled  = (estado === 'Dentro');
-  $('#btnOut').disabled = (estado !== 'Dentro'); // SALIDA sólo si está dentro
-  $('#punchMsg').textContent = '';
+  $('#btnOut').disabled = (estado !== 'Dentro');
+  toast($('#punchMsg'), '');
 
-  // 3) Últimas marcas (de hoy)
+  // 3) Últimas marcas de hoy
   const { data: tps } = await supabase
     .from('time_punches')
     .select('direction, punch_at, latitude, longitude')
@@ -200,34 +198,29 @@ async function loadStatusAndRecent() {
     .order('punch_at', { ascending: false })
     .limit(10);
 
-  const rp = $('#recentPunches');
-  if (!tps?.length) rp.textContent = 'Sin marcas aún.';
-  else {
-    rp.innerHTML = tps.map(tp => {
-      const d = new Date(tp.punch_at);
-      const hh = d.toLocaleString();
-      const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
-      return `<div><strong>${tp.direction}</strong> — ${hh}${loc}</div>`;
-    }).join('');
-  }
+  $('#recentPunches').innerHTML = (!tps?.length)
+    ? 'Sin marcas aún.'
+    : tps.map(tp => {
+        const d = new Date(tp.punch_at);
+        const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
+        return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
+      }).join('');
 
-  // 4) Minutos requeridos para asignación (si hay sesión abierta)
+  // 4) Requeridos (en minutos, mostrados como HH:MM)
   if (st.sessionOpen) {
     const diffMin = Math.max(0, Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000));
     st.requiredMinutes = diffMin;
-    $('#allocRequired').textContent = `${st.requiredMinutes}`;
   } else {
     st.requiredMinutes = 0;
-    $('#allocRequired').textContent = '0';
   }
+  $('#allocRequired').textContent = fmtHM(st.requiredMinutes);
 
-  // 5) Preparar UI de asignaciones (clientes + proyectos activos)
+  // 5) UI de asignaciones
   await prepareAllocUI();
 }
 
 // === PROYECTOS (cliente + lista) ===========================================
 async function loadClients() {
-  // clientes únicos de proyectos activos
   const { data, error } = await supabase
     .from('projects')
     .select('client_name')
@@ -251,7 +244,7 @@ async function loadProjects(client = null) {
 }
 
 function bindClientFilter() {
-  const sel = $('#clientFilter'); // si no existe, no hacemos nada
+  const sel = $('#clientFilter');
   if (!sel) return;
   sel.innerHTML = `<option value="">— Todos los clientes —</option>`
     + st.clients.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -264,7 +257,7 @@ function bindClientFilter() {
   };
 }
 
-// === ASIGNACIONES (UI) ======================================================
+// === ASIGNACIONES (UI HH:MM) ===============================================
 function renderAllocContainer() {
   const cont = $('#allocContainer');
   cont.innerHTML = '';
@@ -277,7 +270,7 @@ function renderAllocContainer() {
     const line = document.createElement('div');
     line.className = 'allocRow';
 
-    // SELECT de proyectos (muestra "PROJECT-000001 — Nombre del proyecto")
+    // SELECT proyecto
     const sel = document.createElement('select');
     sel.className = 'allocSelect';
     sel.innerHTML = `<option value="">— Selecciona proyecto —</option>`
@@ -288,14 +281,17 @@ function renderAllocContainer() {
         }).join('');
     sel.addEventListener('change', () => { row.project_code = sel.value; });
 
-    // INPUT minutos
+    // INPUT HH:MM
     const inp = document.createElement('input');
-    inp.type = 'number'; inp.min = '0'; inp.step = '1';
-    inp.placeholder = 'min';
-    inp.value = row.minutes || '';
+    inp.type = 'text';
+    inp.inputMode = 'numeric';
+    inp.placeholder = 'hh:mm';
+    inp.pattern = '^\\d{1,2}:[0-5]\\d$';
+    inp.value = row.minutes ? fmtHM(row.minutes) : '';
     inp.className = 'allocMinutes';
     inp.addEventListener('input', () => {
-      row.minutes = parseInt(inp.value || '0', 10) || 0;
+      const mins = parseHM(inp.value);
+      row.minutes = (mins ?? 0);
       updateAllocTotals();
     });
 
@@ -319,21 +315,20 @@ function renderAllocContainer() {
 }
 
 function updateAllocTotals() {
-  const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
-  $('#allocTotal').textContent = `${tot}`;
-  // Habilitar SALIDA sólo si tot >= requeridos y hay sesión abierta
-  $('#btnOut').disabled = !(st.sessionOpen && tot >= st.requiredMinutes);
+  const totMin = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
+  $('#allocTotal').textContent = fmtHM(totMin);
+  $('#allocRequired').textContent = fmtHM(st.requiredMinutes);
+  // Habilitar SALIDA sólo si tot >= requeridos
+  $('#btnOut').disabled = !(st.sessionOpen && totMin >= st.requiredMinutes);
 }
 
 async function prepareAllocUI() {
-  // Si existe el select de clientes, lo usamos; si no, cargamos todo
   st.clients  = await loadClients();
   st.projects = await loadProjects(st.clientFilter || null);
   bindClientFilter();
 
-  // Si hay sesión abierta, comenzar con 1 fila
   if (st.sessionOpen) {
-    if (st.allocRows.length === 0) st.allocRows = [{ project_code: '', minutes: 0 }];
+    if (!st.allocRows.length) st.allocRows = [{ project_code:'', minutes:0 }];
   } else {
     st.allocRows = [];
   }
@@ -370,13 +365,12 @@ async function onMarkIn() {
 
 async function onMarkOut() {
   try {
-    // Validar que cubrimos los minutos requeridos
-    const total = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
-    if (total < st.requiredMinutes) {
-      throw new Error(`Faltan minutos por asignar: ${st.requiredMinutes - total}`);
+    const totMin = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
+    if (totMin < st.requiredMinutes) {
+      const diff = st.requiredMinutes - totMin;
+      throw new Error(`Faltan ${fmtHM(diff)} por asignar.`);
     }
 
-    // Guardar asignación (limpiamos anteriores y subimos las nuevas)
     if (st.sessionOpen) {
       const sid = st.sessionOpen.id;
       await supabase.from('work_session_allocations').delete().eq('session_id', sid);
@@ -390,11 +384,9 @@ async function onMarkOut() {
       if (error) throw error;
     }
 
-    // Ahora sí OUT
     $('#btnOut').disabled = true;
     await mark('OUT');
     toast($('#punchMsg'), 'Salida registrada.');
-
   } catch (e) {
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
@@ -418,9 +410,10 @@ function onAddAlloc() {
 async function onSaveAlloc() {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
-    const total = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
-    if (total < st.requiredMinutes) {
-      throw new Error(`Faltan minutos por asignar: ${st.requiredMinutes - total}`);
+    const totMin = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
+    if (totMin < st.requiredMinutes) {
+      const diff = st.requiredMinutes - totMin;
+      throw new Error(`Faltan ${fmtHM(diff)} por asignar.`);
     }
 
     const sid = st.sessionOpen.id;
@@ -462,9 +455,9 @@ function setNavListeners() {
 
 // === ARRANQUE ===
 async function boot() {
-  console.log('APP JS v3.1 – proyectos activos + filtro cliente (opcional)');
+  console.log('APP JS v7 – UI HH:MM');
 
-  // Rutas por query (recovery)
+  // Recovery
   const hash = location.pathname;
   const params = new URLSearchParams(location.hash?.split('?')[1] || location.search);
   const type = params.get('type');
@@ -475,7 +468,6 @@ async function boot() {
   const user = await loadSession();
   if (!user) {
     routeTo('/');
-    // Login
     $('#btnLogin')?.addEventListener('click', async () => {
       try {
         const email = $('#email').value.trim();
@@ -485,11 +477,8 @@ async function boot() {
         await loadSession();
         await loadEmployeeContext();
         routeTo('/app');
-      } catch (e) {
-        toast($('#msg'), e.message);
-      } finally {
-        $('#btnLogin').disabled = false;
-      }
+      } catch (e) { toast($('#msg'), e.message); }
+      finally { $('#btnLogin').disabled = false; }
     });
 
     $('#btnForgot')?.addEventListener('click', async () => {
@@ -498,12 +487,9 @@ async function boot() {
         if (!email) throw new Error('Escribe tu correo y vuelve a pulsar “¿Olvidaste…?”');
         await sendReset(email);
         toast($('#msg'), 'Te enviamos un correo con el enlace para restablecer.');
-      } catch (e) {
-        toast($('#msg'), e.message);
-      }
+      } catch (e) { toast($('#msg'), e.message); }
     });
 
-    // Reset screen
     $('#btnSetNew')?.addEventListener('click', async () => {
       try {
         const pw = $('#newPassword').value;
@@ -511,13 +497,10 @@ async function boot() {
         const { error } = await supabase.auth.updateUser({ password: pw });
         if (error) throw error;
         toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
-      } catch (e) {
-        toast($('#msg2'), e.message);
-      }
+      } catch (e) { toast($('#msg2'), e.message); }
     });
 
     $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
-
     return;
   }
 
@@ -525,16 +508,9 @@ async function boot() {
   try {
     await loadEmployeeContext();
     routeTo('/app');
-    // refrescar encabezado Punch si navega a /marcas
-    document.querySelector('[data-nav="/marcas"]')?.addEventListener('click', async () => {
-      $('#empName2').textContent = st.employee.full_name;
-      $('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`;
-      await loadStatusAndRecent();
-    });
   } catch (e) {
     toast($('#msg'), e.message);
     await signOut();
-    return;
   }
 }
 
