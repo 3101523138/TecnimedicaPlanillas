@@ -257,7 +257,36 @@ function bindClientFilter() {
   };
 }
 
+// === ASIGNACIONES (leer existentes) ========================================
+async function loadExistingAllocations() {
+  if (!st.sessionOpen) return [];
+  const { data, error } = await supabase
+    .from('work_session_allocations')
+    .select('project_code, minutes_alloc')
+    .eq('session_id', st.sessionOpen.id)
+    .order('project_code', { ascending: true });
+  if (error) { console.error(error); return []; }
+  return (data || []).map(r => ({ project_code: r.project_code, minutes: r.minutes_alloc || 0 }));
+}
+
 // === ASIGNACIONES (UI HH:MM) ===============================================
+function bindMinutesInput(inp, row) {
+  // En blur, normalizo: "8" => "08:00", "08:5" inválido => ""
+  inp.addEventListener('blur', () => {
+    if (!inp.value.trim()) { row.minutes = 0; inp.value = ''; updateAllocTotals(); return; }
+    const mins = parseHM(inp.value);
+    if (mins === null) { row.minutes = 0; inp.value = ''; }
+    else { row.minutes = mins; inp.value = fmtHM(mins); }
+    updateAllocTotals();
+  });
+  // En input, solo recalculo totales si parece válido
+  inp.addEventListener('input', () => {
+    const mins = parseHM(inp.value);
+    row.minutes = (mins ?? 0);
+    updateAllocTotals();
+  });
+}
+
 function renderAllocContainer() {
   const cont = $('#allocContainer');
   cont.innerHTML = '';
@@ -279,7 +308,7 @@ function renderAllocContainer() {
           const selAttr = (p.project_code === row.project_code) ? 'selected' : '';
           return `<option value="${p.project_code}" ${selAttr}>${label}</option>`;
         }).join('');
-    sel.addEventListener('change', () => { row.project_code = sel.value; });
+    sel.addEventListener('change', () => { row.project_code = sel.value; updateAllocTotals(); });
 
     // INPUT HH:MM
     const inp = document.createElement('input');
@@ -289,11 +318,7 @@ function renderAllocContainer() {
     inp.pattern = '^\\d{1,2}:[0-5]\\d$';
     inp.value = row.minutes ? fmtHM(row.minutes) : '';
     inp.className = 'allocMinutes';
-    inp.addEventListener('input', () => {
-      const mins = parseHM(inp.value);
-      row.minutes = (mins ?? 0);
-      updateAllocTotals();
-    });
+    bindMinutesInput(inp, row);
 
     // Botón eliminar fila
     const del = document.createElement('button');
@@ -316,10 +341,25 @@ function renderAllocContainer() {
 
 function updateAllocTotals() {
   const totMin = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
-  $('#allocTotal').textContent = fmtHM(totMin);
-  $('#allocRequired').textContent = fmtHM(st.requiredMinutes);
-  // Habilitar SALIDA sólo si tot >= requeridos
-  $('#btnOut').disabled = !(st.sessionOpen && totMin >= st.requiredMinutes);
+  const req   = st.requiredMinutes;
+
+  $('#allocTotal').textContent    = fmtHM(totMin);
+  $('#allocRequired').textContent = fmtHM(req);
+
+  // Mensaje estado
+  const info = $('#allocInfo');
+  if (totMin === req) {
+    info.textContent = 'Listo: cubre la jornada.';
+  } else if (totMin < req) {
+    info.textContent = `Restan ${fmtHM(req - totMin)} por asignar.`;
+  } else {
+    info.textContent = `Te pasaste ${fmtHM(totMin - req)}. Reduce algún proyecto.`;
+  }
+
+  // Habilitar sólo si tot == requeridos
+  const ok = st.sessionOpen && totMin === req && st.allocRows.every(r => r.project_code);
+  $('#btnOut').disabled  = !ok;
+  $('#btnSaveAlloc').disabled = !ok;
 }
 
 async function prepareAllocUI() {
@@ -328,7 +368,8 @@ async function prepareAllocUI() {
   bindClientFilter();
 
   if (st.sessionOpen) {
-    if (!st.allocRows.length) st.allocRows = [{ project_code:'', minutes:0 }];
+    const ex = await loadExistingAllocations();
+    st.allocRows = ex.length ? ex : [{ project_code:'', minutes:0 }];
   } else {
     st.allocRows = [];
   }
@@ -366,9 +407,12 @@ async function onMarkIn() {
 async function onMarkOut() {
   try {
     const totMin = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
-    if (totMin < st.requiredMinutes) {
-      const diff = st.requiredMinutes - totMin;
-      throw new Error(`Faltan ${fmtHM(diff)} por asignar.`);
+    const req = st.requiredMinutes;
+    if (totMin !== req) {
+      const diff = Math.abs(req - totMin);
+      throw new Error(totMin < req
+        ? `Faltan ${fmtHM(diff)} por asignar.`
+        : `Te pasaste ${fmtHM(diff)}. Ajusta antes de cerrar.`);
     }
 
     if (st.sessionOpen) {
@@ -411,9 +455,12 @@ async function onSaveAlloc() {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
     const totMin = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
-    if (totMin < st.requiredMinutes) {
-      const diff = st.requiredMinutes - totMin;
-      throw new Error(`Faltan ${fmtHM(diff)} por asignar.`);
+    const req = st.requiredMinutes;
+    if (totMin !== req) {
+      const diff = Math.abs(req - totMin);
+      throw new Error(totMin < req
+        ? `Faltan ${fmtHM(diff)} por asignar.`
+        : `Te pasaste ${fmtHM(diff)}. Ajusta antes de guardar.`);
     }
 
     const sid = st.sessionOpen.id;
@@ -455,7 +502,7 @@ function setNavListeners() {
 
 // === ARRANQUE ===
 async function boot() {
-  console.log('APP JS v7 – UI HH:MM');
+  console.log('APP JS v8 – UI HH:MM + validación exacta + precarga');
 
   // Recovery
   const hash = location.pathname;
