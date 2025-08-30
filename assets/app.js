@@ -1,46 +1,60 @@
-// === CONFIG SUPABASE (usa tus valores reales) ===============================
+// === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
+// Usa tu anon key real; dejé el formato listo. Si ya la tenías, déjala igual.
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('AQUI')) {
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('AQUI') ) {
   alert('⚠️ Falta configurar SUPABASE_URL o SUPABASE_ANON_KEY en assets/app.js');
   throw new Error('Missing Supabase config');
 }
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-});
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// === STATE ==================================================================
+// === STATE ===
 const st = {
   user: null,
-  employee: null,         // { uid, code, full_name }
-  sessionOpen: null,      // work_sessions fila OPEN (o null)
-  requiredMinutes: 0,     // minutos a asignar para cerrar
-  allocRows: [],          // [{ project_code, minutes }]
-  clients: [],            // ['Cliente A', ...]
-  projects: [],           // [{ project_code, name, client_name }]
-  clientFilter: '',       // cliente seleccionado en el filtro
+  employee: null,           // { uid, code, full_name }
+  sessionOpen: null,        // work_sessions row con status OPEN (o null)
+  requiredMinutes: 0,       // minutos a asignar (según sesión abierta)
+  allocRows: [],            // [{project_code, minutes}]
+  projects: [],             // catálogo de proyectos (activos)
+  clients: [],              // lista única de clientes
+  clientFilter: '',         // cliente seleccionado (si existe el select)
 };
 
-// === HELPERS ================================================================
+// === HELPERS UI ===
 const $ = (s) => document.querySelector(s);
-const hide = (el) => el && (el.style.display = 'none');
 const show = (el) => el && (el.style.display = '');
+const hide = (el) => el && (el.style.display = 'none');
 const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
 const fmtHM = (mins) => `${fmt2(Math.floor(mins/60))}:${fmt2(mins%60)}`;
 const todayStr = () => new Date().toISOString().slice(0,10);
 
 function routeTo(path) {
   history.replaceState({}, '', path);
-  ['#authCard','#resetCard','#homeCard','#punchCard','#projectsCard','#leaveCard','#payslipsCard']
-    .forEach(id => (id===path ? show($(id)) : hide($(id))));
+  // cards
+  hide($('#authCard'));
+  hide($('#resetCard'));
+  hide($('#homeCard'));
+  hide($('#punchCard'));
+  hide($('#projectsCard'));
+  hide($('#leaveCard'));
+  hide($('#payslipsCard'));
+
+  if (path === '/' || path === '/login') show($('#authCard'));
+  else if (path === '/reset') show($('#resetCard'));
+  else if (path === '/app') show($('#homeCard'));
+  else if (path === '/marcas') show($('#punchCard'));
+  else if (path === '/proyectos') show($('#projectsCard'));
+  else if (path === '/licencias') show($('#leaveCard'));
+  else if (path === '/comprobantes') show($('#payslipsCard'));
 }
 
 function toast(el, msg) {
   if (!el) return;
   el.textContent = msg || '';
   if (!msg) return;
+  // auto clear
   setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 6000);
 }
 
@@ -55,7 +69,7 @@ async function getGPS() {
   });
 }
 
-// === AUTH ===================================================================
+// === AUTH ===
 async function loadSession() {
   const { data: { session } } = await supabase.auth.getSession();
   st.user = session?.user || null;
@@ -68,6 +82,7 @@ async function signIn(email, password) {
 }
 
 async function sendReset(email) {
+  // Reemplaza la URL por tu /reset publicado en Netlify si usas subpath
   const redirectTo = `${location.origin}/reset`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
@@ -75,26 +90,29 @@ async function sendReset(email) {
 
 async function signOut() {
   await supabase.auth.signOut();
-  st.user = null; st.employee = null; st.sessionOpen = null;
+  st.user = null;
+  st.employee = null;
   routeTo('/');
 }
 
-// === EMPLEADO ==============================================================
-// Busca por user_id y si no, por email
+// === EMPLEADO ===
 async function loadEmployeeContext() {
+  // Primero intentamos por user_id
   let q = supabase.from('employees')
     .select('employee_uid, employee_code, full_name, login_enabled')
     .eq('user_id', st.user.id)
     .single();
   let { data, error } = await q;
 
+  // fallback por email si no existiera user_id
   if (error || !data) {
-    const r = await supabase.from('employees')
+    const { data: e2 } = await supabase.from('employees')
       .select('employee_uid, employee_code, full_name, login_enabled')
       .eq('email', st.user.email)
       .single();
-    data = r.data || null;
+    data = e2 || null;
   }
+
   if (!data) throw new Error('No se encontró el empleado');
   if (data.login_enabled === false) throw new Error('Usuario deshabilitado');
 
@@ -104,19 +122,21 @@ async function loadEmployeeContext() {
     full_name: data.full_name || '(sin nombre)',
   };
 
-  // Pintar en Home y Punch
-  $('#empName') .textContent = st.employee.full_name;
-  $('#empUid')  .textContent = `employee_uid: ${st.employee.uid}`;
-  $('#empName2').textContent = st.employee.full_name;
-  $('#empUid2') .textContent = `employee_uid: ${st.employee.uid}`;
+  // Pintar Home
+  $('#empName').textContent = st.employee.full_name;
+  $('#empUid').textContent = `employee_uid: ${st.employee.uid}`;
+  // Pintar encabezado de Marcas (por si ya navega)
+  $('#empName2') && ($('#empName2').textContent = st.employee.full_name);
+  $('#empUid2') && ($('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`);
 }
 
-// === ESTADO / ÚLTIMAS MARCAS ===============================================
+// === MARCAS: estado, últimos, etc. ===
 async function loadStatusAndRecent() {
+  // Estado actual y minutos de hoy
   let estado = 'Fuera';
   let minsHoy = 0;
 
-  // 1) Sesión reciente
+  // 1) Sesión abierta
   {
     const { data } = await supabase
       .from('work_sessions')
@@ -125,42 +145,53 @@ async function loadStatusAndRecent() {
       .order('start_at', { ascending: false })
       .limit(1);
 
-    const ws = data?.[0] || null;
+    const ws = data && data[0];
     st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
-    if (st.sessionOpen) estado = 'Dentro';
+
+    if (st.sessionOpen) {
+      estado = 'Dentro';
+    }
   }
 
-  // 2) Minutos de hoy (suma de sesiones del día)
+  // 2) Minutos de hoy: sumar diferencias (coprocesado rápido)
   {
     const { data } = await supabase
       .from('work_sessions')
       .select('start_at, end_at')
       .eq('employee_uid', st.employee.uid)
       .eq('session_date', todayStr());
+
     if (data?.length) {
       const now = Date.now();
       minsHoy = data.reduce((acc, r) => {
-        const s = new Date(r.start_at).getTime();
-        const e = r.end_at ? new Date(r.end_at).getTime() : now;
-        return acc + Math.max(0, Math.round((e - s)/60000));
+        const start = new Date(r.start_at).getTime();
+        const end = r.end_at ? new Date(r.end_at).getTime() : now;
+        const diff = Math.max(0, Math.round((end - start) / 60000));
+        return acc + diff;
       }, 0);
     }
   }
 
-  // Header estado
-  $('#punchCard .statusHdr')?.remove();
+  // Pintar header de marcas
   const hdr = document.createElement('div');
-  hdr.className = 'card inner statusHdr';
-  hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div>
-                   <div class="muted">Horas de hoy: ${fmtHM(minsHoy)}</div>`;
-  $('#punchCard').insertBefore(hdr, $('#punchCard .row.gap.m-t'));
+  hdr.className = 'card inner';
+  hdr.innerHTML = `
+    <div><strong>Estado actual:</strong> ${estado}</div>
+    <div class="muted">Horas de hoy: ${fmtHM(minsHoy)}</div>
+  `;
+  // Insertarlo encima del bloque de botones (primer inner después del topbar)
+  const punchCard = $('#punchCard');
+  const oldHdr = punchCard?.querySelector('.card.inner.statusHdr');
+  if (oldHdr) oldHdr.remove();
+  hdr.classList.add('statusHdr');
+  punchCard && punchCard.insertBefore(hdr, punchCard.querySelector('.row.gap.m-t'));
 
-  // Botones
+  // Botones ENTRADA/SALIDA según estado
   $('#btnIn').disabled  = (estado === 'Dentro');
-  $('#btnOut').disabled = (estado !== 'Dentro');
-  toast($('#punchMsg'), '');
+  $('#btnOut').disabled = (estado !== 'Dentro'); // SALIDA sólo si está dentro
+  $('#punchMsg').textContent = '';
 
-  // 3) Últimas marcas de hoy
+  // 3) Últimas marcas (de hoy)
   const { data: tps } = await supabase
     .from('time_punches')
     .select('direction, punch_at, latitude, longitude')
@@ -169,40 +200,44 @@ async function loadStatusAndRecent() {
     .order('punch_at', { ascending: false })
     .limit(10);
 
-  $('#recentPunches').innerHTML = (!tps?.length)
-    ? 'Sin marcas aún.'
-    : tps.map(tp => {
-        const d = new Date(tp.punch_at);
-        const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
-        return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
-      }).join('');
+  const rp = $('#recentPunches');
+  if (!tps?.length) rp.textContent = 'Sin marcas aún.';
+  else {
+    rp.innerHTML = tps.map(tp => {
+      const d = new Date(tp.punch_at);
+      const hh = d.toLocaleString();
+      const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
+      return `<div><strong>${tp.direction}</strong> — ${hh}${loc}</div>`;
+    }).join('');
+  }
 
-  // 4) Minutos requeridos (si hay OPEN)
+  // 4) Minutos requeridos para asignación (si hay sesión abierta)
   if (st.sessionOpen) {
     const diffMin = Math.max(0, Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000));
     st.requiredMinutes = diffMin;
+    $('#allocRequired').textContent = `${st.requiredMinutes}`;
   } else {
     st.requiredMinutes = 0;
+    $('#allocRequired').textContent = '0';
   }
-  $('#allocRequired').textContent = `${st.requiredMinutes}`;
 
-  // 5) UI de asignaciones (clientes + proyectos)
+  // 5) Preparar UI de asignaciones (clientes + proyectos activos)
   await prepareAllocUI();
 }
 
-// === PROYECTOS / CLIENTES ===================================================
+// === PROYECTOS (cliente + lista) ===========================================
 async function loadClients() {
+  // clientes únicos de proyectos activos
   const { data, error } = await supabase
     .from('projects')
     .select('client_name')
     .eq('is_active', true)
     .order('client_name', { ascending: true });
   if (error) { console.error(error); return []; }
-  // unique
   return [...new Set((data || []).map(r => r.client_name).filter(Boolean))];
 }
 
-async function loadProjects(client=null) {
+async function loadProjects(client = null) {
   let q = supabase
     .from('projects')
     .select('project_code, name, client_name')
@@ -216,8 +251,8 @@ async function loadProjects(client=null) {
 }
 
 function bindClientFilter() {
-  const sel = $('#clientFilter');
-  if (!sel) return; // si no existe en el HTML, no pasa nada
+  const sel = $('#clientFilter'); // si no existe, no hacemos nada
+  if (!sel) return;
   sel.innerHTML = `<option value="">— Todos los clientes —</option>`
     + st.clients.map(c => `<option value="${c}">${c}</option>`).join('');
   sel.value = st.clientFilter || '';
@@ -229,9 +264,11 @@ function bindClientFilter() {
   };
 }
 
+// === ASIGNACIONES (UI) ======================================================
 function renderAllocContainer() {
   const cont = $('#allocContainer');
   cont.innerHTML = '';
+
   const visible = st.clientFilter
     ? st.projects.filter(p => p.client_name === st.clientFilter)
     : st.projects;
@@ -240,7 +277,7 @@ function renderAllocContainer() {
     const line = document.createElement('div');
     line.className = 'allocRow';
 
-    // SELECT proyecto
+    // SELECT de proyectos (muestra "PROJECT-000001 — Nombre del proyecto")
     const sel = document.createElement('select');
     sel.className = 'allocSelect';
     sel.innerHTML = `<option value="">— Selecciona proyecto —</option>`
@@ -249,7 +286,7 @@ function renderAllocContainer() {
           const selAttr = (p.project_code === row.project_code) ? 'selected' : '';
           return `<option value="${p.project_code}" ${selAttr}>${label}</option>`;
         }).join('');
-    sel.onchange = () => { row.project_code = sel.value; };
+    sel.addEventListener('change', () => { row.project_code = sel.value; });
 
     // INPUT minutos
     const inp = document.createElement('input');
@@ -257,35 +294,46 @@ function renderAllocContainer() {
     inp.placeholder = 'min';
     inp.value = row.minutes || '';
     inp.className = 'allocMinutes';
-    inp.oninput = () => { row.minutes = parseInt(inp.value || '0', 10) || 0; updateAllocTotals(); };
+    inp.addEventListener('input', () => {
+      row.minutes = parseInt(inp.value || '0', 10) || 0;
+      updateAllocTotals();
+    });
 
-    // Quitar fila
+    // Botón eliminar fila
     const del = document.createElement('button');
-    del.type='button'; del.className='btn light small'; del.textContent='Quitar';
-    del.onclick = () => {
+    del.type = 'button';
+    del.className = 'btn light small';
+    del.textContent = 'Quitar';
+    del.addEventListener('click', () => {
       st.allocRows.splice(idx, 1);
       if (!st.allocRows.length) st.allocRows.push({ project_code:'', minutes:0 });
-      renderAllocContainer(); updateAllocTotals();
-    };
+      renderAllocContainer();
+      updateAllocTotals();
+    });
 
-    line.appendChild(sel); line.appendChild(inp); line.appendChild(del);
+    line.appendChild(sel);
+    line.appendChild(inp);
+    line.appendChild(del);
     cont.appendChild(line);
   });
 }
 
 function updateAllocTotals() {
-  const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0,10) || 0), 0);
+  const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
   $('#allocTotal').textContent = `${tot}`;
+  // Habilitar SALIDA sólo si tot >= requeridos y hay sesión abierta
   $('#btnOut').disabled = !(st.sessionOpen && tot >= st.requiredMinutes);
 }
 
 async function prepareAllocUI() {
+  // Si existe el select de clientes, lo usamos; si no, cargamos todo
   st.clients  = await loadClients();
   st.projects = await loadProjects(st.clientFilter || null);
   bindClientFilter();
 
+  // Si hay sesión abierta, comenzar con 1 fila
   if (st.sessionOpen) {
-    if (!st.allocRows.length) st.allocRows = [{ project_code:'', minutes:0 }];
+    if (st.allocRows.length === 0) st.allocRows = [{ project_code: '', minutes: 0 }];
   } else {
     st.allocRows = [];
   }
@@ -293,12 +341,12 @@ async function prepareAllocUI() {
   updateAllocTotals();
 }
 
-// === MARCAR ENTRADA / SALIDA ===============================================
+// === MARCAR ENTRADA / SALIDA ===
 async function mark(direction) {
   const gps = await getGPS();
   const payload = {
     employee_uid: st.employee.uid,
-    direction, // 'IN' | 'OUT'
+    direction,                       // 'IN' | 'OUT'
     latitude: gps?.lat ?? null,
     longitude: gps?.lon ?? null,
   };
@@ -322,23 +370,31 @@ async function onMarkIn() {
 
 async function onMarkOut() {
   try {
-    const total = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0,10) || 0), 0);
-    if (total < st.requiredMinutes) throw new Error(`Faltan minutos por asignar: ${st.requiredMinutes - total}`);
+    // Validar que cubrimos los minutos requeridos
+    const total = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
+    if (total < st.requiredMinutes) {
+      throw new Error(`Faltan minutos por asignar: ${st.requiredMinutes - total}`);
+    }
 
+    // Guardar asignación (limpiamos anteriores y subimos las nuevas)
     if (st.sessionOpen) {
       const sid = st.sessionOpen.id;
       await supabase.from('work_session_allocations').delete().eq('session_id', sid);
+
       const rows = st.allocRows
-        .filter(r => r.project_code && (parseInt(r.minutes,10) > 0))
-        .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes,10) }));
+        .filter(r => r.project_code && (parseInt(r.minutes, 10) > 0))
+        .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes, 10) }));
+
       if (!rows.length) throw new Error('No hay proyectos válidos.');
       const { error } = await supabase.from('work_session_allocations').insert(rows);
       if (error) throw error;
     }
 
+    // Ahora sí OUT
     $('#btnOut').disabled = true;
     await mark('OUT');
     toast($('#punchMsg'), 'Salida registrada.');
+
   } catch (e) {
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
@@ -346,65 +402,80 @@ async function onMarkOut() {
   }
 }
 
-// === NAV + BOOT =============================================================
+// Añadir una fila de asignación (máx 3)
+function onAddAlloc() {
+  if (!st.sessionOpen) return;
+  if (st.allocRows.length >= 3) {
+    toast($('#punchMsg'), 'Máximo 3 proyectos por jornada.');
+    return;
+  }
+  st.allocRows.push({ project_code: '', minutes: 0 });
+  renderAllocContainer();
+  updateAllocTotals();
+}
+
+// Guardar asignación (manual, sin salir)
+async function onSaveAlloc() {
+  try {
+    if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
+    const total = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0, 10) || 0), 0);
+    if (total < st.requiredMinutes) {
+      throw new Error(`Faltan minutos por asignar: ${st.requiredMinutes - total}`);
+    }
+
+    const sid = st.sessionOpen.id;
+    await supabase.from('work_session_allocations').delete().eq('session_id', sid);
+
+    const rows = st.allocRows
+      .filter(r => r.project_code && (parseInt(r.minutes, 10) > 0))
+      .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes, 10) }));
+
+    if (!rows.length) throw new Error('No hay proyectos válidos.');
+    const { error } = await supabase.from('work_session_allocations').insert(rows);
+    if (error) throw error;
+
+    toast($('#punchMsg'), 'Asignación guardada.');
+    updateAllocTotals();
+  } catch (e) {
+    toast($('#punchMsg'), `Error al guardar: ${e.message}`);
+  }
+}
+
+// === NAV ===
 function setNavListeners() {
   document.querySelectorAll('[data-nav]').forEach(el => {
-    el.addEventListener('click', async () => {
+    el.addEventListener('click', () => {
       const to = el.getAttribute('data-nav');
       routeTo(to);
-      if (to === '/marcas') await loadStatusAndRecent();
+      if (to === '/marcas') loadStatusAndRecent();
     });
   });
   $('#btnLogout')?.addEventListener('click', signOut);
   $('#btnLogout2')?.addEventListener('click', signOut);
+
   $('#btnIn')?.addEventListener('click', onMarkIn);
   $('#btnOut')?.addEventListener('click', onMarkOut);
 
-  // Guardar asignación manual
-  $('#btnSaveAlloc')?.addEventListener('click', async () => {
-    try {
-      if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
-      const total = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes||0,10) || 0), 0);
-      if (total < st.requiredMinutes) throw new Error(`Faltan minutos por asignar: ${st.requiredMinutes - total}`);
-
-      const sid = st.sessionOpen.id;
-      await supabase.from('work_session_allocations').delete().eq('session_id', sid);
-      const rows = st.allocRows
-        .filter(r => r.project_code && (parseInt(r.minutes,10) > 0))
-        .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes,10) }));
-      if (!rows.length) throw new Error('No hay proyectos válidos.');
-      const { error } = await supabase.from('work_session_allocations').insert(rows);
-      if (error) throw error;
-
-      toast($('#punchMsg'), 'Asignación guardada.');
-      updateAllocTotals();
-    } catch (e) {
-      toast($('#punchMsg'), `Error al guardar: ${e.message}`);
-    }
-  });
+  $('#btnAddAlloc')?.addEventListener('click', onAddAlloc);
+  $('#btnSaveAlloc')?.addEventListener('click', onSaveAlloc);
 }
 
-async function handleRecoveryFromHash() {
-  const hash = location.hash?.slice(1) || '';
-  const params = new URLSearchParams(hash);
-  const type = params.get('type');
-  const access_token = params.get('access_token');
-  const refresh_token = params.get('refresh_token');
-  if (type === 'recovery' && access_token && refresh_token) {
-    await supabase.auth.setSession({ access_token, refresh_token });
-    routeTo('/reset');
-  }
-}
-
+// === ARRANQUE ===
 async function boot() {
-  console.log('APP JS v5 — compacto con filtro por cliente');
+  console.log('APP JS v3.1 – proyectos activos + filtro cliente (opcional)');
 
-  await handleRecoveryFromHash();
+  // Rutas por query (recovery)
+  const hash = location.pathname;
+  const params = new URLSearchParams(location.hash?.split('?')[1] || location.search);
+  const type = params.get('type');
+  if (hash.startsWith('/reset') || type === 'recovery') routeTo('/reset');
+
   setNavListeners();
 
   const user = await loadSession();
   if (!user) {
     routeTo('/');
+    // Login
     $('#btnLogin')?.addEventListener('click', async () => {
       try {
         const email = $('#email').value.trim();
@@ -416,16 +487,23 @@ async function boot() {
         routeTo('/app');
       } catch (e) {
         toast($('#msg'), e.message);
-      } finally { $('#btnLogin').disabled = false; }
+      } finally {
+        $('#btnLogin').disabled = false;
+      }
     });
+
     $('#btnForgot')?.addEventListener('click', async () => {
       try {
         const email = $('#email').value.trim();
-        if (!email) throw new Error('Escribe tu correo y vuelve a intentar.');
+        if (!email) throw new Error('Escribe tu correo y vuelve a pulsar “¿Olvidaste…?”');
         await sendReset(email);
         toast($('#msg'), 'Te enviamos un correo con el enlace para restablecer.');
-      } catch (e) { toast($('#msg'), e.message); }
+      } catch (e) {
+        toast($('#msg'), e.message);
+      }
     });
+
+    // Reset screen
     $('#btnSetNew')?.addEventListener('click', async () => {
       try {
         const pw = $('#newPassword').value;
@@ -433,19 +511,30 @@ async function boot() {
         const { error } = await supabase.auth.updateUser({ password: pw });
         if (error) throw error;
         toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
-        setTimeout(() => routeTo('/'), 700);
-      } catch (e) { toast($('#msg2'), e.message); }
+      } catch (e) {
+        toast($('#msg2'), e.message);
+      }
     });
+
     $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
+
     return;
   }
 
+  // Ya hay sesión
   try {
     await loadEmployeeContext();
     routeTo('/app');
+    // refrescar encabezado Punch si navega a /marcas
+    document.querySelector('[data-nav="/marcas"]')?.addEventListener('click', async () => {
+      $('#empName2').textContent = st.employee.full_name;
+      $('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`;
+      await loadStatusAndRecent();
+    });
   } catch (e) {
     toast($('#msg'), e.message);
     await signOut();
+    return;
   }
 }
 
