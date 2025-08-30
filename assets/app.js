@@ -1,7 +1,7 @@
 // === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 // Usa tu anon key real; dejé el formato listo. Si ya la tenías, déjala igual.
-const SUPABASE_ANON_KEY = 'REEMPLAZA_CON_TU_ANON_KEY';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
