@@ -266,22 +266,17 @@ function renderAllocContainer() {
     });
     sel.addEventListener('change', () => { row.project_code = sel.value; });
 
-   // INPUT DURACIÓN (HH:MM) con dos números
+    // DURACIÓN HH:MM con dos inputs numéricos
     const h = document.createElement('input');
-    h.type = 'number';
-    h.min = '0';
-    h.max = '24';
+    h.type = 'number'; h.min = '0'; h.max = '24';
     h.value = Math.floor((row.minutes || 0) / 60);
     h.className = 'allocH';
-    
+
     const m = document.createElement('input');
-    m.type = 'number';
-    m.min = '0';
-    m.max = '59';
-    m.step = '1';
+    m.type = 'number'; m.min = '0'; m.max = '59'; m.step = '1';
     m.value = Math.abs(row.minutes || 0) % 60;
     m.className = 'allocM';
-    
+
     const onDurChange = () => {
       let hv = parseInt(h.value || '0', 10); if (hv < 0) hv = 0;
       let mv = parseInt(m.value || '0', 10); if (mv < 0) mv = 0;
@@ -292,11 +287,11 @@ function renderAllocContainer() {
     };
     h.addEventListener('input', onDurChange);
     m.addEventListener('input', onDurChange);
-    
-    // wrapper visual "HH : MM"
+
     const dur = document.createElement('div');
     dur.className = 'allocDuration';
-    const sep = document.createElement('span'); sep.textContent = ':'; sep.className = 'allocSep';
+    const sep = document.createElement('span');
+    sep.textContent = ':'; sep.className = 'allocSep';
     dur.appendChild(h); dur.appendChild(sep); dur.appendChild(m);
 
     // Botón eliminar
@@ -304,10 +299,14 @@ function renderAllocContainer() {
     del.type = 'button'; del.className = 'btn light small'; del.textContent = 'Quitar';
     del.addEventListener('click', () => { st.allocRows.splice(idx, 1); renderAllocContainer(); updateAllocTotals(); });
 
-    line.appendChild(sel); line.appendChild(inp); line.appendChild(del);
+    // ENSAMBLE
+    line.appendChild(sel);
+    line.appendChild(dur);      // <- ya no usamos 'inp'
+    line.appendChild(del);
     cont.appendChild(line);
   });
 }
+
 
 function remainingMinutes() {
   const tot = st.allocRows.reduce((a, r) => a + (r.minutes || 0), 0);
