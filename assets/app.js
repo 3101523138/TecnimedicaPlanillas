@@ -399,33 +399,39 @@ function onAddAlloc() {
   renderAllocContainer(); updateAllocTotals();
 }
 
-// Guardar asignación sin salir
-async function onSaveAlloc(silent = false) {
+// Guardar asignación (parcial o para cerrar)
+async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
-    // aceptar [req .. req+GRACE]
-    if (tot < st.requiredMinutes) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
-    if (tot > st.requiredMinutes + GRACE_MINUTES) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
+    // Solo exigir cobertura completa cuando vamos a cerrar
+    if (forClosing) {
+      if (tot < st.requiredMinutes) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
+      if (tot > st.requiredMinutes + GRACE_MINUTES) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
+    }
 
     const sid = st.sessionOpen.id;
+
+    // Borramos todo lo previo de la sesión
     await supabase.from('work_session_allocations').delete().eq('session_id', sid);
 
+    // Insertamos lo que haya (si hay minutos > 0)
     const rows = st.allocRows
       .filter(r => r.project_code && (parseInt(r.minutes, 10) > 0))
       .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes, 10) }));
 
-    if (!rows.length) throw new Error('No hay proyectos válidos.');
-    const { error } = await supabase.from('work_session_allocations').insert(rows);
-    if (error) throw error;
+    if (rows.length) {
+      const { error } = await supabase.from('work_session_allocations').insert(rows);
+      if (error) throw error;
+    }
 
-    if (!silent) toast($('#punchMsg'), 'Asignación guardada.');
+    toast($('#punchMsg'), forClosing ? 'Asignación válida. Puedes marcar salida.' : 'Asignación guardada.');
     console.log('[APP] saveAlloc OK:', rows);
     return true;
   } catch (e) {
     console.error('[APP] onSaveAlloc error:', e);
-    if (!silent) toast($('#punchMsg'), `Error al guardar: ${e.message}`);
+    toast($('#punchMsg'), `Error al guardar: ${e.message}`);
     return false;
   } finally {
     updateAllocTotals();
