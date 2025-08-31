@@ -1,76 +1,46 @@
-/*************************************************
- * Portal TMI · assets/app.js  (v12, con loggers)
- *************************************************/
+// ===============================
+//  Portal TMI · app.js (v13 LOG)
+// ===============================
 
-/* ============ DIAGNÓSTICO / LOGGER ============ */
-const LOG = '[APP]';
-const log  = (...a) => console.log(LOG, ...a);
-const warn = (...a) => console.warn(LOG, ...a);
-const err  = (...a) => console.error(LOG, ...a);
+// Log global de errores JS
+window.addEventListener('error', (e) => console.error('[APP] window.error:', e.message, e.filename, e.lineno));
+window.addEventListener('unhandledrejection', (e) => console.error('[APP] unhandledrejection:', e.reason));
 
-function showLoginMsg(msg) {
-  const el = document.querySelector('#msg');
-  if (el) el.textContent = msg || '';
-}
-
-// Captura errores globales y los muestra en login
-window.addEventListener('error', (e) => {
-  err('window.error:', e.message, e.error);
-  showLoginMsg('Error: ' + (e.message || 'revisa consola'));
-});
-window.addEventListener('unhandledrejection', (e) => {
-  err('unhandledrejection:', e.reason);
-  showLoginMsg('Error: ' + (e.reason?.message || e.reason || 'revisa consola'));
-});
-
-/* ============== CONFIG SUPABASE =============== */
+// === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('AQUI')) {
   alert('⚠️ Falta configurar SUPABASE_URL o SUPABASE_ANON_KEY en assets/app.js');
   throw new Error('Missing Supabase config');
 }
-if (!window.supabase) {
-  throw new Error('Supabase SDK no cargó. Revisa el <script src="https://unpkg.com/@supabase/supabase-js@2"> en index.html');
-}
+console.log('[APP] creando cliente Supabase…');
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-log('Supabase listo:', SUPABASE_URL);
+console.log('[APP] Supabase OK:', !!supabase);
 
-/* ================== STATE ===================== */
+// === STATE ===
 const st = {
   user: null,
-  employee: null,           // { uid, code, full_name }
-  sessionOpen: null,        // work_sessions con status OPEN
-  requiredMinutes: 0,       // minutos trabajados a asignar (con margen)
-  allocRows: [],            // [{project_code, minutes}]
-  projects: [],             // catálogo activo
-  clientFilter: '',         // filtro de cliente
-  lastOverWarnAt: 0,        // anti-spam
+  employee: null,        // { uid, code, full_name }
+  sessionOpen: null,     // última work_session abierta
+  requiredMinutes: 0,    // minutos trabajados (con margen aplicado)
+  allocRows: [],         // [{ project_code, minutes }]
+  projects: [],          // catálogo de proyectos activos
+  clientFilter: '',      // filtro por cliente (solo cambia opciones del select)
+  lastOverWarnAt: 0,
 };
 
-/* ====== REGLAS Y UTILIDADES DE TIEMPO ========= */
-const GRACE_MINUTES = 10; // margen (±10 min)
+// === REGLAS / UTILIDADES TIEMPO ===
+const GRACE_MINUTES = 10; // margen para poder cerrar (±10 min)
 const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
 const minToHM = (mins) => `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs(mins || 0) % 60)}`;
 const hmToMin = (hhmm) => {
   if (!hhmm) return 0;
-  const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10));
+  const [h, m] = hhmm.split(':').map((v) => parseInt(v || '0', 10));
   return (h * 60 + (m || 0)) | 0;
 };
-// Texto libre “8” => 480, “8:30” => 510 (si algún día usas text en vez de time)
-function parseHM(str) {
-  if (!str) return null;
-  const s = String(str).trim();
-  if (/^\d+$/.test(s)) { const h = +s; return (isFinite(h) && h >= 0) ? h * 60 : null; }
-  const m = s.match(/^(\d{1,2}):([0-5]\d)$/);
-  if (!m) return null;
-  const h = +m[1], mm = +m[2];
-  return (isFinite(h) && isFinite(mm)) ? h * 60 + mm : null;
-}
 
-/* ================= HELPERS UI ================= */
+// === HELPERS UI ===
 const $ = (s) => document.querySelector(s);
 const show = (el) => el && (el.style.display = '');
 const hide = (el) => el && (el.style.display = 'none');
@@ -79,12 +49,14 @@ function toast(el, msg) {
   if (!el) return;
   el.textContent = msg || '';
   if (!msg) return;
-  setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 6000);
+  setTimeout(() => {
+    if (el.textContent === msg) el.textContent = '';
+  }, 6000);
 }
 
-/* ================== ROUTER ==================== */
+// === ROUTER ===
 function routeTo(path) {
-  log('routeTo:', path);
+  console.log('[APP] routeTo', path);
   history.replaceState({}, '', path);
   hide($('#authCard')); hide($('#resetCard')); hide($('#homeCard'));
   hide($('#punchCard')); hide($('#projectsCard')); hide($('#leaveCard')); hide($('#payslipsCard'));
@@ -97,95 +69,102 @@ function routeTo(path) {
   else if (path === '/comprobantes') show($('#payslipsCard'));
 }
 
-/* ==================== GEO ===================== */
+// === GEO ===
 async function getGPS() {
   return new Promise((res) => {
     if (!navigator.geolocation) return res(null);
     navigator.geolocation.getCurrentPosition(
-      p => res({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      e => { warn('geo fail:', e?.message); res(null); },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      (p) => res({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      (_) => res(null),
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
     );
   });
 }
 
-/* =================== AUTH ===================== */
+// === AUTH ===
 async function loadSession() {
-  log('getSession()…');
+  console.log('[APP] loadSession…');
   const { data: { session }, error } = await supabase.auth.getSession();
-  if (error) err('getSession error:', error);
+  if (error) console.error('[APP] getSession error:', error);
   st.user = session?.user || null;
-  log('getSession ok. user?', !!st.user);
+  console.log('[APP] session user:', st.user?.email || null);
   return st.user;
 }
 async function signIn(email, password) {
-  log('signIn:', email);
+  console.log('[APP] signIn click', email);
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) { err('signIn error:', error); throw error; }
-  log('signIn OK');
+  if (error) throw error;
 }
 async function sendReset(email) {
-  log('reset for:', email);
+  console.log('[APP] sendReset click', email);
   const redirectTo = `${location.origin}/reset`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-  if (error) { err('reset error:', error); throw error; }
-  log('reset enviado');
+  if (error) throw error;
 }
 async function signOut() {
-  log('signOut()');
+  console.log('[APP] signOut');
   await supabase.auth.signOut();
-  st.user = null; st.employee = null;
+  st.user = null;
+  st.employee = null;
   routeTo('/');
 }
 
-/* ================= EMPLEADO =================== */
+// === EMPLEADO ===
 async function loadEmployeeContext() {
-  log('loadEmployeeContext() for', st.user?.email);
+  console.log('[APP] loadEmployeeContext');
   let { data, error } = await supabase.from('employees')
     .select('employee_uid, employee_code, full_name, login_enabled')
     .eq('user_id', st.user.id).single();
 
   if (error || !data) {
+    console.warn('[APP] employee por user_id no encontrado; probando por email…', error);
     const r = await supabase.from('employees')
       .select('employee_uid, employee_code, full_name, login_enabled')
       .eq('email', st.user.email).single();
     data = r.data || null;
   }
-  if (!data) { throw new Error('No se encontró el empleado'); }
-  if (data.login_enabled === false) { throw new Error('Usuario deshabilitado'); }
+  if (!data) throw new Error('No se encontró el empleado');
+  if (data.login_enabled === false) throw new Error('Usuario deshabilitado');
 
-  st.employee = { uid: data.employee_uid, code: data.employee_code || null, full_name: data.full_name || '(sin nombre)' };
+  st.employee = {
+    uid: data.employee_uid,
+    code: data.employee_code || null,
+    full_name: data.full_name || '(sin nombre)',
+  };
+
   $('#empName').textContent = st.employee.full_name;
-  $('#empUid').textContent  = `employee_uid: ${st.employee.uid}`;
-  $('#empName2') && ($('#empName2').textContent = st.employee.full_name);
-  $('#empUid2')  && ($('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`);
-  log('employee OK:', st.employee);
+  $('#empUid').textContent = `employee_uid: ${st.employee.uid}`;
+  if ($('#empName2')) $('#empName2').textContent = st.employee.full_name;
+  if ($('#empUid2')) $('#empUid2').textContent = `employee_uid: ${st.employee.uid}`;
+  console.log('[APP] employee OK:', st.employee);
 }
 
-/* =========== STATUS + RECIENTES =============== */
+// === STATUS + RECIENTES ===
 async function loadStatusAndRecent() {
-  log('loadStatusAndRecent()');
+  console.log('[APP] loadStatusAndRecent');
   let estado = 'Fuera', minsHoy = 0;
 
-  // 1) última sesión
+  // última sesión
   {
     const { data, error } = await supabase.from('work_sessions')
       .select('id, start_at, end_at, status')
       .eq('employee_uid', st.employee.uid)
-      .order('start_at', { ascending: false }).limit(1);
-    if (error) warn('ws last error:', error);
+      .order('start_at', { ascending: false })
+      .limit(1);
+    if (error) console.error('[APP] work_sessions last error:', error);
     const ws = data && data[0];
     st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
     if (st.sessionOpen) estado = 'Dentro';
+    console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // 2) minutos de hoy
+  // minutos de hoy
   {
     const { data, error } = await supabase.from('work_sessions')
       .select('start_at, end_at')
       .eq('employee_uid', st.employee.uid)
       .eq('session_date', todayStr());
-    if (error) warn('ws today error:', error);
+    if (error) console.error('[APP] minutes today error:', error);
     if (data?.length) {
       const now = Date.now();
       minsHoy = data.reduce((acc, r) => {
@@ -205,25 +184,26 @@ async function loadStatusAndRecent() {
   punch && punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
 
   // botones
-  $('#btnIn').disabled  = (estado === 'Dentro');
+  $('#btnIn').disabled = (estado === 'Dentro');
   $('#btnOut').disabled = (estado !== 'Dentro');
   toast($('#punchMsg'), '');
 
   // últimas marcas
-  const { data: tps, error: eTp } = await supabase.from('time_punches')
+  const { data: tps, error: eTP } = await supabase.from('time_punches')
     .select('direction, punch_at, latitude, longitude')
     .eq('employee_uid', st.employee.uid)
     .eq('punch_date', todayStr())
-    .order('punch_at', { ascending: false }).limit(10);
-  if (eTp) warn('time_punches error:', eTp);
+    .order('punch_at', { ascending: false })
+    .limit(10);
+  if (eTP) console.error('[APP] time_punches error:', eTP);
   $('#recentPunches').innerHTML = (!tps?.length) ? 'Sin marcas aún.' :
     tps.map(tp => {
-      const d = new Date(tp.punch_at),
-        loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
+      const d = new Date(tp.punch_at);
+      const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
       return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
     }).join('');
 
-  // requeridos con margen
+  // requeridos (con margen)
   if (st.sessionOpen) {
     const diffMin = Math.max(0, Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000));
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
@@ -232,10 +212,11 @@ async function loadStatusAndRecent() {
   }
   $('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
 
+  // UI asignaciones
   await prepareAllocUI();
 }
 
-/* ================ PROYECTOS =================== */
+// === PROYECTOS ===
 async function loadProjects(client = null) {
   let q = supabase.from('projects')
     .select('project_code, name, description, client_name')
@@ -244,25 +225,26 @@ async function loadProjects(client = null) {
     .order('project_code', { ascending: true });
   if (client) q = q.eq('client_name', client);
   const { data, error } = await q;
-  if (error) { warn('loadProjects error:', error); return []; }
+  if (error) { console.error('[APP] loadProjects error:', error); return []; }
   return data || [];
 }
 
-/* ======= ASIGNACIONES existentes ============== */
+// === ASIGNACIONES existentes ===
 async function loadExistingAllocations() {
   if (!st.sessionOpen) return [];
   const { data, error } = await supabase.from('work_session_allocations')
     .select('project_code, minutes_alloc')
     .eq('session_id', st.sessionOpen.id)
     .order('project_code', { ascending: true });
-  if (error) { warn('alloc existing error:', error); return []; }
+  if (error) { console.error('[APP] loadExistingAllocations error:', error); return []; }
   return (data || []).map(r => ({ project_code: r.project_code, minutes: r.minutes_alloc || 0 }));
 }
 
-/* ========== UI ASIGNACIONES (HH:MM) =========== */
+// === UI ASIGNACIONES ===
 function renderAllocContainer() {
   const cont = $('#allocContainer');
   cont.innerHTML = '';
+
   const filter = st.clientFilter || '';
 
   st.allocRows.forEach((row, idx) => {
@@ -288,18 +270,14 @@ function renderAllocContainer() {
 
     // INPUT HH:MM
     const inp = document.createElement('input');
-    inp.type = 'time'; inp.step = 60;
-    inp.value = minToHM(row.minutes || 0);
+    inp.type = 'time'; inp.step = 60; inp.value = minToHM(row.minutes || 0);
     inp.className = 'allocMinutes';
     inp.addEventListener('input', () => { row.minutes = hmToMin(inp.value); updateAllocTotals(); });
 
-    // Quitar
+    // Botón eliminar
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'btn light small'; del.textContent = 'Quitar';
-    del.addEventListener('click', () => {
-      st.allocRows.splice(idx, 1);
-      renderAllocContainer(); updateAllocTotals();
-    });
+    del.addEventListener('click', () => { st.allocRows.splice(idx, 1); renderAllocContainer(); updateAllocTotals(); });
 
     line.appendChild(sel); line.appendChild(inp); line.appendChild(del);
     cont.appendChild(line);
@@ -320,6 +298,7 @@ function updateAllocTotals() {
 
   const info = $('#allocInfo');
   let ok = false;
+
   if (tot < req) {
     info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
   } else if (tot > req + GRACE_MINUTES) {
@@ -328,32 +307,35 @@ function updateAllocTotals() {
     info.textContent = 'Listo: cubre la jornada.';
     ok = true;
   }
+
   $('#btnOut').disabled = !(st.sessionOpen && ok);
 }
 
 async function prepareAllocUI() {
-  // Catálogo de proyectos
+  // Cargar catálogo una vez
   if (!st.projects.length) {
-    const { data } = await supabase
-      .from('projects')
-      .select('project_code, client_name, project_number, description, name')
+    const { data } = await supabase.from('projects')
+      .select('project_code, client_name, name, description')
       .order('client_name', { ascending: true })
-      .order('project_number', { ascending: true });
+      .order('project_code', { ascending: true });
     st.projects = data || [];
 
     // Filtro de clientes
     const clients = [...new Set(st.projects.map(p => p.client_name).filter(Boolean))].sort();
     const selClient = $('#allocClient');
     if (selClient && selClient.options.length === 1) {
-      clients.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; selClient.appendChild(o); });
+      clients.forEach(c => {
+        const o = document.createElement('option'); o.value = c; o.textContent = c; selClient.appendChild(o);
+      });
       selClient.addEventListener('change', () => {
         st.clientFilter = selClient.value || '';
-        renderAllocContainer(); updateAllocTotals();
+        renderAllocContainer();
+        updateAllocTotals();
       });
     }
   }
 
-  // Precarga con lo guardado (si ya existe) o con todo el requerido
+  // Prellenar con lo guardado si existe
   if (st.sessionOpen) {
     if (st.allocRows.length === 0) {
       const prev = await loadExistingAllocations();
@@ -367,39 +349,52 @@ async function prepareAllocUI() {
   updateAllocTotals();
 }
 
-/* ============== MARCAR IN/OUT ================= */
+// === MARCAR IN/OUT ===
 async function mark(direction) {
-  log('mark', direction);
+  console.log('[APP] mark', direction);
   const gps = await getGPS();
-  const payload = { employee_uid: st.employee.uid, direction,
-    latitude: gps?.lat ?? null, longitude: gps?.lon ?? null };
+  const payload = {
+    employee_uid: st.employee.uid,
+    direction,
+    latitude: gps?.lat ?? null,
+    longitude: gps?.lon ?? null,
+  };
   if (st.employee.code) payload.employee_code = st.employee.code;
   const { error } = await supabase.from('time_punches').insert(payload).select().single();
-  if (error) { err('mark error:', error); throw error; }
+  if (error) throw error;
 }
 
 async function onMarkIn() {
-  try { $('#btnIn').disabled = true; await mark('IN'); toast($('#punchMsg'), 'Entrada registrada.'); }
-  catch (e) { toast($('#punchMsg'), `Error al marcar: ${e.message}`); }
-  finally { await loadStatusAndRecent(); }
-}
-
-async function onMarkOut() {
   try {
-    // Guardar asignación primero (con tolerancia)
-    const ok = await onSaveAlloc(true);
-    if (!ok) return;
-    $('#btnOut').disabled = true;
-    await mark('OUT');
-    toast($('#punchMsg'), 'Salida registrada.');
+    console.log('[APP] CLICK ENTRADA');
+    $('#btnIn').disabled = true;
+    await mark('IN');
+    toast($('#punchMsg'), 'Entrada registrada.');
   } catch (e) {
+    console.error('[APP] onMarkIn error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
     await loadStatusAndRecent();
   }
 }
 
-/* ========== Asignación: add & save ============ */
+async function onMarkOut() {
+  try {
+    console.log('[APP] CLICK SALIDA');
+    const ok = await onSaveAlloc(true); // valida tolerancia
+    if (!ok) return;
+    $('#btnOut').disabled = true;
+    await mark('OUT');
+    toast($('#punchMsg'), 'Salida registrada.');
+  } catch (e) {
+    console.error('[APP] onMarkOut error:', e);
+    toast($('#punchMsg'), `Error al marcar: ${e.message}`);
+  } finally {
+    await loadStatusAndRecent();
+  }
+}
+
+// + Proyecto (precarga con tiempo restante)
 function onAddAlloc() {
   if (!st.sessionOpen) return;
   if (st.allocRows.length >= 3) { toast($('#punchMsg'), 'Máximo 3 proyectos por jornada.'); return; }
@@ -409,11 +404,13 @@ function onAddAlloc() {
   renderAllocContainer(); updateAllocTotals();
 }
 
+// Guardar asignación sin salir
 async function onSaveAlloc(silent = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
+    // aceptar [req .. req+GRACE]
     if (tot < st.requiredMinutes) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
     if (tot > st.requiredMinutes + GRACE_MINUTES) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
 
@@ -429,8 +426,10 @@ async function onSaveAlloc(silent = false) {
     if (error) throw error;
 
     if (!silent) toast($('#punchMsg'), 'Asignación guardada.');
+    console.log('[APP] saveAlloc OK:', rows);
     return true;
   } catch (e) {
+    console.error('[APP] onSaveAlloc error:', e);
     if (!silent) toast($('#punchMsg'), `Error al guardar: ${e.message}`);
     return false;
   } finally {
@@ -438,108 +437,92 @@ async function onSaveAlloc(silent = false) {
   }
 }
 
-/* ================== NAV ======================= */
+// === NAV ===
 function setNavListeners() {
-  log('setNavListeners()');
+  console.log('[APP] setNavListeners');
   document.querySelectorAll('[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
       const to = el.getAttribute('data-nav');
-      log('nav ->', to);
       routeTo(to);
       if (to === '/marcas') loadStatusAndRecent();
     });
   });
-  $('#btnLogout')?.addEventListener('click', () => { log('logout'); signOut(); });
-  $('#btnLogout2')?.addEventListener('click', () => { log('logout2'); signOut(); });
-  $('#btnIn')?.addEventListener('click', () => { log('click ENTRADA'); onMarkIn(); });
-  $('#btnOut')?.addEventListener('click', () => { log('click SALIDA'); onMarkOut(); });
-  $('#btnAddAlloc')?.addEventListener('click', () => { log('click +Proyecto'); onAddAlloc(); });
-  $('#btnSaveAlloc')?.addEventListener('click', () => { log('click Guardar asignación'); onSaveAlloc(false); });
+  $('#btnLogout')?.addEventListener('click', signOut);
+  $('#btnLogout2')?.addEventListener('click', signOut);
+  $('#btnIn')?.addEventListener('click', onMarkIn);
+  $('#btnOut')?.addEventListener('click', onMarkOut);
+  $('#btnAddAlloc')?.addEventListener('click', onAddAlloc);
+  $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false));
 }
 
-/* ================== BOOT ====================== */
+// === BOOT ===
 async function boot() {
-  log('BOOT start. path=', location.pathname, 'hash=', location.hash);
+  console.log('[APP] BOOT start…');
+  const hash = location.pathname;
+  const params = new URLSearchParams(location.hash?.split('?')[1] || location.search);
+  const type = params.get('type');
+  if (hash.startsWith('/reset') || type === 'recovery') routeTo('/reset');
+
+  setNavListeners();
+
+  const user = await loadSession();
+  if (!user) {
+    console.log('[APP] Sin sesión → login');
+    routeTo('/');
+    $('#btnLogin')?.addEventListener('click', async () => {
+      try {
+        console.log('[APP] CLICK Entrar');
+        const email = $('#email').value.trim();
+        const password = $('#password').value;
+        $('#btnLogin').disabled = true;
+        await signIn(email, password);
+        await loadSession();
+        await loadEmployeeContext();
+        routeTo('/app');
+      } catch (e) {
+        console.error('[APP] signIn error:', e);
+        toast($('#msg'), e.message);
+      } finally {
+        $('#btnLogin').disabled = false;
+      }
+    });
+    $('#btnForgot')?.addEventListener('click', async () => {
+      try {
+        console.log('[APP] CLICK Forgot');
+        const email = $('#email').value.trim();
+        if (!email) throw new Error('Escribe tu correo y vuelve a pulsar “¿Olvidaste…?”');
+        await sendReset(email);
+        toast($('#msg'), 'Te enviamos un correo con el enlace para restablecer.');
+      } catch (e) {
+        console.error('[APP] reset error:', e);
+        toast($('#msg'), e.message);
+      }
+    });
+    $('#btnSetNew')?.addEventListener('click', async () => {
+      try {
+        console.log('[APP] CLICK SetNew');
+        const pw = $('#newPassword').value;
+        if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        const { error } = await supabase.auth.updateUser({ password: pw });
+        if (error) throw error;
+        toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
+      } catch (e) {
+        console.error('[APP] update password error:', e);
+        toast($('#msg2'), e.message);
+      }
+    });
+    $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
+    return;
+  }
+
   try {
-    setNavListeners();
-
-    // Modo recovery si aplica
-    const params = new URLSearchParams(location.hash?.split('?')[1] || location.search);
-    const type = params.get('type');
-    if (location.pathname.startsWith('/reset') || type === 'recovery') {
-      log('modo recovery/reset');
-      routeTo('/reset');
-    }
-
-    const user = await loadSession();
-    if (!user) {
-      log('Sin sesión → login');
-      routeTo('/');
-
-      // Login
-      $('#btnLogin')?.addEventListener('click', async () => {
-        try {
-          log('CLICK Entrar');
-          const email = $('#email').value.trim();
-          const password = $('#password').value;
-          $('#btnLogin').disabled = true;
-          await signIn(email, password);
-          await loadSession();
-          await loadEmployeeContext();
-          routeTo('/app');
-        } catch (e) {
-          showLoginMsg(e.message || String(e));
-        } finally {
-          $('#btnLogin').disabled = false;
-        }
-      });
-
-      // Forgot
-      $('#btnForgot')?.addEventListener('click', async () => {
-        try {
-          log('CLICK Olvidaste contraseña');
-          const email = $('#email').value.trim();
-          if (!email) throw new Error('Escribe tu correo y vuelve a pulsar “¿Olvidaste…?”');
-          await sendReset(email);
-          showLoginMsg('Te enviamos un correo con el enlace para restablecer.');
-        } catch (e) {
-          showLoginMsg(e.message || String(e));
-        }
-      });
-
-      // Reset
-      $('#btnSetNew')?.addEventListener('click', async () => {
-        try {
-          log('CLICK Guardar nueva contraseña');
-          const pw = $('#newPassword').value;
-          if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
-          const { error } = await supabase.auth.updateUser({ password: pw });
-          if (error) throw error;
-          $('#msg2').textContent = 'Contraseña actualizada. Ya puedes iniciar sesión.';
-        } catch (e) {
-          $('#msg2').textContent = e.message || String(e);
-        }
-      });
-
-      $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
-      return;
-    }
-
-    // Con sesión
-    log('Sesión detectada:', user.email);
-    try {
-      await loadEmployeeContext();
-      routeTo('/app');
-    } catch (e) {
-      err('loadEmployeeContext falló:', e);
-      showLoginMsg(e.message || String(e));
-      await signOut();
-    }
+    console.log('[APP] Sesión activa → cargar contexto empleado');
+    await loadEmployeeContext();
+    routeTo('/app');
   } catch (e) {
-    err('BOOT error:', e);
-    showLoginMsg('Error en boot: ' + (e.message || String(e)));
+    console.error('[APP] loadEmployeeContext error:', e);
+    toast($('#msg'), e.message);
+    await signOut();
   }
 }
-
-// Arranca cuando el DOM está listo (seguro)
-window.addEventListener('DOMContentLoaded', boot);
+boot();
