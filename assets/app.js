@@ -383,11 +383,19 @@ async function onMarkIn() {
 async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
-    const ok = await onSaveAlloc(true); // valida tolerancia
+
+    // 1) Refresca para asegurar que st.sessionOpen sea la que realmente se cerrará
+    await loadStatusAndRecent();
+
+    // 2) Guarda asignación validando tolerancia sobre ese session_id
+    const ok = await onSaveAlloc(true);
     if (!ok) return;
+
+    // 3) Marca salida
     const outBtn = $('#btnOut');
     if (outBtn) outBtn.disabled = true;
     await mark('OUT');
+
     toast($('#punchMsg'), 'Salida registrada.');
   } catch (e) {
     console.error('[APP] onMarkOut error:', e);
