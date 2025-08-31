@@ -394,8 +394,20 @@ async function mark(direction) {
 async function onMarkIn() {
   try {
     console.log('[APP] CLICK ENTRADA');
+
+    // Si ya hubo una jornada cerrada hoy, advertir
+    const alreadyClosedToday = await hasClosedSessionToday();
+    if (alreadyClosedToday) {
+      const ok = window.confirm(
+        'Ya registraste una jornada para este día.\n' +
+        '¿Quieres iniciar otra? Esto puede afectar cálculos de planilla y generar reclamos posteriores.'
+      );
+      if (!ok) return; // cancela
+    }
+
     const inBtn = $('#btnIn');
     if (inBtn) inBtn.disabled = true;
+
     await mark('IN');
     toast($('#punchMsg'), 'Entrada registrada.');
   } catch (e) {
@@ -405,6 +417,7 @@ async function onMarkIn() {
     await loadStatusAndRecent();
   }
 }
+
 
 async function onMarkOut() {
   try {
