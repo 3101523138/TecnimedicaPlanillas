@@ -266,11 +266,38 @@ function renderAllocContainer() {
     });
     sel.addEventListener('change', () => { row.project_code = sel.value; });
 
-    // INPUT HH:MM
-    const inp = document.createElement('input');
-    inp.type = 'time'; inp.step = 60; inp.value = minToHM(row.minutes || 0);
-    inp.className = 'allocMinutes';
-    inp.addEventListener('input', () => { row.minutes = hmToMin(inp.value); updateAllocTotals(); });
+   // INPUT DURACIÓN (HH:MM) con dos números
+    const h = document.createElement('input');
+    h.type = 'number';
+    h.min = '0';
+    h.max = '24';
+    h.value = Math.floor((row.minutes || 0) / 60);
+    h.className = 'allocH';
+    
+    const m = document.createElement('input');
+    m.type = 'number';
+    m.min = '0';
+    m.max = '59';
+    m.step = '1';
+    m.value = Math.abs(row.minutes || 0) % 60;
+    m.className = 'allocM';
+    
+    const onDurChange = () => {
+      let hv = parseInt(h.value || '0', 10); if (hv < 0) hv = 0;
+      let mv = parseInt(m.value || '0', 10); if (mv < 0) mv = 0;
+      if (mv > 59) { hv += Math.floor(mv / 60); mv = mv % 60; }
+      h.value = hv; m.value = mv;
+      row.minutes = hv * 60 + mv;
+      updateAllocTotals();
+    };
+    h.addEventListener('input', onDurChange);
+    m.addEventListener('input', onDurChange);
+    
+    // wrapper visual "HH : MM"
+    const dur = document.createElement('div');
+    dur.className = 'allocDuration';
+    const sep = document.createElement('span'); sep.textContent = ':'; sep.className = 'allocSep';
+    dur.appendChild(h); dur.appendChild(sep); dur.appendChild(m);
 
     // Botón eliminar
     const del = document.createElement('button');
