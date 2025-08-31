@@ -416,23 +416,29 @@ function onAddAlloc() {
 }
 
 // Guardar asignación (parcial o para cerrar)
+
+// Guardar asignación (parcial o para cerrar)
 async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
-    // Solo exigir cobertura completa cuando vamos a cerrar
     if (forClosing) {
-      if (tot < st.requiredMinutes) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
-      if (tot > st.requiredMinutes + GRACE_MINUTES) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
+      // st.requiredMinutes = worked - GRACE_MINUTES (ya calculado en loadStatusAndRecent)
+      const lower = Math.max(0, st.requiredMinutes - 1);              // cojín de 1 min
+      const upper = st.requiredMinutes + GRACE_MINUTES;               // = worked + tolerancia
+
+      if (tot < lower) {
+        throw new Error(`Faltan ${minToHM((st.requiredMinutes) - tot)}.`);
+      }
+      if (tot > upper) {
+        throw new Error(`Te pasaste ${minToHM(tot - (st.requiredMinutes))}.`);
+      }
     }
 
     const sid = st.sessionOpen.id;
-
-    // Borramos todo lo previo de la sesión
     await supabase.from('work_session_allocations').delete().eq('session_id', sid);
 
-    // Insertamos lo que haya (si hay minutos > 0)
     const rows = st.allocRows
       .filter(r => r.project_code && (parseInt(r.minutes, 10) > 0))
       .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes, 10) }));
