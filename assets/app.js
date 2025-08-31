@@ -1,8 +1,8 @@
 // ===============================
-//  Portal TMI · app.js (v13 LOG)
+//  Portal TMI · app.js (v14 LOG)
 // ===============================
 
-// Log global de errores JS
+// Log global
 window.addEventListener('error', (e) => console.error('[APP] window.error:', e.message, e.filename, e.lineno));
 window.addEventListener('unhandledrejection', (e) => console.error('[APP] unhandledrejection:', e.reason));
 
@@ -16,7 +16,6 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('AQUI')) {
 }
 console.log('[APP] creando cliente Supabase…');
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log('[APP] Supabase OK:', !!supabase);
 
 // === STATE ===
 const st = {
@@ -26,7 +25,7 @@ const st = {
   requiredMinutes: 0,    // minutos trabajados (con margen aplicado)
   allocRows: [],         // [{ project_code, minutes }]
   projects: [],          // catálogo de proyectos activos
-  clientFilter: '',      // filtro por cliente (solo cambia opciones del select)
+  clientFilter: '',      // filtro por cliente
   lastOverWarnAt: 0,
 };
 
@@ -34,25 +33,14 @@ const st = {
 const GRACE_MINUTES = 10; // margen para poder cerrar (±10 min)
 const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
 const minToHM = (mins) => `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs(mins || 0) % 60)}`;
-const hmToMin = (hhmm) => {
-  if (!hhmm) return 0;
-  const [h, m] = hhmm.split(':').map((v) => parseInt(v || '0', 10));
-  return (h * 60 + (m || 0)) | 0;
-};
+const hmToMin = (hhmm) => { if (!hhmm) return 0; const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10)); return (h * 60 + (m || 0)) | 0; };
+const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // === HELPERS UI ===
 const $ = (s) => document.querySelector(s);
 const show = (el) => el && (el.style.display = '');
 const hide = (el) => el && (el.style.display = 'none');
-const todayStr = () => new Date().toISOString().slice(0, 10);
-function toast(el, msg) {
-  if (!el) return;
-  el.textContent = msg || '';
-  if (!msg) return;
-  setTimeout(() => {
-    if (el.textContent === msg) el.textContent = '';
-  }, 6000);
-}
+function toast(el, msg){ if(!el) return; el.textContent = msg || ''; if(!msg) return; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; },6000); }
 
 // === ROUTER ===
 function routeTo(path) {
@@ -60,6 +48,7 @@ function routeTo(path) {
   history.replaceState({}, '', path);
   hide($('#authCard')); hide($('#resetCard')); hide($('#homeCard'));
   hide($('#punchCard')); hide($('#projectsCard')); hide($('#leaveCard')); hide($('#payslipsCard'));
+
   if (path === '/' || path === '/login') show($('#authCard'));
   else if (path === '/reset') show($('#resetCard'));
   else if (path === '/app') show($('#homeCard'));
@@ -75,7 +64,7 @@ async function getGPS() {
     if (!navigator.geolocation) return res(null);
     navigator.geolocation.getCurrentPosition(
       (p) => res({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      (_) => res(null),
+      () => res(null),
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
     );
   });
@@ -91,12 +80,12 @@ async function loadSession() {
   return st.user;
 }
 async function signIn(email, password) {
-  console.log('[APP] signIn click', email);
+  console.log('[APP] signIn', email);
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
 }
 async function sendReset(email) {
-  console.log('[APP] sendReset click', email);
+  console.log('[APP] sendReset', email);
   const redirectTo = `${location.origin}/reset`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
@@ -104,8 +93,7 @@ async function sendReset(email) {
 async function signOut() {
   console.log('[APP] signOut');
   await supabase.auth.signOut();
-  st.user = null;
-  st.employee = null;
+  st.user = null; st.employee = null;
   routeTo('/');
 }
 
@@ -135,7 +123,7 @@ async function loadEmployeeContext() {
   $('#empName').textContent = st.employee.full_name;
   $('#empUid').textContent = `employee_uid: ${st.employee.uid}`;
   if ($('#empName2')) $('#empName2').textContent = st.employee.full_name;
-  if ($('#empUid2')) $('#empUid2').textContent = `employee_uid: ${st.employee.uid}`;
+  if ($('#empUid2'))  $('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`;
   console.log('[APP] employee OK:', st.employee);
 }
 
@@ -177,11 +165,12 @@ async function loadStatusAndRecent() {
 
   // header
   const punch = $('#punchCard');
-  const old = punch?.querySelector('.card.inner.statusHdr'); if (old) old.remove();
+  const old = punch && punch.querySelector('.card.inner.statusHdr'); 
+  if (old) old.remove();
   const hdr = document.createElement('div');
   hdr.className = 'card inner statusHdr';
   hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div><div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>`;
-  punch && punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
+  if (punch) punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
 
   // botones
   $('#btnIn').disabled = (estado === 'Dentro');
@@ -210,7 +199,8 @@ async function loadStatusAndRecent() {
   } else {
     st.requiredMinutes = 0;
   }
-  $('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
+  const reqEl = $('#allocRequiredHM');
+  if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
 
   // UI asignaciones
   await prepareAllocUI();
@@ -293,22 +283,25 @@ function updateAllocTotals() {
   const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
   const req = st.requiredMinutes;
 
-  $('#allocTotalHM')?.textContent = minToHM(tot);
-  $('#allocRequiredHM')?.textContent = minToHM(req);
+  const totalEl = $('#allocTotalHM');
+  if (totalEl) totalEl.textContent = minToHM(tot);
+  const reqEl = $('#allocRequiredHM');
+  if (reqEl) reqEl.textContent = minToHM(req);
 
   const info = $('#allocInfo');
   let ok = false;
 
   if (tot < req) {
-    info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
+    if (info) info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
   } else if (tot > req + GRACE_MINUTES) {
-    info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`;
+    if (info) info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`;
   } else {
-    info.textContent = 'Listo: cubre la jornada.';
+    if (info) info.textContent = 'Listo: cubre la jornada.';
     ok = true;
   }
 
-  $('#btnOut').disabled = !(st.sessionOpen && ok);
+  const outBtn = $('#btnOut');
+  if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
 
 async function prepareAllocUI() {
@@ -367,7 +360,8 @@ async function mark(direction) {
 async function onMarkIn() {
   try {
     console.log('[APP] CLICK ENTRADA');
-    $('#btnIn').disabled = true;
+    const inBtn = $('#btnIn');
+    if (inBtn) inBtn.disabled = true;
     await mark('IN');
     toast($('#punchMsg'), 'Entrada registrada.');
   } catch (e) {
@@ -383,7 +377,8 @@ async function onMarkOut() {
     console.log('[APP] CLICK SALIDA');
     const ok = await onSaveAlloc(true); // valida tolerancia
     if (!ok) return;
-    $('#btnOut').disabled = true;
+    const outBtn = $('#btnOut');
+    if (outBtn) outBtn.disabled = true;
     await mark('OUT');
     toast($('#punchMsg'), 'Salida registrada.');
   } catch (e) {
