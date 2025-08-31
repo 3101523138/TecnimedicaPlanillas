@@ -128,7 +128,6 @@ async function loadEmployeeContext() {
 }
 
 // === STATUS + RECIENTES ===
-// === STATUS + RECIENTES ===
 async function loadStatusAndRecent() {
   console.log('[APP] loadStatusAndRecent');
   let estado = 'Fuera', minsHoy = 0;
@@ -147,7 +146,7 @@ async function loadStatusAndRecent() {
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // minutos de hoy (sumando sesiones de hoy; opcional, lo puedes dejar igual)
+  // minutos de hoy (sumando sesiones de hoy)
   {
     const { data, error } = await supabase.from('work_sessions')
       .select('start_at, end_at')
@@ -164,64 +163,9 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // header (igual que antes)
-  const punch = $('#punchCard');
-  const old = punch && punch.querySelector('.card.inner.statusHdr');
-  if (old) old.remove();
-  const hdr = document.createElement('div');
-  hdr.className = 'card inner statusHdr';
-  hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div><div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>`;
-  if (punch) punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
-
-  // botones (igual que antes)
-  $('#btnIn').disabled = (estado === 'Dentro');
-  $('#btnOut').disabled = (estado !== 'Dentro');
-  toast($('#punchMsg'), '');
-
-  // últimas marcas (igual que antes)
-  const { data: tps, error: eTP } = await supabase.from('time_punches')
-    .select('direction, punch_at, latitude, longitude')
-    .eq('employee_uid', st.employee.uid)
-    .eq('punch_date', todayStr())
-    .order('punch_at', { ascending: false })
-    .limit(10);
-  if (eTP) console.error('[APP] time_punches error:', eTP);
-  $('#recentPunches').innerHTML = (!tps?.length) ? 'Sin marcas aún.' :
-    tps.map(tp => {
-      const d = new Date(tp.punch_at);
-      const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
-      return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
-    }).join('');
-
-  // === REQUERIDOS (desde medianoche local, con margen) — REEMPLAZA TU BLOQUE ANTERIOR ===
-  if (st.sessionOpen) {
-    const now = Date.now();
-    const start = new Date(st.sessionOpen.start_at).getTime();
-
-    // medianoche local de hoy
-    const midnightLocal = new Date();
-    midnightLocal.setHours(0, 0, 0, 0);
-    const midnightTs = midnightLocal.getTime();
-
-    // si la sesión empezó antes de medianoche, sólo cuenta desde medianoche
-    const effectiveStart = (start < midnightTs) ? midnightTs : start;
-    const diffMin = Math.max(0, Math.round((now - effectiveStart) / 60000));
-
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
-  } else {
-    st.requiredMinutes = 0;
-  }
-  const reqEl = $('#allocRequiredHM');
-  if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
-
-  // UI asignaciones
-  await prepareAllocUI();
-}
-
-
   // header
   const punch = $('#punchCard');
-  const old = punch && punch.querySelector('.card.inner.statusHdr'); 
+  const old = punch && punch.querySelector('.card.inner.statusHdr');
   if (old) old.remove();
   const hdr = document.createElement('div');
   hdr.className = 'card inner statusHdr';
@@ -233,7 +177,7 @@ async function loadStatusAndRecent() {
   $('#btnOut').disabled = (estado !== 'Dentro');
   toast($('#punchMsg'), '');
 
-  // últimas marcas
+  // últimas marcas (de hoy)
   const { data: tps, error: eTP } = await supabase.from('time_punches')
     .select('direction, punch_at, latitude, longitude')
     .eq('employee_uid', st.employee.uid)
@@ -248,9 +192,17 @@ async function loadStatusAndRecent() {
       return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
     }).join('');
 
-  // requeridos (con margen)
+  // REQUERIDOS desde medianoche local (con margen)
   if (st.sessionOpen) {
-    const diffMin = Math.max(0, Math.round((Date.now() - new Date(st.sessionOpen.start_at).getTime()) / 60000));
+    const now = Date.now();
+    const start = new Date(st.sessionOpen.start_at).getTime();
+
+    const midnightLocal = new Date();
+    midnightLocal.setHours(0, 0, 0, 0);
+    const midnightTs = midnightLocal.getTime();
+
+    const effectiveStart = (start < midnightTs) ? midnightTs : start;
+    const diffMin = Math.max(0, Math.round((now - effectiveStart) / 60000));
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
   } else {
     st.requiredMinutes = 0;
