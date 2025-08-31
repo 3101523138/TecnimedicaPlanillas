@@ -36,6 +36,23 @@ const minToHM = (mins) => `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs
 const hmToMin = (hhmm) => { if (!hhmm) return 0; const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10)); return (h * 60 + (m || 0)) | 0; };
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+// Verificar si ya existe una jornada cerrada hoy
+async function hasClosedSessionToday() {
+  const { data, error } = await supabase
+    .from('work_sessions')
+    .select('id')
+    .eq('employee_uid', st.employee.uid)
+    .eq('session_date', todayStr())
+    .eq('status', 'CLOSED')
+    .limit(1);
+
+  if (error) {
+    console.error('[APP] hasClosedSessionToday error:', error);
+    return false;
+  }
+  return (data && data.length > 0);
+}
+
 // === HELPERS UI ===
 const $ = (s) => document.querySelector(s);
 const show = (el) => el && (el.style.display = '');
