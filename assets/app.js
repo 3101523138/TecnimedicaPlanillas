@@ -324,6 +324,19 @@ function renderAllocContainer() {
   });
 }
 
+// --- Sincroniza minutos desde los inputs al estado antes de guardar ---
+function syncAllocFromInputs() {
+  const rowsEls = [...document.querySelectorAll('#allocContainer .allocRow')];
+  rowsEls.forEach((el, i) => {
+    const h = el.querySelector('.allocH');
+    const m = el.querySelector('.allocM');
+    if (!h || !m || !st.allocRows[i]) return;
+    let hv = parseInt(h.value || '0', 10) || 0;
+    let mv = parseInt(m.value || '0', 10) || 0;
+    if (mv > 59) { hv += Math.floor(mv / 60); mv = mv % 60; }
+    st.allocRows[i].minutes = hv * 60 + mv;
+  });
+}
 
 function remainingMinutes() {
   const tot = st.allocRows.reduce((a, r) => a + (r.minutes || 0), 0);
@@ -477,6 +490,9 @@ function onAddAlloc() {
 async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
+
+    // 👇 asegura que lo guardado coincida EXACTO con lo que ves en los inputs
+    syncAllocFromInputs();
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
     if (forClosing) {
