@@ -367,7 +367,6 @@ async function loadExistingAllocations() {
 function renderAllocContainer() {
   const cont = $('#allocContainer');
   cont.innerHTML = '';
-
   const filter = st.clientFilter || '';
 
   st.allocRows.forEach((row, idx) => {
@@ -389,7 +388,21 @@ function renderAllocContainer() {
       if (p.project_code === row.project_code) o.selected = true;
       sel.appendChild(o);
     });
-    sel.addEventListener('change', () => { row.project_code = sel.value; });
+
+    sel.addEventListener('change', () => {
+      row.project_code = sel.value || '';
+      // Si escogió proyecto y la fila está en 00:00, dale el restante (y reparte)
+      const curMin = parseInt(row.minutes || 0, 10) || 0;
+      if (row.project_code && curMin === 0) {
+        // Asigna restante a esta fila y reparte a partir de aquí
+        const before = st.allocRows.slice(0, idx).reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+        row.minutes = Math.max(0, st.workedMinutes - before);
+        rebalanceFrom(idx);
+      } else {
+        renderAllocContainer();
+        updateAllocTotals();
+      }
+    });
 
     // DURACIÓN HH:MM
     const h = document.createElement('input');
@@ -403,14 +416,26 @@ function renderAllocContainer() {
     m.className = 'allocM';
 
     const onDurChange = () => {
-      st.selectorDirty = true; // el usuario tocó HH/MM → no autocompletar
-      let hv = parseInt(h.value || '0', 10); if (hv < 0) hv = 0;
-      let mv = parseInt(m.value || '0', 10); if (mv < 0) mv = 0;
+      st.selectorDirty = true; // usuario está editando
+      let hv = parseInt(h.value || '0', 10); if (isNaN(hv) || hv < 0) hv = 0;
+      let mv = parseInt(m.value || '0', 10); if (isNaN(mv) || mv < 0) mv = 0;
       if (mv > 59) { hv += Math.floor(mv / 60); mv = mv % 60; }
       h.value = hv; m.value = mv;
+
       row.minutes = hv * 60 + mv;
-      updateAllocTotals();
+
+      // Si quedó en 00:00 y sin proyecto, elimina esta fila (no crear basura)
+      if ((row.minutes || 0) === 0 && !row.project_code && idx > 0) {
+        st.allocRows.splice(idx, 1);
+        renderAllocContainer();
+        updateAllocTotals();
+        return;
+      }
+
+      // Repartición automática desde la fila modificada
+      rebalanceFrom(idx);
     };
+
     h.addEventListener('input', onDurChange);
     m.addEventListener('input', onDurChange);
 
@@ -423,7 +448,11 @@ function renderAllocContainer() {
     // Botón eliminar
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'btn light small'; del.textContent = 'Quitar';
-    del.addEventListener('click', () => { st.allocRows.splice(idx, 1); renderAllocContainer(); updateAllocTotals(); });
+    del.addEventListener('click', () => {
+      st.allocRows.splice(idx, 1);
+      renderAllocContainer();
+      updateAllocTotals();
+    });
 
     // ENSAMBLE
     line.appendChild(sel);
@@ -464,26 +493,25 @@ function updateAllocTotals() {
   const totalEl = $('#allocTotalHM');
   if (totalEl) totalEl.textContent = minToHM(tot);
 
-  const rightEl = $('#allocRequiredHM'); // mismo span a la derecha
+  const rightEl = $('#allocRequiredHM'); // “/ trabajados”
   if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
 
   const info = $('#allocInfo');
   let ok = false;
 
-  // Guía basada en TRABAJADO: permitimos pasarse hasta GRACE_MINUTES
   if (tot < st.workedMinutes) {
-    if (info) info.textContent = `Faltan ${minToHM(st.workedMinutes - tot)}. Completa la jornada.`;
+    if (info) info.textContent = `Debes asignar ${minToHM(st.workedMinutes - tot)} más.`;
   } else if (tot > st.workedMinutes + GRACE_MINUTES) {
-    if (info) info.textContent = `Te pasaste ${minToHM(tot - st.workedMinutes)}. Reduce algún proyecto.`;
+    if (info) info.textContent = `Asignaste ${minToHM(tot - st.workedMinutes)} de más. Ajusta los proyectos.`;
   } else {
-    if (info) info.textContent = 'Listo: cubre la jornada.';
+    if (info) info.textContent = 'Listo: la jornada está cubierta.';
     ok = true;
   }
 
-  // Habilitar OUT solo si hay sesión y el total está dentro del rango permitido
   const outBtn = $('#btnOut');
   if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
+
 
 async function prepareAllocUI() {
   // Al entrar a la vista, el selector aún no ha sido tocado
@@ -605,30 +633,91 @@ async function onMarkOut() {
 }
 
 // + Proyecto (precarga con tiempo restante)
+// + Proyecto (con reparto automático del restante)
 function onAddAlloc() {
   if (!st.sessionOpen) return;
   if (st.allocRows.length >= 3) { toast($('#punchMsg'), 'Máximo 3 proyectos por jornada.'); return; }
-  const rem = remainingMinutes();
-  if (rem <= 0) { toast($('#punchMsg'), 'Ya asignaste todo el tiempo trabajado.'); return; }
+
+  // Asegura estado desde inputs
+  syncAllocFromInputs();
+
+  const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
+  const rem = Math.max(0, st.workedMinutes - tot);
+
+  if (rem <= 0) { toast($('#punchMsg'), 'No hay tiempo restante por asignar.'); return; }
+
+  // Nueva fila con TODO el restante
   st.allocRows.push({ project_code: '', minutes: rem });
-  renderAllocContainer(); updateAllocTotals();
+  renderAllocContainer();
+  updateAllocTotals();
 }
+
+// Reparte automáticamente el tiempo restante a partir de la fila modificada.
+// - Mantiene tal cual las filas anteriores.
+// - La fila modificada se "clampa" al máximo disponible.
+// - La fila siguiente recibe TODO el restante.
+// - Las filas posteriores quedan en 00:00 (y se limpian si no tienen proyecto).
+function rebalanceFrom(changedIdx) {
+  if (!st.sessionOpen) return;
+
+  // Asegura que el estado refleje lo escrito en inputs
+  syncAllocFromInputs();
+
+  const maxTotal = st.workedMinutes; // objetivo de asignación visual
+  const rows = st.allocRows;
+
+  // 1) Suma minutos de filas anteriores
+  let before = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (i >= changedIdx) break;
+    before += (parseInt(rows[i].minutes || 0, 10) || 0);
+  }
+
+  // 2) Clampear la fila modificada al disponible
+  const maxForThis = Math.max(0, maxTotal - before);
+  rows[changedIdx].minutes = Math.min(maxForThis, parseInt(rows[changedIdx].minutes || 0, 10) || 0);
+
+  // 3) Repartir restante a la siguiente fila y poner 0 en las demás
+  let usedUntilChanged = before + rows[changedIdx].minutes;
+  let remaining = Math.max(0, maxTotal - usedUntilChanged);
+
+  for (let j = changedIdx + 1; j < rows.length; j++) {
+    rows[j].minutes = (j === changedIdx + 1) ? remaining : 0;
+    remaining = (j === changedIdx + 1) ? 0 : remaining;
+  }
+
+  // 4) Limpieza: elimina filas 00:00 sin proyecto al final
+  for (let k = rows.length - 1; k >= 0; k--) {
+    const r = rows[k];
+    const mins = parseInt(r.minutes || 0, 10) || 0;
+    if (mins === 0 && !r.project_code && k > 0) {
+      rows.splice(k, 1);
+    } else {
+      break; // detente al encontrar una fila útil
+    }
+  }
+
+  renderAllocContainer();
+  updateAllocTotals();
+}
+
 
 // Guardar asignación (parcial o para cerrar)
 async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
 
-    // forzar que lo que ves en inputs sea lo que guardamos
+    // fuerza estado desde inputs
     syncAllocFromInputs();
+
+    // Limpieza previa: elimina filas 00:00 sin proyecto
+    st.allocRows = st.allocRows.filter(r => (parseInt(r.minutes || 0, 10) > 0) || r.project_code);
 
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
     if (forClosing) {
-      // Validación de cierre contra TRABAJADO real con tolerancia GRACE
-      const lower = Math.max(0, st.workedMinutes - 1);        // colchón 1 min por redondeo
-      const upper = st.workedMinutes + GRACE_MINUTES;         // tolerancia permitida
-
+      const lower = Math.max(0, st.workedMinutes - 1);
+      const upper = st.workedMinutes + GRACE_MINUTES;
       if (tot < lower) throw new Error(`Faltan ${minToHM(st.workedMinutes - tot)}.`);
       if (tot > upper) throw new Error(`Te pasaste ${minToHM(tot - st.workedMinutes)}.`);
     }
@@ -653,9 +742,11 @@ async function onSaveAlloc(forClosing = false) {
     toast($('#punchMsg'), `Error al guardar: ${e.message}`);
     return false;
   } finally {
+    renderAllocContainer();
     updateAllocTotals();
   }
 }
+
 
 // === NAV ===
 function setNavListeners() {
