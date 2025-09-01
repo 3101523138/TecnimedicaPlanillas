@@ -480,24 +480,34 @@ function updateAllocTotals() {
   const outBtn = $('#btnOut');
   if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
+
 async function prepareAllocUI() {
   // Al entrar a la vista, el selector aún no ha sido tocado
   st.selectorDirty = false;
 
   // Cargar catálogo una vez
   if (!st.projects.length) {
-    const { data } = await supabase.from('projects')
+    const { data, error } = await supabase
+      .from('projects')
       .select('project_code, client_name, name, description')
       .order('client_name', { ascending: true })
       .order('project_code', { ascending: true });
-    st.projects = data || [];
+    if (error) {
+      console.error('[APP] load projects error:', error);
+      st.projects = [];
+    } else {
+      st.projects = data || [];
+    }
 
     // Filtro de clientes
     const clients = [...new Set(st.projects.map(p => p.client_name).filter(Boolean))].sort();
     const selClient = $('#allocClient');
     if (selClient && selClient.options.length === 1) {
       clients.forEach(c => {
-        const o = document.createElement('option'); o.value = c; o.textContent = c; selClient.appendChild(o);
+        const o = document.createElement('option');
+        o.value = c;
+        o.textContent = c;
+        selClient.appendChild(o);
       });
       selClient.addEventListener('change', () => {
         st.clientFilter = selClient.value || '';
@@ -522,24 +532,6 @@ async function prepareAllocUI() {
   renderAllocContainer();
   updateAllocTotals();
 }
-
-
-  // Prellenar con lo guardado si existe
-  if (st.sessionOpen) {
-    if (st.allocRows.length === 0) {
-      const prev = await loadExistingAllocations();
-      const sumPrev = prev.reduce((a, r) => a + (r.minutes || 0), 0);
-      const restante = Math.max(0, st.workedMinutes - sumPrev);
-      st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restante }];
-    }
-  } else {
-    st.allocRows = [];
-  }
-
-  renderAllocContainer();
-  updateAllocTotals();
-}
-
 
 
 // === MARCAR IN/OUT ===
