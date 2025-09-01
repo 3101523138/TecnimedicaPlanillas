@@ -36,7 +36,7 @@ const minToHM = (mins) => `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs
 const hmToMin = (hhmm) => { if (!hhmm) return 0; const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10)); return (h * 60 + (m || 0)) | 0; };
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-// Verificar si ya existe una jornada cerrada hoy
+// Verificar si ya existe una jornada cerrada hoy (solo para ADVERTIR al IN)
 async function hasClosedSessionToday() {
   const { data, error } = await supabase
     .from('work_sessions')
@@ -167,7 +167,6 @@ async function loadStatusAndRecent() {
       .eq('employee_uid', st.employee.uid)
       .order('start_at', { ascending: false })
       .limit(1);
-
     if (error) console.error('[APP] work_sessions last error:', error);
     const ws = data && data[0];
     st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
@@ -183,7 +182,6 @@ async function loadStatusAndRecent() {
       .select('start_at, end_at')
       .eq('employee_uid', st.employee.uid)
       .or(`start_at.gte.${midnightISO},end_at.gte.${midnightISO},end_at.is.null`);
-
     if (error) console.error('[APP] minutes today error:', error);
 
     minsHoy = 0;
@@ -191,7 +189,7 @@ async function loadStatusAndRecent() {
       minsHoy = data.reduce((acc, r) => {
         const s = new Date(r.start_at).getTime();
         const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
-        const effStart = Math.max(s, midnightTs); // cuenta solo desde hoy
+        const effStart = Math.max(s, midnightTs); // solo desde hoy
         const deltaMin = Math.max(0, Math.round((e - effStart) / 60000));
         return acc + deltaMin;
       }, 0);
@@ -230,7 +228,6 @@ async function loadStatusAndRecent() {
       .gte('punch_at', midnightISO)
       .order('punch_at', { ascending: false })
       .limit(10);
-
     if (eTP) console.error('[APP] time_punches error:', eTP);
 
     const recentEl = $('#recentPunches');
@@ -247,65 +244,7 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Minutos REQUERIDOS para asignar hoy (con margen)
-  if (st.sessionOpen) {
-    const start = new Date(st.sessionOpen.start_at).getTime();
-    const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
-    const diffMin = Math.max(0, Math.round((nowTs - effectiveStart) / 60000));
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
-  } else {
-    st.requiredMinutes = 0;
-  }
-  {
-    const reqEl = $('#allocRequiredHM');
-    if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
-  }
-
-  // 7) Pintar / actualizar UI de asignaciones
-  await prepareAllocUI();
-}
-
-
-  // 3) Header “Estado actual / Horas de hoy”
-  const punch = $('#punchCard');
-  const old = punch && punch.querySelector('.card.inner.statusHdr');
-  if (old) old.remove();
-  const hdr = document.createElement('div');
-  hdr.className = 'card inner statusHdr';
-  hdr.innerHTML = `
-    <div><strong>Estado actual:</strong> ${estado}</div>
-    <div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>
-  `;
-  if (punch) punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
-
-  // 4) Habilitar/Deshabilitar botones de IN/OUT
-  $('#btnIn').disabled  = (estado === 'Dentro');
-  $('#btnOut').disabled = (estado !== 'Dentro');
-  toast($('#punchMsg'), '');
-
-  // 5) Últimas marcas (solo desde medianoche local)
-  {
-    const { data: tps, error: eTP } = await supabase
-      .from('time_punches')
-      .select('direction, punch_at, latitude, longitude')
-      .eq('employee_uid', st.employee.uid)
-      .gte('punch_at', midnightISO)
-      .order('punch_at', { ascending: false })
-      .limit(10);
-    if (eTP) console.error('[APP] time_punches error:', eTP);
-
-    $('#recentPunches').innerHTML = (!tps?.length)
-      ? 'Sin marcas aún.'
-      : tps.map(tp => {
-          const d = new Date(tp.punch_at);
-          const loc = (tp.latitude && tp.longitude)
-            ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})`
-            : '';
-          return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
-        }).join('');
-  }
-
-  // 6) Minutos REQUERIDOS para asignar hoy (con margen)
+  // 6) Minutos REQUERIDOS (con margen)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
     const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
@@ -316,62 +255,7 @@ async function loadStatusAndRecent() {
   }
   $('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
 
-  // 7) Pintar / actualizar UI de asignaciones
-  await prepareAllocUI();
-}
-
-    
-  // header
-  const punch = $('#punchCard');
-  const old = punch && punch.querySelector('.card.inner.statusHdr');
-  if (old) old.remove();
-  const hdr = document.createElement('div');
-  hdr.className = 'card inner statusHdr';
-  hdr.innerHTML = `<div><strong>Estado actual:</strong> ${estado}</div><div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>`;
-  if (punch) punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
-
-  // botones
-  $('#btnIn').disabled = (estado === 'Dentro');
-  $('#btnOut').disabled = (estado !== 'Dentro');
-  toast($('#punchMsg'), '');
-
-  // últimas marcas (de hoy)
-
-  const { data: tps, error: eTP } = await supabase.from('time_punches')
-  .select('direction, punch_at, latitude, longitude')
-  .eq('employee_uid', st.employee.uid)
-  .gte('punch_at', midnightISO)          // desde medianoche local
-  .order('punch_at', { ascending: false })
-  .limit(10);
-
-  if (eTP) console.error('[APP] time_punches error:', eTP);
-  $('#recentPunches').innerHTML = (!tps?.length) ? 'Sin marcas aún.' :
-    tps.map(tp => {
-      const d = new Date(tp.punch_at);
-      const loc = (tp.latitude && tp.longitude) ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})` : '';
-      return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
-    }).join('');
-
-  // REQUERIDOS desde medianoche local (con margen)
-  if (st.sessionOpen) {
-    const now = Date.now();
-    const start = new Date(st.sessionOpen.start_at).getTime();
-
-    const midnightLocal = new Date();
-    midnightLocal.setHours(0,0,0,0);
-    const midnightISO = midnightLocal.toISOString(); // sirve para gte/lt
-
-
-    const effectiveStart = (start < midnightTs) ? midnightTs : start;
-    const diffMin = Math.max(0, Math.round((now - effectiveStart) / 60000));
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
-  } else {
-    st.requiredMinutes = 0;
-  }
-  const reqEl = $('#allocRequiredHM');
-  if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
-
-  // UI asignaciones
+  // 7) UI asignaciones
   await prepareAllocUI();
 }
 
@@ -462,7 +346,7 @@ function renderAllocContainer() {
 
     // ENSAMBLE
     line.appendChild(sel);
-    line.appendChild(dur);      // <- ya no usamos 'inp'
+    line.appendChild(dur);
     line.appendChild(del);
     cont.appendChild(line);
   });
@@ -510,8 +394,7 @@ function updateAllocTotals() {
     ok = true;
   }
 
-  // El botón SALIDA depende SOLO de tener sesión abierta y cobertura correcta;
-  // no se bloquea por "segunda jornada".
+  // Solo se bloquea por no cubrir tiempo o no haber sesión abierta.
   const outBtn = $('#btnOut');
   if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
@@ -571,9 +454,9 @@ async function mark(direction) {
 
 async function onMarkIn() {
   try {
-    console.log('[APP] CLICK ENTRADA');
+    console.log('[APP] CLICK ENTRADA]');
 
-    // Si ya hubo una jornada cerrada hoy, advertir
+    // Advertir si ya hubo una jornada cerrada hoy (no bloquea)
     const alreadyClosedToday = await hasClosedSessionToday();
     if (alreadyClosedToday) {
       const ok = window.confirm(
@@ -583,8 +466,7 @@ async function onMarkIn() {
       if (!ok) return; // cancela
     }
 
-    const inBtn = $('#btnIn');
-    if (inBtn) inBtn.disabled = true;
+    $('#btnIn') && ($('#btnIn').disabled = true);
 
     await mark('IN');
     toast($('#punchMsg'), 'Entrada registrada.');
@@ -600,16 +482,15 @@ async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
 
-    // ⛔️ NO refrescar aquí; esto borra lo que el usuario ajustó en la UI
+    // ⛔ NO refrescar antes (no pisar lo que ajustó el usuario)
     // await loadStatusAndRecent();
 
-    // Guarda asignación validando tolerancia
+    // Validar y guardar asignación
     const ok = await onSaveAlloc(true);
     if (!ok) return;
 
-    // Marca salida
-    const outBtn = $('#btnOut');
-    if (outBtn) outBtn.disabled = true;
+    // Marcar salida
+    $('#btnOut') && ($('#btnOut').disabled = true);
     await mark('OUT');
 
     toast($('#punchMsg'), 'Salida registrada.');
@@ -617,7 +498,7 @@ async function onMarkOut() {
     console.error('[APP] onMarkOut error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
-    // ✅ refresca después de cerrar
+    // ✅ refrescar después
     await loadStatusAndRecent();
   }
 }
@@ -633,27 +514,21 @@ function onAddAlloc() {
 }
 
 // Guardar asignación (parcial o para cerrar)
-
-// Guardar asignación (parcial o para cerrar)
 async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
 
-    // 👇 asegura que lo guardado coincida EXACTO con lo que ves en los inputs
+    // forzar que lo que ves en inputs sea lo que guardamos
     syncAllocFromInputs();
+
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
     if (forClosing) {
-      // st.requiredMinutes = worked - GRACE_MINUTES (ya calculado en loadStatusAndRecent)
-      const lower = Math.max(0, st.requiredMinutes - 1);              // cojín de 1 min
-      const upper = st.requiredMinutes + GRACE_MINUTES;               // = worked + tolerancia
+      const lower = Math.max(0, st.requiredMinutes - 1); // colchón 1 min
+      const upper = st.requiredMinutes + GRACE_MINUTES;  // worked + tolerancia
 
-      if (tot < lower) {
-        throw new Error(`Faltan ${minToHM((st.requiredMinutes) - tot)}.`);
-      }
-      if (tot > upper) {
-        throw new Error(`Te pasaste ${minToHM(tot - (st.requiredMinutes))}.`);
-      }
+      if (tot < lower) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
+      if (tot > upper) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
     }
 
     const sid = st.sessionOpen.id;
