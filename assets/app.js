@@ -81,13 +81,7 @@ function routeTo(path) {
 function startSessionTicker() {
   stopSessionTicker();
   if (!st.sessionOpen) return;
-
-  // guardamos medianoche para el cálculo “de hoy”
-  const midnightLocal = new Date();
-  midnightLocal.setHours(0, 0, 0, 0);
-  st._midnightTs = midnightLocal.getTime();
-
-  // primer tick inmediato + cada minuto
+  // primer tick inmediato + cada 60 s (puedes bajar a 10 s)
   tickSessionClock(true);
   st.sessionTickId = setInterval(() => tickSessionClock(false), 60 * 1000);
 }
@@ -103,24 +97,35 @@ function tickSessionClock(firstRun = false) {
   if (!st.sessionOpen) { stopSessionTicker(); return; }
 
   const nowTs = Date.now();
+
+  // --- Actualiza TRABAJADO (UI derecha / precarga)
   const startTs = new Date(st.sessionOpen.start_at).getTime();
   const effStart = Math.max(startTs, st._midnightTs || 0);
-
-  // Recalcula trabajado real
-  const diffMin = Math.max(0, Math.round((nowTs - effStart) / 60000));
+  const diffMin = Math.max(0, Math.floor((nowTs - effStart) / 60000)); // real
   st.workedMinutes   = diffMin;
-  st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES); // solo para validación OUT
+  st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
 
-  // Refresca UI derecha “/ trabajados”
   const rightEl = $('#allocRequiredHM');
   if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
 
-  // Si el usuario NO ha tocado HH/MM, mantenemos el restante precargado
+  // --- Actualiza “Horas de hoy” = sesiones de hoy (cerradas) + abierta hasta ahora
+  if (Array.isArray(st.todaySessions)) {
+    const minsHoyLive = st.todaySessions.reduce((acc, r) => {
+      const s = new Date(r.start_at).getTime();
+      const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
+      const effS = Math.max(s, st._midnightTs || 0);
+      const dMin = Math.max(0, Math.floor((e - effS) / 60000));
+      return acc + dMin;
+    }, 0);
+    const hoursTodayEl = $('#hoursTodayText');
+    if (hoursTodayEl) hoursTodayEl.textContent = minToHM(minsHoyLive);
+  }
+
+  // --- Si el usuario no tocó HH/MM, mantenemos precarga con el restante
   if (!st.selectorDirty && st.allocRows && st.allocRows.length > 0) {
     const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
     const restante = Math.max(0, st.workedMinutes - tot);
 
-    // precargar en la PRIMERA fila que esté vacía de minutos (>0 evita pisar manual)
     const rowsEls = [...document.querySelectorAll('#allocContainer .allocRow')];
     if (rowsEls.length) {
       const firstRow = rowsEls[0];
@@ -133,19 +138,15 @@ function tickSessionClock(firstRun = false) {
           const hh = Math.floor(restante / 60);
           const mm = restante % 60;
           h.value = hh; m.value = mm;
-          // sincroniza al estado para que los totales sean coherentes
-          syncAllocFromInputs();
+          syncAllocFromInputs(); // actualiza estado
         }
       }
     }
   }
 
-  // Recalcula mensajes y habilitación de OUT
   updateAllocTotals();
-
   if (firstRun) console.log('[APP] session ticker iniciado');
 }
-
 
 // === GEO ===
 async function getGPS() {
@@ -230,7 +231,7 @@ async function loadStatusAndRecent() {
   const midnightTs  = midnightLocal.getTime();
   const midnightISO = midnightLocal.toISOString();
 
-  // 1) Última sesión
+  // 1) Última sesión (para saber si está OPEN)
   {
     const { data, error } = await supabase
       .from('work_sessions')
@@ -245,29 +246,31 @@ async function loadStatusAndRecent() {
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // 2) “Horas de hoy”
+  // 2) Sesiones de HOY → guardamos para el ticker y calculamos “Horas de hoy” inicial
   {
     const nowTs = Date.now();
     const { data, error } = await supabase
       .from('work_sessions')
-      .select('start_at, end_at')
+      .select('start_at, end_at, status')
       .eq('employee_uid', st.employee.uid)
       .or(`start_at.gte.${midnightISO},end_at.gte.${midnightISO},end_at.is.null`);
-    if (error) console.error('[APP] minutes today error:', error);
-
-    minsHoy = 0;
-    if (data && data.length) {
-      minsHoy = data.reduce((acc, r) => {
-        const s = new Date(r.start_at).getTime();
-        const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
-        const effStart = Math.max(s, midnightTs);
-        const deltaMin = Math.max(0, Math.round((e - effStart) / 60000));
-        return acc + deltaMin;
-      }, 0);
+    if (error) {
+      console.error('[APP] minutes today error:', error);
+      st.todaySessions = [];
+    } else {
+      st.todaySessions = data || [];
     }
+
+    minsHoy = st.todaySessions.reduce((acc, r) => {
+      const s = new Date(r.start_at).getTime();
+      const e = r.end_at ? new Date(r.end_at).getTime() : nowTs; // si está abierta, hasta ahora
+      const effStart = Math.max(s, midnightTs);
+      const deltaMin = Math.max(0, Math.floor((e - effStart) / 60000)); // floor = tiempo real
+      return acc + deltaMin;
+    }, 0);
   }
 
-  // 3) Header
+  // 3) Header (IMPORTANTE: span con id para actualizar en vivo)
   const punch = $('#punchCard');
   if (punch) {
     const old = punch.querySelector('.card.inner.statusHdr');
@@ -276,7 +279,7 @@ async function loadStatusAndRecent() {
     hdr.className = 'card inner statusHdr';
     hdr.innerHTML = `
       <div><strong>Estado actual:</strong> ${estado}</div>
-      <div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>
+      <div class="muted">Horas de hoy: <span id="hoursTodayText">${minToHM(minsHoy)}</span></div>
     `;
     const ref = punch.querySelector('.row.gap.m-t');
     if (ref) punch.insertBefore(hdr, ref);
@@ -288,7 +291,7 @@ async function loadStatusAndRecent() {
   $('#btnOut') && ($('#btnOut').disabled = (estado !== 'Dentro'));
   toast($('#punchMsg'), '');
 
-  // 5) Últimas marcas
+  // 5) Últimas marcas (desde medianoche local)
   {
     const { data: tps, error: eTP } = await supabase
       .from('time_punches')
@@ -313,13 +316,13 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Trabajado (UI) y Requerido (validación OUT)
+  // 6) Trabajado (UI) y Requerido (solo para validar OUT)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
-    const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
-    const diffMin = Math.max(0, Math.round((Date.now() - effectiveStart) / 60000));
-    st.workedMinutes   = diffMin;                          // para UI y precarga
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES); // solo para validar OUT
+    const effStart = (start < midnightTs) ? midnightTs : start;
+    const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000)); // real
+    st.workedMinutes   = diffMin;                           // usado en “/ trabajados” y precarga
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
   } else {
     st.workedMinutes = 0;
     st.requiredMinutes = 0;
@@ -330,8 +333,9 @@ async function loadStatusAndRecent() {
   await prepareAllocUI();
 
   // 8) Ticker en vivo
-  if (st.sessionOpen) startSessionTicker();
-  else stopSessionTicker();
+  const mLocal = new Date(); mLocal.setHours(0,0,0,0);
+  st._midnightTs = mLocal.getTime();
+  if (st.sessionOpen) startSessionTicker(); else stopSessionTicker();
 }
 
 
