@@ -147,11 +147,22 @@ async function loadEmployeeContext() {
 // === STATUS + RECIENTES ===
 async function loadStatusAndRecent() {
   console.log('[APP] loadStatusAndRecent');
-  let estado = 'Fuera', minsHoy = 0;
 
-  // última sesión
+  // Estado por defecto
+  let estado = 'Fuera';
+  let minsHoy = 0;
+
+  // ⏰ Anclar medianoche local de HOY (todo lo “de hoy” se calcula desde aquí)
+  const midnightLocal = new Date();
+  midnightLocal.setHours(0, 0, 0, 0);
+  const midnightTs  = midnightLocal.getTime();
+  const midnightISO = midnightLocal.toISOString();
+  const nowTs = Date.now();
+
+  // 1) Última sesión -> saber si hay jornada abierta
   {
-    const { data, error } = await supabase.from('work_sessions')
+    const { data, error } = await supabase
+      .from('work_sessions')
       .select('id, start_at, end_at, status')
       .eq('employee_uid', st.employee.uid)
       .order('start_at', { ascending: false })
@@ -163,23 +174,84 @@ async function loadStatusAndRecent() {
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // minutos de hoy (sumando sesiones de hoy)
+  // 2) “Horas de hoy”: suma solo lo que cae desde medianoche local.
+  //    Incluye sesiones que empezaron ayer pero siguen abiertas o terminaron hoy.
   {
-    const { data: dataWs, error: eWs } = await supabase.from('work_sessions')
-  .select('start_at, end_at')
-  .eq('employee_uid', st.employee.uid)
-  .gte('start_at', midnightISO);
-if (eWs) console.error('[APP] minutes today error:', eWs);
-if (dataWs?.length) {
-  const now = Date.now();
-  minsHoy = dataWs.reduce((acc, r) => {
-    const s = new Date(r.start_at).getTime();
-    const e = r.end_at ? new Date(r.end_at).getTime() : now;
-    // Solo cuenta lo que cae desde medianoche local:
-    const effStart = Math.max(s, midnightLocal.getTime());
-    return acc + Math.max(0, Math.round((e - effStart) / 60000));
-  }, 0);
+    const { data, error } = await supabase
+      .from('work_sessions')
+      .select('start_at, end_at')
+      .eq('employee_uid', st.employee.uid)
+      // toca hoy si: empezó hoy, o terminó hoy, o sigue abierta
+      .or(`start_at.gte.${midnightISO},end_at.gte.${midnightISO},end_at.is.null`);
+    if (error) console.error('[APP] minutes today error:', error);
+
+    minsHoy = 0;
+    if (data?.length) {
+      minsHoy = data.reduce((acc, r) => {
+        const s = new Date(r.start_at).getTime();
+        const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
+        // solo cuenta tiempo desde medianoche local
+        const effStart = Math.max(s, midnightTs);
+        const deltaMin = Math.max(0, Math.round((e - effStart) / 60000));
+        return acc + deltaMin;
+      }, 0);
+    }
+  }
+
+  // 3) Header “Estado actual / Horas de hoy”
+  const punch = $('#punchCard');
+  const old = punch && punch.querySelector('.card.inner.statusHdr');
+  if (old) old.remove();
+  const hdr = document.createElement('div');
+  hdr.className = 'card inner statusHdr';
+  hdr.innerHTML = `
+    <div><strong>Estado actual:</strong> ${estado}</div>
+    <div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>
+  `;
+  if (punch) punch.insertBefore(hdr, punch.querySelector('.row.gap.m-t'));
+
+  // 4) Habilitar/Deshabilitar botones de IN/OUT
+  $('#btnIn').disabled  = (estado === 'Dentro');
+  $('#btnOut').disabled = (estado !== 'Dentro');
+  toast($('#punchMsg'), '');
+
+  // 5) Últimas marcas (solo desde medianoche local)
+  {
+    const { data: tps, error: eTP } = await supabase
+      .from('time_punches')
+      .select('direction, punch_at, latitude, longitude')
+      .eq('employee_uid', st.employee.uid)
+      .gte('punch_at', midnightISO)
+      .order('punch_at', { ascending: false })
+      .limit(10);
+    if (eTP) console.error('[APP] time_punches error:', eTP);
+
+    $('#recentPunches').innerHTML = (!tps?.length)
+      ? 'Sin marcas aún.'
+      : tps.map(tp => {
+          const d = new Date(tp.punch_at);
+          const loc = (tp.latitude && tp.longitude)
+            ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})`
+            : '';
+          return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
+        }).join('');
+  }
+
+  // 6) Minutos REQUERIDOS para asignar hoy (con margen)
+  if (st.sessionOpen) {
+    const start = new Date(st.sessionOpen.start_at).getTime();
+    const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
+    const diffMin = Math.max(0, Math.round((nowTs - effectiveStart) / 60000));
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+  } else {
+    st.requiredMinutes = 0;
+  }
+  $('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
+
+  // 7) Pintar / actualizar UI de asignaciones
+  await prepareAllocUI();
 }
+
     
   // header
   const punch = $('#punchCard');
