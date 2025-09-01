@@ -229,7 +229,6 @@ async function loadStatusAndRecent() {
   midnightLocal.setHours(0, 0, 0, 0);
   const midnightTs  = midnightLocal.getTime();
   const midnightISO = midnightLocal.toISOString();
-  const nowTs = Date.now();
 
   // 1) Última sesión
   {
@@ -248,6 +247,7 @@ async function loadStatusAndRecent() {
 
   // 2) “Horas de hoy”
   {
+    const nowTs = Date.now();
     const { data, error } = await supabase
       .from('work_sessions')
       .select('start_at, end_at')
@@ -284,7 +284,7 @@ async function loadStatusAndRecent() {
   }
 
   // 4) Botones
-  $('#btnIn') && ($('#btnIn').disabled = (estado === 'Dentro'));
+  $('#btnIn')  && ($('#btnIn').disabled  = (estado === 'Dentro'));
   $('#btnOut') && ($('#btnOut').disabled = (estado !== 'Dentro'));
   toast($('#punchMsg'), '');
 
@@ -313,13 +313,13 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Recalcular trabajado/requerido para UI inicial
+  // 6) Trabajado (UI) y Requerido (validación OUT)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
-    const effectiveStart = (start < midnightTs) ? midnightTs : start;
+    const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
     const diffMin = Math.max(0, Math.round((Date.now() - effectiveStart) / 60000));
-    st.workedMinutes   = diffMin;
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+    st.workedMinutes   = diffMin;                          // para UI y precarga
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES); // solo para validar OUT
   } else {
     st.workedMinutes = 0;
     st.requiredMinutes = 0;
@@ -330,85 +330,10 @@ async function loadStatusAndRecent() {
   await prepareAllocUI();
 
   // 8) Ticker en vivo
-  if (st.sessionOpen) {
-    startSessionTicker();
-  } else {
-    stopSessionTicker();
-  }
+  if (st.sessionOpen) startSessionTicker();
+  else stopSessionTicker();
 }
 
-  // 3) Header “Estado actual / Horas de hoy”
-  const punch = $('#punchCard');
-  if (punch) {
-    const old = punch.querySelector('.card.inner.statusHdr');
-    if (old) old.remove();
-    const hdr = document.createElement('div');
-    hdr.className = 'card inner statusHdr';
-    hdr.innerHTML = `
-      <div><strong>Estado actual:</strong> ${estado}</div>
-      <div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>
-    `;
-    const ref = punch.querySelector('.row.gap.m-t');
-    if (ref) punch.insertBefore(hdr, ref);
-    else punch.prepend(hdr);
-  }
-
-  // 4) Botones IN/OUT
-  const btnIn  = $('#btnIn');
-  const btnOut = $('#btnOut');
-  if (btnIn)  btnIn.disabled  = (estado === 'Dentro');
-  if (btnOut) btnOut.disabled = (estado !== 'Dentro');
-  toast($('#punchMsg'), '');
-
-  // 5) Últimas marcas (desde medianoche local)
-  {
-    const { data: tps, error: eTP } = await supabase
-      .from('time_punches')
-      .select('direction, punch_at, latitude, longitude')
-      .eq('employee_uid', st.employee.uid)
-      .gte('punch_at', midnightISO)
-      .order('punch_at', { ascending: false })
-      .limit(10);
-    if (eTP) console.error('[APP] time_punches error:', eTP);
-
-    const recentEl = $('#recentPunches');
-    if (recentEl) {
-      recentEl.innerHTML = (!tps || !tps.length)
-        ? 'Sin marcas aún.'
-        : tps.map(tp => {
-            const d = new Date(tp.punch_at);
-            const loc = (tp.latitude && tp.longitude)
-              ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})`
-              : '';
-            return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
-          }).join('');
-    }
-  }
-
-  // 6) Minutos trabajados (UI) vs requeridos (validación de cierre)
-  if (st.sessionOpen) {
-    const start = new Date(st.sessionOpen.start_at).getTime();
-    const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
-    const diffMin = Math.max(0, Math.round((nowTs - effectiveStart) / 60000));
-
-    // Trabajado real para UI/precarga:
-    st.workedMinutes   = diffMin;
-    // Requerido solo para validar OUT (usa margen):
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
-  } else {
-    st.workedMinutes   = 0;
-    st.requiredMinutes = 0;
-  }
-
-  // Mostrar a la derecha el TRABAJADO (no el requerido)
-  {
-    const reqEl = $('#allocRequiredHM');
-    if (reqEl) reqEl.textContent = minToHM(st.workedMinutes);
-  }
-
-  // 7) UI asignaciones
-  await prepareAllocUI();
-}
 
 // === PROYECTOS ===
 async function loadProjects(client = null) {
