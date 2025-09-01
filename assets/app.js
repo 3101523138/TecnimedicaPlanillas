@@ -165,21 +165,22 @@ async function loadStatusAndRecent() {
 
   // minutos de hoy (sumando sesiones de hoy)
   {
-    const { data, error } = await supabase.from('work_sessions')
-      .select('start_at, end_at')
-      .eq('employee_uid', st.employee.uid)
-      .eq('session_date', todayStr());
-    if (error) console.error('[APP] minutes today error:', error);
-    if (data?.length) {
-      const now = Date.now();
-      minsHoy = data.reduce((acc, r) => {
-        const s = new Date(r.start_at).getTime();
-        const e = r.end_at ? new Date(r.end_at).getTime() : now;
-        return acc + Math.max(0, Math.round((e - s) / 60000));
-      }, 0);
-    }
-  }
-
+    const { data: dataWs, error: eWs } = await supabase.from('work_sessions')
+  .select('start_at, end_at')
+  .eq('employee_uid', st.employee.uid)
+  .gte('start_at', midnightISO);
+if (eWs) console.error('[APP] minutes today error:', eWs);
+if (dataWs?.length) {
+  const now = Date.now();
+  minsHoy = dataWs.reduce((acc, r) => {
+    const s = new Date(r.start_at).getTime();
+    const e = r.end_at ? new Date(r.end_at).getTime() : now;
+    // Solo cuenta lo que cae desde medianoche local:
+    const effStart = Math.max(s, midnightLocal.getTime());
+    return acc + Math.max(0, Math.round((e - effStart) / 60000));
+  }, 0);
+}
+    
   // header
   const punch = $('#punchCard');
   const old = punch && punch.querySelector('.card.inner.statusHdr');
@@ -195,12 +196,14 @@ async function loadStatusAndRecent() {
   toast($('#punchMsg'), '');
 
   // últimas marcas (de hoy)
+
   const { data: tps, error: eTP } = await supabase.from('time_punches')
-    .select('direction, punch_at, latitude, longitude')
-    .eq('employee_uid', st.employee.uid)
-    .eq('punch_date', todayStr())
-    .order('punch_at', { ascending: false })
-    .limit(10);
+  .select('direction, punch_at, latitude, longitude')
+  .eq('employee_uid', st.employee.uid)
+  .gte('punch_at', midnightISO)          // desde medianoche local
+  .order('punch_at', { ascending: false })
+  .limit(10);
+
   if (eTP) console.error('[APP] time_punches error:', eTP);
   $('#recentPunches').innerHTML = (!tps?.length) ? 'Sin marcas aún.' :
     tps.map(tp => {
@@ -215,8 +218,9 @@ async function loadStatusAndRecent() {
     const start = new Date(st.sessionOpen.start_at).getTime();
 
     const midnightLocal = new Date();
-    midnightLocal.setHours(0, 0, 0, 0);
-    const midnightTs = midnightLocal.getTime();
+    midnightLocal.setHours(0,0,0,0);
+    const midnightISO = midnightLocal.toISOString(); // sirve para gte/lt
+
 
     const effectiveStart = (start < midnightTs) ? midnightTs : start;
     const diffMin = Math.max(0, Math.round((now - effectiveStart) / 60000));
@@ -338,32 +342,36 @@ function syncAllocFromInputs() {
   });
 }
 
+function validAllocRows() {
+  return st.allocRows.filter(r => r.project_code && (parseInt(r.minutes || 0, 10) > 0));
+}
+
 function remainingMinutes() {
-  const tot = st.allocRows.reduce((a, r) => a + (r.minutes || 0), 0);
+  const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
   return Math.max(0, st.requiredMinutes - tot);
 }
 
 function updateAllocTotals() {
-  const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+  const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
   const req = st.requiredMinutes;
 
-  const totalEl = $('#allocTotalHM');
-  if (totalEl) totalEl.textContent = minToHM(tot);
-  const reqEl = $('#allocRequiredHM');
-  if (reqEl) reqEl.textContent = minToHM(req);
+  $('#allocTotalHM')?.textContent = minToHM(tot);
+  $('#allocRequiredHM')?.textContent = minToHM(req);
 
   const info = $('#allocInfo');
   let ok = false;
 
   if (tot < req) {
-    if (info) info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
+    info && (info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`);
   } else if (tot > req + GRACE_MINUTES) {
-    if (info) info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`;
+    info && (info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`);
   } else {
-    if (info) info.textContent = 'Listo: cubre la jornada.';
+    info && (info.textContent = 'Listo: cubre la jornada.');
     ok = true;
   }
 
+  // El botón SALIDA depende SOLO de tener sesión abierta y cobertura correcta;
+  // no se bloquea por "segunda jornada".
   const outBtn = $('#btnOut');
   if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
