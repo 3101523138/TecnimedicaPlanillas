@@ -61,7 +61,8 @@
 
       <div class="grid">
         <div class="tile" data-nav="/marcas">
-          <div class="k">Marcar IN/OUT</div><div class="s">Registrar entrada o salida con GPS</div>
+          <div class="k">Marcar IN/OUT</div>
+          <div class="s">Registrar entrada o salida</div>
         </div>
         <div class="tile" data-nav="/proyectos">
           <div class="k">Proyectos</div><div class="s">Ver asignaciones en curso</div>
@@ -91,7 +92,7 @@
 
       <div class="row gap m-t">
         <button class="btn" id="btnIn">Marcar ENTRADA</button>
-        <button class="btn light" id="btnOut" disabled>Marcar SALIDA</button>
+        <button class="btn light" id="btnOut">Marcar SALIDA</button>
       </div>
 
       <div id="punchMsg" class="muted m-t"></div>
@@ -112,15 +113,20 @@
           <button class="btn light" id="btnAddAlloc">+ Proyecto</button>
         </div>
 
-        <div class="row m-t">
-          <label class="muted" for="allocClient" style="margin-right:.75rem;">Cliente</label>
-          <select id="allocClient" style="flex:1">
+        <!-- Bloque Cliente -->
+        <div class="allocClientBox m-t">
+          <label for="allocClient">Cliente</label>
+          <select id="allocClient">
             <option value="">— Todos los clientes —</option>
           </select>
         </div>
 
-        <div id="allocContainer" class="m-t"></div>
+        <!-- Bloque Proyectos -->
+        <div class="allocProjectsBox">
+          <div id="allocContainer"></div>
+        </div>
 
+        <!-- Totales -->
         <div class="row between m-t">
           <div class="muted">
             <strong><span id="allocTotalHM">00:00</span> / <span id="allocRequiredHM">00:00</span></strong> asignados
