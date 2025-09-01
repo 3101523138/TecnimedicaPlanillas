@@ -448,19 +448,18 @@ async function onMarkIn() {
   }
 }
 
-
 async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
 
-    // 1) Refresca para asegurar que st.sessionOpen sea la que realmente se cerrará
-    await loadStatusAndRecent();
+    // ⛔️ NO refrescar aquí; esto borra lo que el usuario ajustó en la UI
+    // await loadStatusAndRecent();
 
-    // 2) Guarda asignación validando tolerancia sobre ese session_id
+    // Guarda asignación validando tolerancia
     const ok = await onSaveAlloc(true);
     if (!ok) return;
 
-    // 3) Marca salida
+    // Marca salida
     const outBtn = $('#btnOut');
     if (outBtn) outBtn.disabled = true;
     await mark('OUT');
@@ -470,6 +469,7 @@ async function onMarkOut() {
     console.error('[APP] onMarkOut error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
+    // ✅ refresca después de cerrar
     await loadStatusAndRecent();
   }
 }
