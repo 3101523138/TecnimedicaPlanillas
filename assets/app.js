@@ -73,7 +73,79 @@ function routeTo(path) {
   else if (path === '/proyectos') show($('#projectsCard'));
   else if (path === '/licencias') show($('#leaveCard'));
   else if (path === '/comprobantes') show($('#payslipsCard'));
+
+  // Si no estamos en /marcas, apagamos el ticker
+  if (path !== '/marcas') stopSessionTicker();
 }
+
+function startSessionTicker() {
+  stopSessionTicker();
+  if (!st.sessionOpen) return;
+
+  // guardamos medianoche para el cálculo “de hoy”
+  const midnightLocal = new Date();
+  midnightLocal.setHours(0, 0, 0, 0);
+  st._midnightTs = midnightLocal.getTime();
+
+  // primer tick inmediato + cada minuto
+  tickSessionClock(true);
+  st.sessionTickId = setInterval(() => tickSessionClock(false), 60 * 1000);
+}
+
+function stopSessionTicker() {
+  if (st.sessionTickId) {
+    clearInterval(st.sessionTickId);
+    st.sessionTickId = null;
+  }
+}
+
+function tickSessionClock(firstRun = false) {
+  if (!st.sessionOpen) { stopSessionTicker(); return; }
+
+  const nowTs = Date.now();
+  const startTs = new Date(st.sessionOpen.start_at).getTime();
+  const effStart = Math.max(startTs, st._midnightTs || 0);
+
+  // Recalcula trabajado real
+  const diffMin = Math.max(0, Math.round((nowTs - effStart) / 60000));
+  st.workedMinutes   = diffMin;
+  st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES); // solo para validación OUT
+
+  // Refresca UI derecha “/ trabajados”
+  const rightEl = $('#allocRequiredHM');
+  if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
+
+  // Si el usuario NO ha tocado HH/MM, mantenemos el restante precargado
+  if (!st.selectorDirty && st.allocRows && st.allocRows.length > 0) {
+    const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
+    const restante = Math.max(0, st.workedMinutes - tot);
+
+    // precargar en la PRIMERA fila que esté vacía de minutos (>0 evita pisar manual)
+    const rowsEls = [...document.querySelectorAll('#allocContainer .allocRow')];
+    if (rowsEls.length) {
+      const firstRow = rowsEls[0];
+      const h = firstRow.querySelector('.allocH');
+      const m = firstRow.querySelector('.allocM');
+      if (h && m) {
+        const curH = parseInt(h.value || '0', 10);
+        const curM = parseInt(m.value || '0', 10);
+        if (curH === 0 && curM === 0) {
+          const hh = Math.floor(restante / 60);
+          const mm = restante % 60;
+          h.value = hh; m.value = mm;
+          // sincroniza al estado para que los totales sean coherentes
+          syncAllocFromInputs();
+        }
+      }
+    }
+  }
+
+  // Recalcula mensajes y habilitación de OUT
+  updateAllocTotals();
+
+  if (firstRun) console.log('[APP] session ticker iniciado');
+}
+
 
 // === GEO ===
 async function getGPS() {
@@ -159,7 +231,7 @@ async function loadStatusAndRecent() {
   const midnightISO = midnightLocal.toISOString();
   const nowTs = Date.now();
 
-  // 1) Última sesión -> saber si hay jornada abierta
+  // 1) Última sesión
   {
     const { data, error } = await supabase
       .from('work_sessions')
@@ -170,11 +242,11 @@ async function loadStatusAndRecent() {
     if (error) console.error('[APP] work_sessions last error:', error);
     const ws = data && data[0];
     st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
-    if (st.sessionOpen) estado = 'Dentro';
+    estado = st.sessionOpen ? 'Dentro' : 'Fuera';
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // 2) “Horas de hoy”: suma desde medianoche local.
+  // 2) “Horas de hoy”
   {
     const { data, error } = await supabase
       .from('work_sessions')
@@ -194,6 +266,76 @@ async function loadStatusAndRecent() {
       }, 0);
     }
   }
+
+  // 3) Header
+  const punch = $('#punchCard');
+  if (punch) {
+    const old = punch.querySelector('.card.inner.statusHdr');
+    if (old) old.remove();
+    const hdr = document.createElement('div');
+    hdr.className = 'card inner statusHdr';
+    hdr.innerHTML = `
+      <div><strong>Estado actual:</strong> ${estado}</div>
+      <div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>
+    `;
+    const ref = punch.querySelector('.row.gap.m-t');
+    if (ref) punch.insertBefore(hdr, ref);
+    else punch.prepend(hdr);
+  }
+
+  // 4) Botones
+  $('#btnIn') && ($('#btnIn').disabled = (estado === 'Dentro'));
+  $('#btnOut') && ($('#btnOut').disabled = (estado !== 'Dentro'));
+  toast($('#punchMsg'), '');
+
+  // 5) Últimas marcas
+  {
+    const { data: tps, error: eTP } = await supabase
+      .from('time_punches')
+      .select('direction, punch_at, latitude, longitude')
+      .eq('employee_uid', st.employee.uid)
+      .gte('punch_at', midnightISO)
+      .order('punch_at', { ascending: false })
+      .limit(10);
+    if (eTP) console.error('[APP] time_punches error:', eTP);
+
+    const recentEl = $('#recentPunches');
+    if (recentEl) {
+      recentEl.innerHTML = (!tps || !tps.length)
+        ? 'Sin marcas aún.'
+        : tps.map(tp => {
+            const d = new Date(tp.punch_at);
+            const loc = (tp.latitude && tp.longitude)
+              ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})`
+              : '';
+            return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
+          }).join('');
+    }
+  }
+
+  // 6) Recalcular trabajado/requerido para UI inicial
+  if (st.sessionOpen) {
+    const start = new Date(st.sessionOpen.start_at).getTime();
+    const effectiveStart = (start < midnightTs) ? midnightTs : start;
+    const diffMin = Math.max(0, Math.round((Date.now() - effectiveStart) / 60000));
+    st.workedMinutes   = diffMin;
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+  } else {
+    st.workedMinutes = 0;
+    st.requiredMinutes = 0;
+  }
+  $('#allocRequiredHM') && ($('#allocRequiredHM').textContent = minToHM(st.workedMinutes));
+
+  // 7) UI asignaciones
+  await prepareAllocUI();
+
+  // 8) Ticker en vivo
+  if (st.sessionOpen) {
+    startSessionTicker();
+  } else {
+    stopSessionTicker();
+  }
+}
 
   // 3) Header “Estado actual / Horas de hoy”
   const punch = $('#punchCard');
@@ -320,7 +462,7 @@ function renderAllocContainer() {
     });
     sel.addEventListener('change', () => { row.project_code = sel.value; });
 
-    // DURACIÓN HH:MM con dos inputs numéricos
+    // DURACIÓN HH:MM
     const h = document.createElement('input');
     h.type = 'number'; h.min = '0'; h.max = '24';
     h.value = Math.floor((row.minutes || 0) / 60);
@@ -332,6 +474,7 @@ function renderAllocContainer() {
     m.className = 'allocM';
 
     const onDurChange = () => {
+      st.selectorDirty = true; // el usuario tocó HH/MM → no autocompletar
       let hv = parseInt(h.value || '0', 10); if (hv < 0) hv = 0;
       let mv = parseInt(m.value || '0', 10); if (mv < 0) mv = 0;
       if (mv > 59) { hv += Math.floor(mv / 60); mv = mv % 60; }
@@ -412,8 +555,10 @@ function updateAllocTotals() {
   const outBtn = $('#btnOut');
   if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
-
 async function prepareAllocUI() {
+  // Al entrar a la vista, el selector aún no ha sido tocado
+  st.selectorDirty = false;
+
   // Cargar catálogo una vez
   if (!st.projects.length) {
     const { data } = await supabase.from('projects')
@@ -443,8 +588,6 @@ async function prepareAllocUI() {
       const prev = await loadExistingAllocations();
       const sumPrev = prev.reduce((a, r) => a + (r.minutes || 0), 0);
       const restante = Math.max(0, st.workedMinutes - sumPrev);
-
-      // Si ya había algo, lo usamos; si no, una fila con el restante trabajado
       st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restante }];
     }
   } else {
@@ -454,6 +597,25 @@ async function prepareAllocUI() {
   renderAllocContainer();
   updateAllocTotals();
 }
+
+
+  // Prellenar con lo guardado si existe
+  if (st.sessionOpen) {
+    if (st.allocRows.length === 0) {
+      const prev = await loadExistingAllocations();
+      const sumPrev = prev.reduce((a, r) => a + (r.minutes || 0), 0);
+      const restante = Math.max(0, st.workedMinutes - sumPrev);
+      st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restante }];
+    }
+  } else {
+    st.allocRows = [];
+  }
+
+  renderAllocContainer();
+  updateAllocTotals();
+}
+
+
 
 // === MARCAR IN/OUT ===
 async function mark(direction) {
