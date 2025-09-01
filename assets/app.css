@@ -160,3 +160,26 @@ input{
   }
   .card .muted { font-size: 14px; }
 }
+/* Botón de acción "éxito" (SALIDA) en verde */
+.btn.success{
+  background:#10b981;      /* verde */
+  color:#fff;
+}
+
+/* Estado visual cuando aún no se puede cerrar.
+   OJO: sigue siendo clicable para mostrar el mensaje. */
+.btn.success.is-disabled{
+  filter: saturate(.6) brightness(.95);
+  opacity:.7;
+}
+
+/* Pulso para llamar la atención en la sección de proyectos */
+.pulse-ring{
+  outline: 3px solid rgba(16,185,129,.65);
+  border-radius: 16px;
+  animation: pulseRing .9s ease-in-out 2;
+}
+@keyframes pulseRing{
+  0%{ outline-offset: 0; opacity:1 }
+  100%{ outline-offset: 6px; opacity:1 }
+}
