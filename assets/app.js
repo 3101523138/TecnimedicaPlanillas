@@ -188,6 +188,7 @@ async function signOut() {
 }
 
 // === EMPLEADO ===
+
 async function loadEmployeeContext() {
   console.log('[APP] loadEmployeeContext');
   let { data, error } = await supabase.from('employees')
@@ -210,10 +211,14 @@ async function loadEmployeeContext() {
     full_name: data.full_name || '(sin nombre)',
   };
 
-  const n1 = $('#empName'); if (n1) n1.textContent = st.employee.full_name;
-  const u1 = $('#empUid');  if (u1) u1.textContent = `employee_uid: ${st.employee.uid}`;
+  // Solo mostramos el nombre (ocultamos el UID)
+  const n1 = $('#empName');  if (n1) n1.textContent = st.employee.full_name;
   const n2 = $('#empName2'); if (n2) n2.textContent = st.employee.full_name;
-  const u2 = $('#empUid2');  if (u2) u2.textContent  = `employee_uid: ${st.employee.uid}`;
+
+  // Si existen los elementos del UID, los limpiamos por si el CSS no cargó aún
+  const u1 = $('#empUid');  if (u1) u1.textContent = '';
+  const u2 = $('#empUid2'); if (u2) u2.textContent = '';
+
   console.log('[APP] employee OK:', st.employee);
 }
 
@@ -766,6 +771,25 @@ function setNavListeners() {
   $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false));
 }
 
+// === POLISH VISUAL MOVIL ===
+function applyMobilePolish() {
+  // 1) Cambiar subtítulo de la tarjeta "Marcar IN/OUT"
+  const all = document.querySelectorAll('#homeCard *');
+  all.forEach(el => {
+    if (el.childNodes && el.childNodes.length === 1) {
+      const t = (el.textContent || '').trim();
+      if (t === 'Registrar entrada o salida con GPS') {
+        el.textContent = 'Registrar entrada o salida';
+      }
+    }
+  });
+
+  // 2) Ocultar cualquier rastro de UID de empleado
+  const uidEls = [document.getElementById('empUid'), document.getElementById('empUid2')];
+  uidEls.forEach(el => { if (el) el.textContent = ''; });
+}
+
+
 // === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
@@ -790,6 +814,7 @@ async function boot() {
         await loadSession();
         await loadEmployeeContext();
         routeTo('/app');
+        applyMobilePolish(); // <— ajustes visuales
       } catch (e) {
         console.error('[APP] signIn error:', e);
         toast($('#msg'), e.message);
@@ -830,10 +855,12 @@ async function boot() {
     console.log('[APP] Sesión activa → cargar contexto empleado');
     await loadEmployeeContext();
     routeTo('/app');
+    applyMobilePolish(); // <— aplicar cambios visuales también en sesión ya activa
   } catch (e) {
     console.error('[APP] loadEmployeeContext error:', e);
     toast($('#msg'), e.message);
     await signOut();
   }
 }
+
 boot();
