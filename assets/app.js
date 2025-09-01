@@ -152,7 +152,7 @@ async function loadStatusAndRecent() {
   let estado = 'Fuera';
   let minsHoy = 0;
 
-  // ⏰ Medianoche local de HOY (todo “de hoy” parte de aquí)
+  // ⏰ Medianoche local de HOY
   const midnightLocal = new Date();
   midnightLocal.setHours(0, 0, 0, 0);
   const midnightTs  = midnightLocal.getTime();
@@ -174,8 +174,7 @@ async function loadStatusAndRecent() {
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // 2) “Horas de hoy”: suma solo lo que cae desde medianoche local.
-  //    Incluye sesiones que empezaron ayer pero siguen abiertas o terminaron hoy.
+  // 2) “Horas de hoy”: suma desde medianoche local.
   {
     const { data, error } = await supabase
       .from('work_sessions')
@@ -189,7 +188,7 @@ async function loadStatusAndRecent() {
       minsHoy = data.reduce((acc, r) => {
         const s = new Date(r.start_at).getTime();
         const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
-        const effStart = Math.max(s, midnightTs); // solo desde hoy
+        const effStart = Math.max(s, midnightTs);
         const deltaMin = Math.max(0, Math.round((e - effStart) / 60000));
         return acc + deltaMin;
       }, 0);
@@ -219,7 +218,7 @@ async function loadStatusAndRecent() {
   if (btnOut) btnOut.disabled = (estado !== 'Dentro');
   toast($('#punchMsg'), '');
 
-  // 5) Últimas marcas (solo desde medianoche local)
+  // 5) Últimas marcas (desde medianoche local)
   {
     const { data: tps, error: eTP } = await supabase
       .from('time_punches')
@@ -244,18 +243,25 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Minutos REQUERIDOS (con margen)
+  // 6) Minutos trabajados (UI) vs requeridos (validación de cierre)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
     const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
     const diffMin = Math.max(0, Math.round((nowTs - effectiveStart) / 60000));
+
+    // Trabajado real para UI/precarga:
+    st.workedMinutes   = diffMin;
+    // Requerido solo para validar OUT (usa margen):
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
   } else {
+    st.workedMinutes   = 0;
     st.requiredMinutes = 0;
   }
+
+  // Mostrar a la derecha el TRABAJADO (no el requerido)
   {
     const reqEl = $('#allocRequiredHM');
-    if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
+    if (reqEl) reqEl.textContent = minToHM(st.workedMinutes);
   }
 
   // 7) UI asignaciones
@@ -375,32 +381,34 @@ function validAllocRows() {
 
 function remainingMinutes() {
   const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
-  return Math.max(0, st.requiredMinutes - tot);
+  // Disponible para asignar = trabajado real - ya asignado
+  return Math.max(0, st.workedMinutes - tot);
 }
 
 function updateAllocTotals() {
   const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
-  const req = st.requiredMinutes;
 
+  // UI: total asignado vs TRABAJADO real
   const totalEl = $('#allocTotalHM');
   if (totalEl) totalEl.textContent = minToHM(tot);
 
-  const reqEl = $('#allocRequiredHM');
-  if (reqEl) reqEl.textContent = minToHM(req);
+  const rightEl = $('#allocRequiredHM'); // mismo span a la derecha
+  if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
 
   const info = $('#allocInfo');
   let ok = false;
 
-  if (tot < req) {
-    if (info) info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
-  } else if (tot > req + GRACE_MINUTES) {
-    if (info) info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`;
+  // Guía basada en TRABAJADO: permitimos pasarse hasta GRACE_MINUTES
+  if (tot < st.workedMinutes) {
+    if (info) info.textContent = `Faltan ${minToHM(st.workedMinutes - tot)}. Completa la jornada.`;
+  } else if (tot > st.workedMinutes + GRACE_MINUTES) {
+    if (info) info.textContent = `Te pasaste ${minToHM(tot - st.workedMinutes)}. Reduce algún proyecto.`;
   } else {
     if (info) info.textContent = 'Listo: cubre la jornada.';
     ok = true;
   }
 
-  // Solo se bloquea por no cubrir tiempo o no haber sesión abierta.
+  // Habilitar OUT solo si hay sesión y el total está dentro del rango permitido
   const outBtn = $('#btnOut');
   if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
 }
@@ -433,7 +441,11 @@ async function prepareAllocUI() {
   if (st.sessionOpen) {
     if (st.allocRows.length === 0) {
       const prev = await loadExistingAllocations();
-      st.allocRows = prev.length ? prev : [{ project_code: '', minutes: st.requiredMinutes }];
+      const sumPrev = prev.reduce((a, r) => a + (r.minutes || 0), 0);
+      const restante = Math.max(0, st.workedMinutes - sumPrev);
+
+      // Si ya había algo, lo usamos; si no, una fila con el restante trabajado
+      st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restante }];
     }
   } else {
     st.allocRows = [];
@@ -530,11 +542,12 @@ async function onSaveAlloc(forClosing = false) {
     const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
 
     if (forClosing) {
-      const lower = Math.max(0, st.requiredMinutes - 1); // colchón 1 min
-      const upper = st.requiredMinutes + GRACE_MINUTES;  // worked + tolerancia
+      // Validación de cierre contra TRABAJADO real con tolerancia GRACE
+      const lower = Math.max(0, st.workedMinutes - 1);        // colchón 1 min por redondeo
+      const upper = st.workedMinutes + GRACE_MINUTES;         // tolerancia permitida
 
-      if (tot < lower) throw new Error(`Faltan ${minToHM(st.requiredMinutes - tot)}.`);
-      if (tot > upper) throw new Error(`Te pasaste ${minToHM(tot - st.requiredMinutes)}.`);
+      if (tot < lower) throw new Error(`Faltan ${minToHM(st.workedMinutes - tot)}.`);
+      if (tot > upper) throw new Error(`Te pasaste ${minToHM(tot - st.workedMinutes)}.`);
     }
 
     const sid = st.sessionOpen.id;
