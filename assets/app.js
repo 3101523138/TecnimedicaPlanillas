@@ -18,6 +18,7 @@ console.log('[APP] creando cliente Supabase…');
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // === STATE ===
+// === STATE ===
 const st = {
   user: null,
   employee: null,        // { uid, code, full_name }
@@ -27,6 +28,14 @@ const st = {
   projects: [],          // catálogo de proyectos activos
   clientFilter: '',      // filtro por cliente
   lastOverWarnAt: 0,
+
+  // añadidos recientes
+  workedMinutes: 0,
+  todaySessions: [],
+  sessionTickId: null,
+  _midnightTs: null,
+  selectorDirty: false,
+  outReady: false,       // ← NUEVO: indica si ya se puede marcar SALIDA
 };
 
 // === REGLAS / UTILIDADES TIEMPO ===
@@ -148,6 +157,40 @@ function tickSessionClock(firstRun = false) {
   if (firstRun) console.log('[APP] session ticker iniciado');
 }
 
+// === Helpers UX para SALIDA ===
+function scrollToAlloc() {
+  const el = document.querySelector('#allocContainer') || document.querySelector('#punchCard');
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Pulso visual para llamar atención
+  const card = el.closest('.card') || el;
+  card.classList.add('pulse-ring');
+  setTimeout(() => card.classList.remove('pulse-ring'), 1200);
+}
+
+// Si el usuario pulsa SALIDA pero aún no puede cerrar, explicamos el porqué
+function handleOutClick() {
+  if (!st.sessionOpen) {
+    toast($('#punchMsg'), 'No hay jornada abierta.');
+    return;
+  }
+  if (!st.outReady) {
+    const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
+    const falta = Math.max(0, st.workedMinutes - tot);
+    if (falta > 0) {
+      toast($('#punchMsg'), `Para marcar SALIDA debes asignar ${minToHM(falta)} más en proyectos.`);
+    } else {
+      const exceso = Math.max(0, tot - (st.workedMinutes + GRACE_MINUTES));
+      toast($('#punchMsg'), `Asignaste ${minToHM(exceso)} de más. Ajusta los proyectos para cerrar.`);
+    }
+    scrollToAlloc();
+    return;
+  }
+  // Está listo → proceso normal
+  onMarkOut();
+}
+
+
 // === GEO ===
 async function getGPS() {
   return new Promise((res) => {
@@ -251,7 +294,7 @@ async function loadStatusAndRecent() {
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // 2) Sesiones de HOY → guardamos para el ticker y calculamos “Horas de hoy” inicial
+  // 2) Sesiones de HOY → guardamos para el ticker y calculamos “Horas de hoy”
   {
     const nowTs = Date.now();
     const { data, error } = await supabase
@@ -259,23 +302,17 @@ async function loadStatusAndRecent() {
       .select('start_at, end_at, status')
       .eq('employee_uid', st.employee.uid)
       .or(`start_at.gte.${midnightISO},end_at.gte.${midnightISO},end_at.is.null`);
-    if (error) {
-      console.error('[APP] minutes today error:', error);
-      st.todaySessions = [];
-    } else {
-      st.todaySessions = data || [];
-    }
-
+    st.todaySessions = error ? [] : (data || []);
     minsHoy = st.todaySessions.reduce((acc, r) => {
       const s = new Date(r.start_at).getTime();
-      const e = r.end_at ? new Date(r.end_at).getTime() : nowTs; // si está abierta, hasta ahora
+      const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
       const effStart = Math.max(s, midnightTs);
-      const deltaMin = Math.max(0, Math.floor((e - effStart) / 60000)); // floor = tiempo real
+      const deltaMin = Math.max(0, Math.floor((e - effStart) / 60000));
       return acc + deltaMin;
     }, 0);
   }
 
-  // 3) Header (IMPORTANTE: span con id para actualizar en vivo)
+  // 3) Header
   const punch = $('#punchCard');
   if (punch) {
     const old = punch.querySelector('.card.inner.statusHdr');
@@ -291,9 +328,15 @@ async function loadStatusAndRecent() {
     else punch.prepend(hdr);
   }
 
-  // 4) Botones
-  $('#btnIn')  && ($('#btnIn').disabled  = (estado === 'Dentro'));
-  $('#btnOut') && ($('#btnOut').disabled = (estado !== 'Dentro'));
+  // 4) Botones IN/OUT (NO deshabilitar SALIDA: solo estilo base)
+  const btnIn  = $('#btnIn');
+  const btnOut = $('#btnOut');
+  if (btnIn)  btnIn.disabled  = (estado === 'Dentro'); // ENTRADA sí puede bloquearse
+  if (btnOut) {
+    btnOut.disabled = false;            // SALIDA siempre clicable para explicar
+    btnOut.classList.remove('light');
+    btnOut.classList.add('success');    // verde (CSS)
+  }
   toast($('#punchMsg'), '');
 
   // 5) Últimas marcas (desde medianoche local)
@@ -321,12 +364,12 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Trabajado (UI) y Requerido (solo para validar OUT)
+  // 6) Trabajado (UI) y Requerido (validación OUT)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
     const effStart = (start < midnightTs) ? midnightTs : start;
-    const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000)); // real
-    st.workedMinutes   = diffMin;                           // usado en “/ trabajados” y precarga
+    const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
+    st.workedMinutes   = diffMin;
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
   } else {
     st.workedMinutes = 0;
@@ -342,7 +385,6 @@ async function loadStatusAndRecent() {
   st._midnightTs = mLocal.getTime();
   if (st.sessionOpen) startSessionTicker(); else stopSessionTicker();
 }
-
 
 // === PROYECTOS ===
 async function loadProjects(client = null) {
@@ -493,30 +535,39 @@ function remainingMinutes() {
 
 function updateAllocTotals() {
   const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+  const worked = st.workedMinutes;
 
-  // UI: total asignado vs TRABAJADO real
   const totalEl = $('#allocTotalHM');
   if (totalEl) totalEl.textContent = minToHM(tot);
 
   const rightEl = $('#allocRequiredHM'); // “/ trabajados”
-  if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
+  if (rightEl) rightEl.textContent = minToHM(worked);
 
   const info = $('#allocInfo');
-  let ok = false;
 
-  if (tot < st.workedMinutes) {
-    if (info) info.textContent = `Debes asignar ${minToHM(st.workedMinutes - tot)} más.`;
-  } else if (tot > st.workedMinutes + GRACE_MINUTES) {
-    if (info) info.textContent = `Asignaste ${minToHM(tot - st.workedMinutes)} de más. Ajusta los proyectos.`;
+  // ¿está dentro de la ventana válida? (worked .. worked+GRACE)
+  let ok = false;
+  if (tot < worked) {
+    info && (info.textContent = `Debes asignar ${minToHM(worked - tot)} más.`);
+  } else if (tot > worked + GRACE_MINUTES) {
+    info && (info.textContent = `Asignaste ${minToHM(tot - worked)} de más. Ajusta los proyectos.`);
   } else {
-    if (info) info.textContent = 'Listo: la jornada está cubierta.';
+    info && (info.textContent = 'Listo: la jornada está cubierta.');
     ok = true;
   }
 
-  const outBtn = $('#btnOut');
-  if (outBtn) outBtn.disabled = !(st.sessionOpen && ok);
-}
+  // Guardamos en estado (lo usa handleOutClick)
+  st.outReady = !!(st.sessionOpen && ok);
 
+  // Botón SALIDA en verde siempre, con estado visual si aún no se puede cerrar
+  const outBtn = $('#btnOut');
+  if (outBtn) {
+    outBtn.classList.remove('light');         // quitamos el gris
+    outBtn.classList.add('success');          // verde
+    outBtn.classList.toggle('is-disabled', !st.outReady); // solo visual
+    outBtn.setAttribute('aria-disabled', String(!st.outReady));
+  }
+}
 
 async function prepareAllocUI() {
   // Al entrar a la vista, el selector aún no ha sido tocado
@@ -766,7 +817,7 @@ function setNavListeners() {
   $('#btnLogout')?.addEventListener('click', signOut);
   $('#btnLogout2')?.addEventListener('click', signOut);
   $('#btnIn')?.addEventListener('click', onMarkIn);
-  $('#btnOut')?.addEventListener('click', onMarkOut);
+  $('#btnOut')?.addEventListener('click', handleOutClick); // <-- aquí
   $('#btnAddAlloc')?.addEventListener('click', onAddAlloc);
   $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false));
 }
