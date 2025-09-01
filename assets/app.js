@@ -137,10 +137,10 @@ async function loadEmployeeContext() {
     full_name: data.full_name || '(sin nombre)',
   };
 
-  $('#empName').textContent = st.employee.full_name;
-  $('#empUid').textContent = `employee_uid: ${st.employee.uid}`;
-  if ($('#empName2')) $('#empName2').textContent = st.employee.full_name;
-  if ($('#empUid2'))  $('#empUid2').textContent  = `employee_uid: ${st.employee.uid}`;
+  const n1 = $('#empName'); if (n1) n1.textContent = st.employee.full_name;
+  const u1 = $('#empUid');  if (u1) u1.textContent = `employee_uid: ${st.employee.uid}`;
+  const n2 = $('#empName2'); if (n2) n2.textContent = st.employee.full_name;
+  const u2 = $('#empUid2');  if (u2) u2.textContent  = `employee_uid: ${st.employee.uid}`;
   console.log('[APP] employee OK:', st.employee);
 }
 
@@ -253,7 +253,10 @@ async function loadStatusAndRecent() {
   } else {
     st.requiredMinutes = 0;
   }
-  $('#allocRequiredHM')?.textContent = minToHM(st.requiredMinutes);
+  {
+    const reqEl = $('#allocRequiredHM');
+    if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
+  }
 
   // 7) UI asignaciones
   await prepareAllocUI();
@@ -379,18 +382,21 @@ function updateAllocTotals() {
   const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
   const req = st.requiredMinutes;
 
-  $('#allocTotalHM')?.textContent = minToHM(tot);
-  $('#allocRequiredHM')?.textContent = minToHM(req);
+  const totalEl = $('#allocTotalHM');
+  if (totalEl) totalEl.textContent = minToHM(tot);
+
+  const reqEl = $('#allocRequiredHM');
+  if (reqEl) reqEl.textContent = minToHM(req);
 
   const info = $('#allocInfo');
   let ok = false;
 
   if (tot < req) {
-    info && (info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`);
+    if (info) info.textContent = `Faltan ${minToHM(req - tot)}. Completa la jornada.`;
   } else if (tot > req + GRACE_MINUTES) {
-    info && (info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`);
+    if (info) info.textContent = `Te pasaste ${minToHM(tot - req)}. Reduce algún proyecto.`;
   } else {
-    info && (info.textContent = 'Listo: cubre la jornada.');
+    if (info) info.textContent = 'Listo: cubre la jornada.';
     ok = true;
   }
 
@@ -466,7 +472,7 @@ async function onMarkIn() {
       if (!ok) return; // cancela
     }
 
-    $('#btnIn') && ($('#btnIn').disabled = true);
+    const bi = $('#btnIn'); if (bi) bi.disabled = true;
 
     await mark('IN');
     toast($('#punchMsg'), 'Entrada registrada.');
@@ -482,7 +488,7 @@ async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
 
-    // ⛔ NO refrescar antes (no pisar lo que ajustó el usuario)
+    // NO refrescar antes (no pisar lo que ajustó el usuario)
     // await loadStatusAndRecent();
 
     // Validar y guardar asignación
@@ -490,7 +496,7 @@ async function onMarkOut() {
     if (!ok) return;
 
     // Marcar salida
-    $('#btnOut') && ($('#btnOut').disabled = true);
+    const bo = $('#btnOut'); if (bo) bo.disabled = true;
     await mark('OUT');
 
     toast($('#punchMsg'), 'Salida registrada.');
@@ -498,7 +504,7 @@ async function onMarkOut() {
     console.error('[APP] onMarkOut error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
-    // ✅ refrescar después
+    // refrescar después
     await loadStatusAndRecent();
   }
 }
