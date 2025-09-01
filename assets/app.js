@@ -152,7 +152,7 @@ async function loadStatusAndRecent() {
   let estado = 'Fuera';
   let minsHoy = 0;
 
-  // ⏰ Anclar medianoche local de HOY (todo lo “de hoy” se calcula desde aquí)
+  // ⏰ Medianoche local de HOY (todo “de hoy” parte de aquí)
   const midnightLocal = new Date();
   midnightLocal.setHours(0, 0, 0, 0);
   const midnightTs  = midnightLocal.getTime();
@@ -167,6 +167,7 @@ async function loadStatusAndRecent() {
       .eq('employee_uid', st.employee.uid)
       .order('start_at', { ascending: false })
       .limit(1);
+
     if (error) console.error('[APP] work_sessions last error:', error);
     const ws = data && data[0];
     st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
@@ -181,22 +182,89 @@ async function loadStatusAndRecent() {
       .from('work_sessions')
       .select('start_at, end_at')
       .eq('employee_uid', st.employee.uid)
-      // toca hoy si: empezó hoy, o terminó hoy, o sigue abierta
       .or(`start_at.gte.${midnightISO},end_at.gte.${midnightISO},end_at.is.null`);
+
     if (error) console.error('[APP] minutes today error:', error);
 
     minsHoy = 0;
-    if (data?.length) {
+    if (data && data.length) {
       minsHoy = data.reduce((acc, r) => {
         const s = new Date(r.start_at).getTime();
         const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
-        // solo cuenta tiempo desde medianoche local
-        const effStart = Math.max(s, midnightTs);
+        const effStart = Math.max(s, midnightTs); // cuenta solo desde hoy
         const deltaMin = Math.max(0, Math.round((e - effStart) / 60000));
         return acc + deltaMin;
       }, 0);
     }
   }
+
+  // 3) Header “Estado actual / Horas de hoy”
+  const punch = $('#punchCard');
+  if (punch) {
+    const old = punch.querySelector('.card.inner.statusHdr');
+    if (old) old.remove();
+    const hdr = document.createElement('div');
+    hdr.className = 'card inner statusHdr';
+    hdr.innerHTML = `
+      <div><strong>Estado actual:</strong> ${estado}</div>
+      <div class="muted">Horas de hoy: ${minToHM(minsHoy)}</div>
+    `;
+    const ref = punch.querySelector('.row.gap.m-t');
+    if (ref) punch.insertBefore(hdr, ref);
+    else punch.prepend(hdr);
+  }
+
+  // 4) Botones IN/OUT
+  const btnIn  = $('#btnIn');
+  const btnOut = $('#btnOut');
+  if (btnIn)  btnIn.disabled  = (estado === 'Dentro');
+  if (btnOut) btnOut.disabled = (estado !== 'Dentro');
+  toast($('#punchMsg'), '');
+
+  // 5) Últimas marcas (solo desde medianoche local)
+  {
+    const { data: tps, error: eTP } = await supabase
+      .from('time_punches')
+      .select('direction, punch_at, latitude, longitude')
+      .eq('employee_uid', st.employee.uid)
+      .gte('punch_at', midnightISO)
+      .order('punch_at', { ascending: false })
+      .limit(10);
+
+    if (eTP) console.error('[APP] time_punches error:', eTP);
+
+    const recentEl = $('#recentPunches');
+    if (recentEl) {
+      recentEl.innerHTML = (!tps || !tps.length)
+        ? 'Sin marcas aún.'
+        : tps.map(tp => {
+            const d = new Date(tp.punch_at);
+            const loc = (tp.latitude && tp.longitude)
+              ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})`
+              : '';
+            return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
+          }).join('');
+    }
+  }
+
+  // 6) Minutos REQUERIDOS para asignar hoy (con margen)
+  if (st.sessionOpen) {
+    const start = new Date(st.sessionOpen.start_at).getTime();
+    const effectiveStart = (start < midnightTs) ? midnightTs : start; // si empezó ayer, cuenta desde hoy
+    const diffMin = Math.max(0, Math.round((nowTs - effectiveStart) / 60000));
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+  } else {
+    st.requiredMinutes = 0;
+  }
+  {
+    const reqEl = $('#allocRequiredHM');
+    if (reqEl) reqEl.textContent = minToHM(st.requiredMinutes);
+  }
+
+  // 7) Pintar / actualizar UI de asignaciones
+  await prepareAllocUI();
+}
+
 
   // 3) Header “Estado actual / Horas de hoy”
   const punch = $('#punchCard');
