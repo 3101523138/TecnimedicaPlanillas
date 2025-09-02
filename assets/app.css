@@ -36,7 +36,7 @@ h1,h2{margin:8px 0 14px;color:var(--text)}
 h1{font-size:32px}
 h2{font-size:26px}
 label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
-input{
+input, select{
   width:100%;
   padding:14px 16px;
   border-radius:14px;
@@ -55,6 +55,7 @@ input{
   font-weight:700;
   cursor:pointer;
 }
+.btn:disabled{cursor:not-allowed;opacity:.6}
 .btn.light{background:#e9eef5;color:#333}
 .link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
 .muted{color:var(--muted);font-size:13px}
@@ -75,6 +76,7 @@ input{
 .m-t{margin-top:12px}
 .m-b{margin-bottom:10px}
 .m-b-sm{margin-bottom:6px}
+.center{text-align:center}
 
 @media (max-width:640px){
   .app{width:96vw}
@@ -97,7 +99,7 @@ input{
   min-width:0;
 }
 
-/* NUEVO control de duración (HH:MM) */
+/* Control de duración (HH:MM) */
 .allocDuration{display:flex;align-items:center;gap:6px}
 .allocH,.allocM{
   width:64px;
@@ -137,28 +139,37 @@ input{
 /* Ocultar employee_uid */
 #empUid, #empUid2 { display: none !important; }
 
-/* Botón SALIR más visible */
+/* Botón SALIR visible y flotante */
 #btnLogout, #btnLogout2 {
   background: #ef4444;
   color: #fff;
   border: none;
   border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 600;
+  padding: 12px 16px;
+  font-weight: 700;
   box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
-
-/* En móvil: botón fijo arriba (Salir) */
 @media (max-width: 480px) {
   #btnLogout, #btnLogout2 {
     position: fixed;
     top: 10px;
     right: 12px;
     z-index: 1000;
-    padding: 12px 16px;
-    font-size: 16px;
   }
-  .card .muted { font-size: 14px; }
+}
+
+/* Menú flotante debajo de Salir (mismo tamaño, gris más oscuro) */
+#punchCard [data-nav="/app"].floating{
+  position: fixed;
+  right: 12px;
+  top: 72px;           /* debajo del botón Salir */
+  z-index: 999;
+  background:#cfd6df;  /* gris más oscuro */
+  color:#111;
+  padding: 12px 16px;
+  font-weight:700;
+  border-radius:12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
 
 /* Botón de acción "éxito" (SALIDA) en verde */
@@ -167,29 +178,70 @@ input{
   color:#fff;
 }
 
-/* Estado visual cuando aún no se puede cerrar (sigue clicable) */
-.btn.success.is-disabled{
-  filter: saturate(.6) brightness(.95);
-  opacity:.7;
+/* ENTRADA/SALIDA: fuente más grande */
+.btnFull{
+  width:100%;
+  display:block;
+  font-size:18px;       /* más grande y consistente */
 }
 
-/* Pulso para llamar la atención en la sección de proyectos */
-.pulse-ring{
-  outline: 3px solid rgba(16,185,129,.65);
-  border-radius: 16px;
-  animation: pulseRing .9s ease-in-out 2;
-}
-@keyframes pulseRing{
-  0%{ outline-offset: 0; opacity:1 }
-  100%{ outline-offset: 6px; opacity:1 }
+/* ENTRADA deshabilitado = opaco (además de :disabled global) */
+#btnIn:disabled{ opacity:.5 }
+
+/* Sección “cabecera de estado” debajo del logo */
+.statusHdr strong{font-weight:800}
+
+/* Logo grande en marcas con mismo ancho visual que el cajón */
+.punchLogo{
+  width:100%;
+  max-width:560px;      /* límite en pantallas grandes */
+  height:auto;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
 }
 
-/* === Bloques visuales Cliente / Proyectos === */
+/* Ligerísimo corrimiento del nombre hacia adentro */
+.shift-in{ margin-left: 6px; }
+
+/* Título “Últimas marcas” centrado */
+.listTitle{
+  font-weight:800;
+  color:#111827;
+  text-align:center;
+}
+
+/* Lista de marcas centrada y en 3 líneas (dir / fecha / coords) */
+.punchList{ }
+.punchItem{
+  padding:10px 4px;
+  border-bottom:1px solid #eef2f7;
+}
+.punchItem:last-child{ border-bottom:0 }
+.punchItem .dir{
+  text-align:center;
+  font-weight:800;
+  letter-spacing:.4px;
+}
+.punchItem .dt{
+  text-align:center;
+  color:#6b7280;
+  font-size:13px;
+  margin-top:2px;
+}
+.punchItem .coords{
+  text-align:center;
+  color:#6b7280;
+  font-size:12px;
+  margin-top:2px;
+}
+
+/* Bloques Cliente / Proyectos (más legibles) */
 .allocClientBox{
   background:#f9fafb;
   border:2px solid #e5e7eb;
   border-radius:14px;
-  padding:14px 16px;
+  padding:16px 16px;
   margin-bottom:14px;
 }
 #allocClient{
@@ -203,9 +255,9 @@ input{
   color:#111827;
 }
 .allocClientBox label{
-  font-size:15px;
-  font-weight:700;
-  margin-bottom:6px;
+  font-size:17px;
+  font-weight:800;
+  margin-bottom:10px;
   display:block;
   color:#374151;
 }
@@ -215,60 +267,7 @@ input{
   padding-top:14px;
 }
 
-/* ======= NUEVOS AJUSTES UI (pedidos) ======= */
-
-/* Logo grande en la cabecera de marcas (ancho del cajón) */
-.punchLogo{
-  width: min(360px, 80vw);
-  height: auto;
-  border-radius: 16px;
-  background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.12);
-}
-
-/* Ligerísimo corrimiento del nombre hacia adentro */
-.shift-in{ margin-left: 6px; }
-
-/* Botones de ancho completo (Entrada, Salida al final) */
-.btnFull{
-  width:100%;
-  display:block;
-}
-
-/* Botón Menú flotante (como Salir) */
-.btn.floating{
-  position: fixed;
-  top: 64px;         /* debajo del status bar en iOS */
-  z-index: 1000;
-}
-.btn.floating.left{ left: 12px; }
-
-/* Título “Últimas marcas” en negrita */
-.listTitle{
-  font-weight: 800;
-  color: #111827;
-}
-
-/* Lista de marcas con IN/OUT centrado y detalle debajo */
-.punchList{ }
-.punchItem{
-  padding: 8px 4px;
-  border-bottom: 1px solid #eef2f7;
-}
-.punchItem:last-child{ border-bottom: 0; }
-.punchItem .dir{
-  text-align:center;
-  font-weight: 800;
-  letter-spacing:.4px;
-}
-.punchItem .detail{
-  text-align:center;
-  color:#6b7280;
-  font-size: 14px;
-  margin-top: 2px;
-}
-
-/* Select de proyecto más grande, igual escala que Cliente */
+/* Select de proyecto grande (igual escala que Cliente) */
 .allocProjectsBox select,
 .allocSelect{
   font-size:16px !important;
@@ -280,21 +279,25 @@ input{
   color:#111827 !important;
 }
 
-/* +Proyecto más grande y gris más oscuro para mayor contraste */
+/* +Proyecto con tamaño/tipografía como Guardar asignación */
 .btn.darker{
-  background:#d7dde6;
-  color:#111827;
+  background:#2f6fe3;       /* igual color base que primario? si lo prefieres gris, cambia este */
+  color:#fff;
   font-weight:700;
-  padding:14px 18px;
+  padding:13px 18px;        /* igual que .btn base / guardar */
+  border-radius:14px;
 }
+.btn.darker:hover{ filter:brightness(.98) }
 
-/* Guardar asignación un poco más grande para destacarlo */
-.btn.btnLg{
-  padding:14px 22px;
-  font-size:16px;
-}
+/* Encabezados centrados y un toque más grandes en la sección */
+.allocHeadTitle{ text-align:center; font-size:18px; font-weight:800; color:#6b7280; }
+.allocHeadSub{ text-align:center; font-size:14px; color:#6b7280; margin-top:2px; }
+.allocHeadWarn{ text-align:center; font-size:14px; color:#6b7280; margin-top:6px; }
+
+/* Guardar asignación: mantener tipografía actual (sin cambios), pero más aire vertical */
+.btn.btnLg{ padding:14px 22px; }  /* no cambiamos font-size por tu indicación */
 
 /* Ajuste flotantes en móvil (Menú) */
 @media (max-width:480px){
-  .btn.floating{ top: 10px; }
+  #punchCard [data-nav="/app"].floating{ top: 70px; }
 }
