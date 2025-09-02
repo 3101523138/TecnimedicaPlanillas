@@ -2,6 +2,8 @@
   --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
   --logo-max-h:72px; --logo-max-h-sm:56px;
 }
+
+/* ===== Base ===== */
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
@@ -19,6 +21,8 @@ body{
   margin-bottom:18px;
 }
 .card.inner{padding:14px}
+
+/* Marca y títulos */
 .brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
 .brand-row.no-gap{margin:0}
 .brand-row img{
@@ -29,14 +33,15 @@ body{
   background:#fff;
   box-shadow:0 6px 20px rgba(0,0,0,.12);
 }
-.brand-row .title{
-  font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px
-}
+.brand-row .title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px}
+
 h1,h2{margin:8px 0 14px;color:var(--text)}
 h1{font-size:32px}
 h2{font-size:26px}
+
+/* Formularios */
 label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
-input{
+input, select{
   width:100%;
   padding:14px 16px;
   border-radius:14px;
@@ -44,43 +49,52 @@ input{
   background:#fff;
   font-size:16px;
 }
+
+/* Utilidades layout/typography */
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .row.between{justify-content:space-between}
 .row.column{flex-direction:column;align-items:stretch;gap:12px}
-.btn{
-  padding:13px 18px;
-  border:0;
-  border-radius:14px;
-  background:var(--primary);
-  color:#fff;
-  font-weight:700;
-  cursor:pointer;
-  transition:filter .15s ease, transform .02s ease;
-}
-.btn:active{transform:translateY(1px)}
-.btn.light{background:#e9eef5;color:#333}
-.link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
 .muted{color:var(--muted);font-size:13px}
 .big{font-size:22px;font-weight:800}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
-.tile{
-  border:1px solid #e5e7eb;
-  border-radius:18px;
-  padding:16px 18px;
-  background:#fff;
-  box-shadow:0 4px 16px rgba(0,0,0,.06);
-  cursor:pointer;
-}
-.tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
-.tile .s{color:#6b7280}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.center{text-align:center}
 .gap{gap:12px}
 .m-t{margin-top:12px}
 .m-b{margin-bottom:10px}
 .m-b-sm{margin-bottom:6px}
-.center{text-align:center}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
+.tile{
+  border:1px solid #e5e7eb;border-radius:18px;padding:16px 18px;background:#fff;
+  box-shadow:0 4px 16px rgba(0,0,0,.06);cursor:pointer;
+}
+.tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
+.tile .s{color:#6b7280}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 
-/* ================= MOBILE ================= */
+/* ===== Botones ===== */
+.btn{
+  padding:13px 18px;border:0;border-radius:14px;background:var(--primary);
+  color:#fff;font-weight:700;cursor:pointer;transition:filter .15s ease, transform .02s ease;
+}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{cursor:not-allowed;opacity:.6}
+.btn.light{background:#e9eef5;color:#333}
+
+/* Botones “grandes/ancho completo” */
+.btnFull{width:100%;display:block}
+.btnBig{font-size:18px;padding:16px 20px;border-radius:18px}
+.btnLg{font-size:17px;padding:14px 18px}
+.btnWide{width:100%;padding:14px 18px;border-radius:16px;font-size:17px}
+.btnDarker{background:#2563eb;color:#fff}
+.btnDarker:hover{filter:brightness(.98)}
+
+/* Éxito (SALIDA) */
+.btn.success{background:#10b981;color:#fff}
+.btn.success.is-disabled{filter:saturate(.6) brightness(.95);opacity:.85}
+
+/* ENTRADA deshabilitada = opaca (además del :disabled global) */
+#btnIn:disabled{opacity:.55}
+
+/* ===== Móvil ===== */
 @media (max-width:640px){
   .app{width:96vw}
   .brand-row img{max-height:var(--logo-max-h-sm)}
@@ -89,182 +103,113 @@ input{
   .grid{grid-template-columns:1fr}
 }
 
-/* ===== LOGO ARRIBA DEL TODO (MARCAS) ===== */
-.logoHdr{
-  display:block;
-  padding:18px;
-  border-radius:20px;
+/* ===== Flotantes: Salir y Menú ===== */
+#btnLogout, #btnLogout2{
+  background:#ef4444;color:#fff;border:none;border-radius:14px;
+  padding:12px 16px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.12);
 }
+@media (max-width:480px){
+  #btnLogout, #btnLogout2{
+    position:fixed;top:10px;right:12px;z-index:1000;
+  }
+}
+/* Menú flotante — del mismo tamaño y debajo de Salir (gris más oscuro) */
+#punchCard [data-nav="/app"].floating{
+  position:fixed;right:12px;top:72px;z-index:999;
+  background:#cfd6df;color:#111;padding:12px 16px;font-weight:700;border-radius:12px;
+  box-shadow:0 4px 12px rgba(0,0,0,.12);
+}
+
+/* ===== Cabecera logo + estado (MARCAS) ===== */
+.logoHdr{display:block;padding:18px;border-radius:20px}
 .punchLogo{
-  width:100%;
-  height:auto;
-  display:block;
-  object-fit:contain;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.08);
+  width:100%;height:auto;display:block;object-fit:contain;border-radius:14px;
+  background:#fff;box-shadow:0 6px 20px rgba(0,0,0,.08);
 }
+.statusHdr{display:flex;flex-direction:column;gap:6px;border-radius:20px;padding:18px}
+.statusHdr strong{font-weight:800}
 
-/* ===== STATUS HEADER ===== */
-.statusHdr{
-  display:flex;flex-direction:column;gap:6px;
-  border-radius:20px;
-  padding:18px;
-}
+/* Nombre con “aire” hacia el centro */
+.shift-in{padding-left:8px}
 
-/* ===== BOTONES GRANDES/ANCHO ===== */
-.btnFull{width:100%}
-.btnBig{font-size:18px; padding:16px 20px; border-radius:18px}
-.btnLg{font-size:17px; padding:14px 18px}
-.btnWide{width:100%; padding:14px 18px; border-radius:16px; font-size:17px}
-.btnDarker{background:#2563eb; color:#fff}          /* +Proyecto */
-.btnDarker:hover{filter:brightness(.98)}
-#btnIn:disabled{opacity:.55}
-
-/* ===== LISTA DE MARCAS CENTRADA ===== */
-.listTitle{font-weight:800;color:#374151;font-size:22px}
+/* ===== Últimas marcas (centrado en 3 líneas) ===== */
+.listTitle{font-weight:800;color:#111827;text-align:center;font-size:22px}
 .punchList{display:flex;flex-direction:column;gap:10px}
-.punchItem{display:flex;flex-direction:column;align-items:center;text-align:center}
+.punchItem{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 4px;border-bottom:1px solid #eef2f7}
+.punchItem:last-child{border-bottom:0}
 .punchItem .dir{font-weight:900;color:#111827}
-.punchItem .dt{color:#374151}
-.punchItem .coords{color:#6b7280}
+.punchItem .dt{color:#374151;font-size:13px;margin-top:2px}
+.punchItem .coords{color:#6b7280;font-size:12px;margin-top:2px}
 
-/* --- Asignación de proyectos --- */
+/* ===== Asignación de proyectos ===== */
+
+/* Encabezado centrado */
+.assignHeader{text-align:center;margin-bottom:10px}
+.assignTitle{font-weight:800;font-size:28px;color:#4b5563}
+.assignSub{color:#6b7280;margin-top:-4px}
+.assignHint{color:#6b7280;font-size:16px;margin-top:8px}
+
+/* Franja “Cliente” + divisor elegante */
+.filterStrip{
+  background:#f8fafc;border:1.5px solid #e5e7eb;border-radius:16px;
+  padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;
+}
+.filterStrip label{margin:0;font-weight:800;color:#374151;font-size:15px}
+.filterStrip select{
+  width:100%;font-size:16px;padding:10px 12px;border-radius:12px;border:1px solid #d1d5db;
+  background:#fff;font-weight:700;color:#111827;
+}
+.sectionDivider{
+  height:10px;margin:14px 0 4px 0;
+  background:linear-gradient(to right, transparent, transparent) 0 50%/100% 1px,
+             repeating-linear-gradient(90deg,#d1d5db 0 16px,transparent 16px 32px);
+  background-repeat:no-repeat;border-radius:999px;opacity:.9;
+}
+
+/* Fila de asignación */
 .allocRow{
   display:grid;
-  grid-template-columns: 1fr auto auto; /* Select | Duración | Quitar */
-  gap:10px;
-  align-items:center;
-  margin-bottom:8px;
+  grid-template-columns:1fr auto auto; /* Select | Duración | Quitar */
+  gap:10px;align-items:center;margin-bottom:8px;
 }
 .allocSelect{
-  width:100%;
-  min-width:0;
-  font-size:16px;
-  padding:12px 14px;
-  border-radius:12px;
-  border:1px solid #d1d5db;
-  background:#fff;
-  font-weight:700;
-  color:#111827;
+  width:100%;min-width:0;font-size:16px;padding:12px 14px;border-radius:12px;
+  border:1px solid #d1d5db;background:#fff;font-weight:700;color:#111827;
 }
 
-/* NUEVO control de duración (HH:MM) */
+/* Duración HH:MM */
 .allocDuration{display:flex;align-items:center;gap:6px}
 .allocH,.allocM{
-  width:64px;
-  padding:10px 12px;
-  border:1px solid #d8dee9;
-  border-radius:12px;
-  background:#fff;
-  font-size:16px;
+  width:64px;padding:10px 12px;border:1px solid #d8dee9;border-radius:12px;background:#fff;font-size:16px;
 }
 .allocSep{font-weight:700}
 
-/* Botón Quitar rojo */
+/* Quitar */
 .btn.small{
-  padding:10px 14px;
-  font-size:14px;
-  border-radius:12px;
-  white-space:nowrap;
-  justify-self:end;
-  background:#fff;
-  color:#d32f2f;
-  border:2px solid #d32f2f;
-  font-weight:600;
+  padding:10px 14px;font-size:14px;border-radius:12px;white-space:nowrap;justify-self:end;
+  background:#fff;color:#d32f2f;border:2px solid #d32f2f;font-weight:600;
 }
 .btn.small:hover{background:#fdecea}
 
-/* Responsive asignación */
+/* +Proyecto y Guardar: mismo ancho */
+#btnAddAlloc.btnWide{ /* ya es btnWide, reforzamos contraste */
+  background:#2563eb;color:#fff;
+}
+#btnSaveAlloc.btnWide{ /* mismo ancho y jerarquía visual */
+  background:var(--primary);color:#fff;
+}
+
+/* Responsive de asignación */
 @media (max-width:640px){
-  .allocRow{
-    grid-template-columns:1fr auto;
-    grid-auto-rows:auto;
-  }
+  .allocRow{grid-template-columns:1fr auto;grid-auto-rows:auto}
   .allocRow .allocSelect{grid-column:1 / -1}
   .btn.small{justify-self:start}
 }
 
-/* ==== POLISH VISUAL ==== */
-#empUid, #empUid2 { display: none !important; }
+/* ==== Extras ==== */
+#empUid, #empUid2 { display:none !important; } /* ocultar uid */
 
-/* Botón SALIR flotante */
-#btnLogout, #btnLogout2 {
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 14px;
-  padding: 12px 16px;
-  font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
-}
-@media (max-width: 480px) {
-  #btnLogout, #btnLogout2 {
-    position: fixed;
-    top: 10px;
-    right: 12px;
-    z-index: 1000;
-  }
-}
-
-/* Botón de acción "éxito" (SALIDA) en verde */
-.btn.success{ background:#10b981; color:#fff; }
-.btn.success.is-disabled{ filter: saturate(.6) brightness(.95); opacity:.85; }
-
-/* Pulso para llamar atención */
 .pulse-ring{
-  outline: 3px solid rgba(16,185,129,.65);
-  border-radius: 16px;
-  animation: pulseRing .9s ease-in-out 2;
+  outline:3px solid rgba(16,185,129,.65);border-radius:16px;animation:pulseRing .9s ease-in-out 2;
 }
-@keyframes pulseRing{
-  0%{ outline-offset: 0; opacity:1 }
-  100%{ outline-offset: 6px; opacity:1 }
-}
-
-/* ===== FRANJA & DIVISOR CLIENTE ===== */
-.filterStrip{
-  background:#f8fafc;
-  border:1.5px solid #e5e7eb;
-  border-radius:16px;
-  padding:12px 14px;
-  display:grid;
-  grid-template-columns:auto 1fr;
-  gap:10px;
-  align-items:center;
-}
-.filterStrip label{
-  margin:0;
-  font-weight:800;
-  color:#374151;
-  font-size:15px;
-}
-.filterStrip select{
-  width:100%;
-  font-size:16px;
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid #d1d5db;
-  background:#fff;
-  font-weight:700;
-  color:#111827;
-}
-.sectionDivider{
-  height:10px;
-  margin:14px 0 4px 0;
-  background:
-    linear-gradient(to right, transparent, transparent) 0 50%/100% 1px,
-    repeating-linear-gradient(90deg, #d1d5db 0 16px, transparent 16px 32px);
-  background-repeat:no-repeat;
-  border-radius:999px;
-  opacity:.9;
-}
-
-/* Encabezado centrado de Asignación */
-.assignHeader{ text-align:center; margin-bottom:10px }
-.assignTitle{ font-weight:800; font-size:28px; color:#4b5563 }
-.assignSub{ color:#6b7280; margin-top:-4px }
-.assignHint{ color:#6b7280; font-size:16px; margin-top:8px }
-
-/* Nombre con “aire” hacia el centro */
-.shift-in{ padding-left:8px }
+@keyframes pulseRing{0%{outline-offset:0;opacity:1}100%{outline-offset:6px;opacity:1}}
