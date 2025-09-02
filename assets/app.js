@@ -921,5 +921,4 @@ async function boot() {
     await signOut();
   }
 }
-
 boot();
