@@ -2,47 +2,72 @@
   --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
   --logo-max-h:72px; --logo-max-h-sm:56px;
 }
-
-/* ===== Base ===== */
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  background:var(--bg); margin:0; padding:16px;
+  background:var(--bg);
+  margin:0;
+  padding:16px;
 }
-.app{width:min(92vw,980px); margin:24px auto}
+.app{width:min(92vw,980px);margin:24px auto}
 .card{
-  background:var(--card); border-radius:24px; padding:24px 28px;
-  box-shadow:0 16px 48px rgba(0,0,0,.10); margin-bottom:18px;
+  background:var(--card);
+  border-radius:24px;
+  padding:24px 28px;
+  box-shadow:0 16px 48px rgba(0,0,0,.10);
+  margin-bottom:18px;
 }
 .card.inner{padding:14px}
-
 .brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
 .brand-row.no-gap{margin:0}
 .brand-row img{
-  max-height:var(--logo-max-h); height:auto; width:auto; object-fit:contain;
-  border-radius:14px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.12);
+  max-height:var(--logo-max-h);
+  height:auto;width:auto;
+  object-fit:contain;
+  border-radius:14px;
+  background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
 }
-.brand-row .title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px}
-
+.brand-row .title{
+  font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px
+}
 h1,h2{margin:8px 0 14px;color:var(--text)}
 h1{font-size:32px}
 h2{font-size:26px}
-
 label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
 input, select{
-  width:100%; padding:14px 16px; border-radius:14px;
-  border:1px solid #d8dee8; background:#fff; font-size:16px;
+  width:100%;
+  padding:14px 16px;
+  border-radius:14px;
+  border:1px solid #d8dee8;
+  background:#fff;
+  font-size:16px;
 }
-
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .row.between{justify-content:space-between}
+.btn{
+  padding:13px 18px;
+  border:0;
+  border-radius:14px;
+  background:var(--primary);
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+.btn:disabled{cursor:not-allowed;opacity:.6}
+.btn.light{background:#e9eef5;color:#333}
+.link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
 .muted{color:var(--muted);font-size:13px}
 .big{font-size:22px;font-weight:800}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
 .tile{
-  border:1px solid #e5e7eb; border-radius:18px; padding:16px 18px; background:#fff;
-  box-shadow:0 4px 16px rgba(0,0,0,.06); cursor:pointer;
+  border:1px solid #e5e7eb;
+  border-radius:18px;
+  padding:16px 18px;
+  background:#fff;
+  box-shadow:0 4px 16px rgba(0,0,0,.06);
+  cursor:pointer;
 }
 .tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
 .tile .s{color:#6b7280}
@@ -51,6 +76,7 @@ input, select{
 .m-t{margin-top:12px}
 .m-b{margin-bottom:10px}
 .m-b-sm{margin-bottom:6px}
+.center{text-align:center}
 
 @media (max-width:640px){
   .app{width:96vw}
@@ -60,97 +86,116 @@ input, select{
   .grid{grid-template-columns:1fr}
 }
 
-/* ===== Botones ===== */
-.btn{
-  padding:13px 18px; border:0; border-radius:14px; background:var(--primary);
-  color:#fff; font-weight:700; cursor:pointer;
+/* ====== Punch: Logo arriba y estado debajo ====== */
+.logoWrap{ display:flex; justify-content:center; margin: 6px 0 10px; }
+.punchLogo{
+  width:100%;
+  max-width:420px;   /* tamaño controlado (similar al primer cajón) */
+  height:auto;
+  display:block;
+  margin:0 auto;
+  object-fit:contain;
+  background:transparent;    /* sin “doble cajón” */
+  border-radius:12px;
+  box-shadow:0 4px 12px rgba(0,0,0,.06);
 }
-.btn:disabled{cursor:not-allowed;opacity:.6}
-.btn.light{background:#e9eef5;color:#333}
+.statusHdr{ display:flex; flex-direction:column; gap:6px; border-radius:20px; padding:18px; }
+.statusHdr strong{ font-weight:800; }
+.shift-in{ margin-left:6px; }
 
-/* Anchos y tamaños que pediste (sin subir tipografías) */
-.btnFull{width:100%;display:block}
-.btnWide{width:100%}          /* mismo ancho entre +Proyecto y Guardar */
-#btnIn:disabled{opacity:.5}   /* ENTRADA opaca */
-
-/* Salir visible y flotante */
-#btnLogout, #btnLogout2{
-  background:#ef4444; color:#fff; border:none; border-radius:12px;
-  padding:12px 16px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.12);
+/* Menú flotante debajo de Salir (mismo tamaño visual) */
+#btnLogout, #btnLogout2 {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
-@media (max-width:480px){
-  #btnLogout, #btnLogout2{ position:fixed; top:10px; right:12px; z-index:1000; }
-}
-
-/* Menú flotante debajo de Salir, mismo tamaño, gris más oscuro */
-#punchCard [data-nav="/app"].floating{
-  position:fixed; right:12px; top:72px; z-index:999;
-  background:#cfd6df; color:#111; padding:12px 16px; font-weight:700; border-radius:12px;
+#punchCard .floating{
+  position: fixed;
+  right: 12px;
+  top: 72px;
+  z-index: 999;
+  background:#cfd6df;
+  color:#111;
+  padding:12px 16px;
+  font-weight:700;
+  border-radius:12px;
   box-shadow:0 4px 12px rgba(0,0,0,.12);
 }
 
-/* Botón SALIDA en verde, misma tipografía de base */
-.btn.success{background:#10b981;color:#fff}
-.btn.success.is-disabled{filter:saturate(.6) brightness(.95);opacity:.85}
+/* ENTRADA/SALIDA */
+.btnFull{ width:100%; display:block; font-size:18px; }
+#btnIn:disabled{ opacity:.5 }
+.btn.success{ background:#10b981; color:#fff; }
 
-/* ===== Cabecera de MARCAS ===== */
-/* Logo centrado y contenido, **sin** ocupar toda la tarjeta */
-.logoHdr{display:block; padding:10px 0 6px}
-.punchLogo{
-  display:block; margin:0 auto 8px; width:100%; max-width:420px;  /* centrado y controlado */
-  height:auto; object-fit:contain; border-radius:14px; background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.08);
+/* ====== Últimas marcas ====== */
+.listTitle{ font-weight:800; color:#111827; text-align:center; }
+.punchItem{ padding:10px 4px; border-bottom:1px solid #eef2f7; }
+.punchItem:last-child{ border-bottom:0 }
+.punchItem .dir{ text-align:center; font-weight:800; letter-spacing:.4px; }
+.punchItem .dt{ text-align:center; color:#6b7280; font-size:13px; margin-top:2px; }
+.punchItem .coords{ text-align:center; color:#6b7280; font-size:12px; margin-top:2px; }
+
+/* ====== Asignación de proyectos ====== */
+.allocHeadTitle{ text-align:center; font-size:18px; font-weight:800; color:#6b7280; }
+.allocHeadSub{ text-align:center; font-size:14px; color:#6b7280; margin-top:2px; }
+.allocHeadWarn{ text-align:center; font-size:14px; color:#6b7280; margin-top:8px; }
+
+/* Botones iguales de ancho (+Proyecto y Guardar) */
+.btn.block{ width:100%; display:block; }
+
+/* Divisor y cliente simple (sin “cajón” extra) */
+.allocDivider{
+  border-top:2px dashed #e5e7eb;
+  margin:16px 0 10px;
 }
-.statusHdr{display:flex;flex-direction:column;gap:6px;border-radius:20px;padding:18px}
-.statusHdr strong{font-weight:800}
 
-/* ===== Últimas marcas centradas ===== */
-.listTitle{font-weight:800;color:#111827;text-align:center}
-.punchList{}
-.punchItem{padding:10px 4px;border-bottom:1px solid #eef2f7}
-.punchItem:last-child{border-bottom:0}
-.punchItem .dir{text-align:center;font-weight:900}
-.punchItem .dt{text-align:center;color:#374151;font-size:13px;margin-top:2px}
-.punchItem .coords{text-align:center;color:#6b7280;font-size:12px;margin-top:2px}
-
-/* ===== Asignación de proyectos ===== */
-/* Línea simple (en vez de “cajón Cliente”) */
-.sectionLine{border-top:1px solid #e6eaf2; margin:14px 0}
-
-/* Fila de asignación: mismos tamaños originales */
+/* Filas de proyecto */
 .allocRow{
-  display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; margin-bottom:8px;
+  display:grid;
+  grid-template-columns: 1fr auto auto; /* Select | Duración | Quitar */
+  gap:10px;
+  align-items:center;
+  margin-bottom:8px;
 }
-.allocSelect{width:100%;min-width:0}  /* sin elevar tipografías */
-
-/* Duración HH:MM (igual) */
+.allocSelect{ width:100%; min-width:0; }
 .allocDuration{display:flex;align-items:center;gap:6px}
 .allocH,.allocM{
-  width:64px; padding:10px 12px; border:1px solid #d8dee9; border-radius:12px; background:#fff; font-size:14px;
+  width:64px;
+  padding:10px 12px;
+  border:1px solid #d8dee9;
+  border-radius:12px;
+  background:#fff;
+  font-size:14px;
 }
 .allocSep{font-weight:700}
 
-/* Quitar (igual) */
+/* Quitar (rojo) */
 .btn.small{
-  padding:10px 14px; font-size:14px; border-radius:12px; white-space:nowrap; justify-self:end;
-  background:#fff; color:#d32f2f; border:2px solid #d32f2f; font-weight:600;
+  padding:10px 14px;
+  font-size:14px;
+  border-radius:12px;
+  white-space:nowrap;
+  justify-self:end;
+  background:#fff;
+  color:#d32f2f;
+  border:2px solid #d32f2f;
+  font-weight:600;
 }
 .btn.small:hover{background:#fdecea}
 
-/* +Proyecto y Guardar: mismo ancho, misma tipografía; +Proyecto más oscuro */
-#btnAddAlloc{background:#2b2f36;color:#fff}
-#btnAddAlloc.btnWide, #btnSaveAlloc.btnWide{display:block}
-
 /* Responsive asignación */
 @media (max-width:640px){
-  .allocRow{grid-template-columns:1fr auto;grid-auto-rows:auto}
+  .allocRow{
+    grid-template-columns:1fr auto;
+    grid-auto-rows:auto;
+  }
   .allocRow .allocSelect{grid-column:1 / -1}
   .btn.small{justify-self:start}
 }
 
-/* Ocultar UID por si el CSS tarda */
-#empUid, #empUid2{display:none!important}
-
-/* Pulso sutil cuando faltan asignaciones */
-.pulse-ring{outline:3px solid rgba(16,185,129,.65);border-radius:16px;animation:pulseRing .9s ease-in-out 2}
-@keyframes pulseRing{0%{outline-offset:0;opacity:1}100%{outline-offset:6px;opacity:1}}
+/* Ocultar employee_uid extras */
+#empUid, #empUid2 { display: none !important; }
