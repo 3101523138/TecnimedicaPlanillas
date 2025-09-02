@@ -339,8 +339,6 @@ async function loadStatusAndRecent() {
   }
   toast($('#punchMsg'), '');
 
-  // 5) Últimas marcas (desde medianoche local)
-  {
     // 5) Últimas marcas (centradas: línea 1 dir, línea 2 fecha/hora, línea 3 coords)
 {
   const { data: tps, error: eTP } = await supabase
