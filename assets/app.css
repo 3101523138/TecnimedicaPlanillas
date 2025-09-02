@@ -148,7 +148,7 @@ input{
   box-shadow: 0 4px 12px rgba(0,0,0,.12);
 }
 
-/* En móvil: botón fijo arriba */
+/* En móvil: botón fijo arriba (Salir) */
 @media (max-width: 480px) {
   #btnLogout, #btnLogout2 {
     position: fixed;
@@ -213,4 +213,88 @@ input{
   border-top:2px dashed #d1d5db;
   margin-top:18px;
   padding-top:14px;
+}
+
+/* ======= NUEVOS AJUSTES UI (pedidos) ======= */
+
+/* Logo grande en la cabecera de marcas (ancho del cajón) */
+.punchLogo{
+  width: min(360px, 80vw);
+  height: auto;
+  border-radius: 16px;
+  background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+
+/* Ligerísimo corrimiento del nombre hacia adentro */
+.shift-in{ margin-left: 6px; }
+
+/* Botones de ancho completo (Entrada, Salida al final) */
+.btnFull{
+  width:100%;
+  display:block;
+}
+
+/* Botón Menú flotante (como Salir) */
+.btn.floating{
+  position: fixed;
+  top: 64px;         /* debajo del status bar en iOS */
+  z-index: 1000;
+}
+.btn.floating.left{ left: 12px; }
+
+/* Título “Últimas marcas” en negrita */
+.listTitle{
+  font-weight: 800;
+  color: #111827;
+}
+
+/* Lista de marcas con IN/OUT centrado y detalle debajo */
+.punchList{ }
+.punchItem{
+  padding: 8px 4px;
+  border-bottom: 1px solid #eef2f7;
+}
+.punchItem:last-child{ border-bottom: 0; }
+.punchItem .dir{
+  text-align:center;
+  font-weight: 800;
+  letter-spacing:.4px;
+}
+.punchItem .detail{
+  text-align:center;
+  color:#6b7280;
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+/* Select de proyecto más grande, igual escala que Cliente */
+.allocProjectsBox select,
+.allocSelect{
+  font-size:16px !important;
+  padding:12px 14px !important;
+  border-radius:12px !important;
+  border:1px solid #d1d5db !important;
+  background:#fff !important;
+  font-weight:600 !important;
+  color:#111827 !important;
+}
+
+/* +Proyecto más grande y gris más oscuro para mayor contraste */
+.btn.darker{
+  background:#d7dde6;
+  color:#111827;
+  font-weight:700;
+  padding:14px 18px;
+}
+
+/* Guardar asignación un poco más grande para destacarlo */
+.btn.btnLg{
+  padding:14px 22px;
+  font-size:16px;
+}
+
+/* Ajuste flotantes en móvil (Menú) */
+@media (max-width:480px){
+  .btn.floating{ top: 10px; }
 }
