@@ -110,7 +110,7 @@ input, select{
 /* Logo arriba (centrado) con tamaño moderado */
 .logoHero{ flex:1; display:flex; justify-content:center; }
 .punchLogo{
-  max-width:560px; width:100%; height:auto;
+  max-width:360px; width:100%; height:auto;
   border-radius:16px; background:#fff;
   box-shadow:0 6px 20px rgba(0,0,0,.08);
 }
