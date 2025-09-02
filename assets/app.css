@@ -8,30 +8,20 @@
 html,body{height:100%}
 body{
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  background:var(--bg);
-  margin:0;
-  padding:16px;
+  background:var(--bg); margin:0; padding:16px;
 }
-.app{width:min(92vw,980px);margin:24px auto}
+.app{width:min(92vw,980px); margin:24px auto}
 .card{
-  background:var(--card);
-  border-radius:24px;
-  padding:24px 28px;
-  box-shadow:0 16px 48px rgba(0,0,0,.10);
-  margin-bottom:18px;
+  background:var(--card); border-radius:24px; padding:24px 28px;
+  box-shadow:0 16px 48px rgba(0,0,0,.10); margin-bottom:18px;
 }
 .card.inner{padding:14px}
 
-/* Marca y títulos */
 .brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
 .brand-row.no-gap{margin:0}
 .brand-row img{
-  max-height:var(--logo-max-h);
-  height:auto;width:auto;
-  object-fit:contain;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.12);
+  max-height:var(--logo-max-h); height:auto; width:auto; object-fit:contain;
+  border-radius:14px; background:#fff; box-shadow:0 6px 20px rgba(0,0,0,.12);
 }
 .brand-row .title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px}
 
@@ -39,62 +29,29 @@ h1,h2{margin:8px 0 14px;color:var(--text)}
 h1{font-size:32px}
 h2{font-size:26px}
 
-/* Formularios */
 label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
 input, select{
-  width:100%;
-  padding:14px 16px;
-  border-radius:14px;
-  border:1px solid #d8dee8;
-  background:#fff;
-  font-size:16px;
+  width:100%; padding:14px 16px; border-radius:14px;
+  border:1px solid #d8dee8; background:#fff; font-size:16px;
 }
 
-/* Utilidades layout/typography */
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .row.between{justify-content:space-between}
-.row.column{flex-direction:column;align-items:stretch;gap:12px}
 .muted{color:var(--muted);font-size:13px}
 .big{font-size:22px;font-weight:800}
-.center{text-align:center}
-.gap{gap:12px}
-.m-t{margin-top:12px}
-.m-b{margin-bottom:10px}
-.m-b-sm{margin-bottom:6px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
 .tile{
-  border:1px solid #e5e7eb;border-radius:18px;padding:16px 18px;background:#fff;
-  box-shadow:0 4px 16px rgba(0,0,0,.06);cursor:pointer;
+  border:1px solid #e5e7eb; border-radius:18px; padding:16px 18px; background:#fff;
+  box-shadow:0 4px 16px rgba(0,0,0,.06); cursor:pointer;
 }
 .tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
 .tile .s{color:#6b7280}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.gap{gap:12px}
+.m-t{margin-top:12px}
+.m-b{margin-bottom:10px}
+.m-b-sm{margin-bottom:6px}
 
-/* ===== Botones ===== */
-.btn{
-  padding:13px 18px;border:0;border-radius:14px;background:var(--primary);
-  color:#fff;font-weight:700;cursor:pointer;transition:filter .15s ease, transform .02s ease;
-}
-.btn:active{transform:translateY(1px)}
-.btn:disabled{cursor:not-allowed;opacity:.6}
-.btn.light{background:#e9eef5;color:#333}
-
-/* Botones “grandes/ancho completo” */
-.btnFull{width:100%;display:block}
-.btnBig{font-size:18px;padding:16px 20px;border-radius:18px}
-.btnLg{font-size:17px;padding:14px 18px}
-.btnWide{width:100%;padding:14px 18px;border-radius:16px;font-size:17px}
-.btnDarker{background:#2563eb;color:#fff}
-.btnDarker:hover{filter:brightness(.98)}
-
-/* Éxito (SALIDA) */
-.btn.success{background:#10b981;color:#fff}
-.btn.success.is-disabled{filter:saturate(.6) brightness(.95);opacity:.85}
-
-/* ENTRADA deshabilitada = opaca (además del :disabled global) */
-#btnIn:disabled{opacity:.55}
-
-/* ===== Móvil ===== */
 @media (max-width:640px){
   .app{width:96vw}
   .brand-row img{max-height:var(--logo-max-h-sm)}
@@ -103,113 +60,97 @@ input, select{
   .grid{grid-template-columns:1fr}
 }
 
-/* ===== Flotantes: Salir y Menú ===== */
+/* ===== Botones ===== */
+.btn{
+  padding:13px 18px; border:0; border-radius:14px; background:var(--primary);
+  color:#fff; font-weight:700; cursor:pointer;
+}
+.btn:disabled{cursor:not-allowed;opacity:.6}
+.btn.light{background:#e9eef5;color:#333}
+
+/* Anchos y tamaños que pediste (sin subir tipografías) */
+.btnFull{width:100%;display:block}
+.btnWide{width:100%}          /* mismo ancho entre +Proyecto y Guardar */
+#btnIn:disabled{opacity:.5}   /* ENTRADA opaca */
+
+/* Salir visible y flotante */
 #btnLogout, #btnLogout2{
-  background:#ef4444;color:#fff;border:none;border-radius:14px;
-  padding:12px 16px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.12);
+  background:#ef4444; color:#fff; border:none; border-radius:12px;
+  padding:12px 16px; font-weight:700; box-shadow:0 4px 12px rgba(0,0,0,.12);
 }
 @media (max-width:480px){
-  #btnLogout, #btnLogout2{
-    position:fixed;top:10px;right:12px;z-index:1000;
-  }
+  #btnLogout, #btnLogout2{ position:fixed; top:10px; right:12px; z-index:1000; }
 }
-/* Menú flotante — del mismo tamaño y debajo de Salir (gris más oscuro) */
+
+/* Menú flotante debajo de Salir, mismo tamaño, gris más oscuro */
 #punchCard [data-nav="/app"].floating{
-  position:fixed;right:12px;top:72px;z-index:999;
-  background:#cfd6df;color:#111;padding:12px 16px;font-weight:700;border-radius:12px;
+  position:fixed; right:12px; top:72px; z-index:999;
+  background:#cfd6df; color:#111; padding:12px 16px; font-weight:700; border-radius:12px;
   box-shadow:0 4px 12px rgba(0,0,0,.12);
 }
 
-/* ===== Cabecera logo + estado (MARCAS) ===== */
-.logoHdr{display:block;padding:18px;border-radius:20px}
+/* Botón SALIDA en verde, misma tipografía de base */
+.btn.success{background:#10b981;color:#fff}
+.btn.success.is-disabled{filter:saturate(.6) brightness(.95);opacity:.85}
+
+/* ===== Cabecera de MARCAS ===== */
+/* Logo centrado y contenido, **sin** ocupar toda la tarjeta */
+.logoHdr{display:block; padding:10px 0 6px}
 .punchLogo{
-  width:100%;height:auto;display:block;object-fit:contain;border-radius:14px;
-  background:#fff;box-shadow:0 6px 20px rgba(0,0,0,.08);
+  display:block; margin:0 auto 8px; width:100%; max-width:420px;  /* centrado y controlado */
+  height:auto; object-fit:contain; border-radius:14px; background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.08);
 }
 .statusHdr{display:flex;flex-direction:column;gap:6px;border-radius:20px;padding:18px}
 .statusHdr strong{font-weight:800}
 
-/* Nombre con “aire” hacia el centro */
-.shift-in{padding-left:8px}
-
-/* ===== Últimas marcas (centrado en 3 líneas) ===== */
-.listTitle{font-weight:800;color:#111827;text-align:center;font-size:22px}
-.punchList{display:flex;flex-direction:column;gap:10px}
-.punchItem{display:flex;flex-direction:column;align-items:center;text-align:center;padding:10px 4px;border-bottom:1px solid #eef2f7}
+/* ===== Últimas marcas centradas ===== */
+.listTitle{font-weight:800;color:#111827;text-align:center}
+.punchList{}
+.punchItem{padding:10px 4px;border-bottom:1px solid #eef2f7}
 .punchItem:last-child{border-bottom:0}
-.punchItem .dir{font-weight:900;color:#111827}
-.punchItem .dt{color:#374151;font-size:13px;margin-top:2px}
-.punchItem .coords{color:#6b7280;font-size:12px;margin-top:2px}
+.punchItem .dir{text-align:center;font-weight:900}
+.punchItem .dt{text-align:center;color:#374151;font-size:13px;margin-top:2px}
+.punchItem .coords{text-align:center;color:#6b7280;font-size:12px;margin-top:2px}
 
 /* ===== Asignación de proyectos ===== */
+/* Línea simple (en vez de “cajón Cliente”) */
+.sectionLine{border-top:1px solid #e6eaf2; margin:14px 0}
 
-/* Encabezado centrado */
-.assignHeader{text-align:center;margin-bottom:10px}
-.assignTitle{font-weight:800;font-size:28px;color:#4b5563}
-.assignSub{color:#6b7280;margin-top:-4px}
-.assignHint{color:#6b7280;font-size:16px;margin-top:8px}
-
-/* Franja “Cliente” + divisor elegante */
-.filterStrip{
-  background:#f8fafc;border:1.5px solid #e5e7eb;border-radius:16px;
-  padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;
-}
-.filterStrip label{margin:0;font-weight:800;color:#374151;font-size:15px}
-.filterStrip select{
-  width:100%;font-size:16px;padding:10px 12px;border-radius:12px;border:1px solid #d1d5db;
-  background:#fff;font-weight:700;color:#111827;
-}
-.sectionDivider{
-  height:10px;margin:14px 0 4px 0;
-  background:linear-gradient(to right, transparent, transparent) 0 50%/100% 1px,
-             repeating-linear-gradient(90deg,#d1d5db 0 16px,transparent 16px 32px);
-  background-repeat:no-repeat;border-radius:999px;opacity:.9;
-}
-
-/* Fila de asignación */
+/* Fila de asignación: mismos tamaños originales */
 .allocRow{
-  display:grid;
-  grid-template-columns:1fr auto auto; /* Select | Duración | Quitar */
-  gap:10px;align-items:center;margin-bottom:8px;
+  display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; margin-bottom:8px;
 }
-.allocSelect{
-  width:100%;min-width:0;font-size:16px;padding:12px 14px;border-radius:12px;
-  border:1px solid #d1d5db;background:#fff;font-weight:700;color:#111827;
-}
+.allocSelect{width:100%;min-width:0}  /* sin elevar tipografías */
 
-/* Duración HH:MM */
+/* Duración HH:MM (igual) */
 .allocDuration{display:flex;align-items:center;gap:6px}
 .allocH,.allocM{
-  width:64px;padding:10px 12px;border:1px solid #d8dee9;border-radius:12px;background:#fff;font-size:16px;
+  width:64px; padding:10px 12px; border:1px solid #d8dee9; border-radius:12px; background:#fff; font-size:14px;
 }
 .allocSep{font-weight:700}
 
-/* Quitar */
+/* Quitar (igual) */
 .btn.small{
-  padding:10px 14px;font-size:14px;border-radius:12px;white-space:nowrap;justify-self:end;
-  background:#fff;color:#d32f2f;border:2px solid #d32f2f;font-weight:600;
+  padding:10px 14px; font-size:14px; border-radius:12px; white-space:nowrap; justify-self:end;
+  background:#fff; color:#d32f2f; border:2px solid #d32f2f; font-weight:600;
 }
 .btn.small:hover{background:#fdecea}
 
-/* +Proyecto y Guardar: mismo ancho */
-#btnAddAlloc.btnWide{ /* ya es btnWide, reforzamos contraste */
-  background:#2563eb;color:#fff;
-}
-#btnSaveAlloc.btnWide{ /* mismo ancho y jerarquía visual */
-  background:var(--primary);color:#fff;
-}
+/* +Proyecto y Guardar: mismo ancho, misma tipografía; +Proyecto más oscuro */
+#btnAddAlloc{background:#2b2f36;color:#fff}
+#btnAddAlloc.btnWide, #btnSaveAlloc.btnWide{display:block}
 
-/* Responsive de asignación */
+/* Responsive asignación */
 @media (max-width:640px){
   .allocRow{grid-template-columns:1fr auto;grid-auto-rows:auto}
   .allocRow .allocSelect{grid-column:1 / -1}
   .btn.small{justify-self:start}
 }
 
-/* ==== Extras ==== */
-#empUid, #empUid2 { display:none !important; } /* ocultar uid */
+/* Ocultar UID por si el CSS tarda */
+#empUid, #empUid2{display:none!important}
 
-.pulse-ring{
-  outline:3px solid rgba(16,185,129,.65);border-radius:16px;animation:pulseRing .9s ease-in-out 2;
-}
+/* Pulso sutil cuando faltan asignaciones */
+.pulse-ring{outline:3px solid rgba(16,185,129,.65);border-radius:16px;animation:pulseRing .9s ease-in-out 2}
 @keyframes pulseRing{0%{outline-offset:0;opacity:1}100%{outline-offset:6px;opacity:1}}
