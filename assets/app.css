@@ -55,7 +55,7 @@ input, select{
   font-weight:700;
   cursor:pointer;
 }
-.btn:disabled{cursor:not-allowed;opacity:.6}
+.btn:disabled{cursor:not-allowed;opacity:.55}
 .btn.light{background:#e9eef5;color:#333}
 .link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
 .muted{color:var(--muted);font-size:13px}
@@ -86,74 +86,94 @@ input, select{
   .grid{grid-template-columns:1fr}
 }
 
-/* ====== Punch: Logo arriba y estado debajo ====== */
-.logoWrap{ display:flex; justify-content:center; margin: 6px 0 10px; }
-.punchLogo{
-  width:100%;
-  max-width:420px;   /* tamaño controlado (similar al primer cajón) */
-  height:auto;
-  display:block;
-  margin:0 auto;
-  object-fit:contain;
-  background:transparent;    /* sin “doble cajón” */
-  border-radius:12px;
-  box-shadow:0 4px 12px rgba(0,0,0,.06);
-}
-.statusHdr{ display:flex; flex-direction:column; gap:6px; border-radius:20px; padding:18px; }
-.statusHdr strong{ font-weight:800; }
-.shift-in{ margin-left:6px; }
+/* ======== POLISH VISUAL ======== */
+/* Ocultar employee_uid en UI */
+#empUid, #empUid2 { display: none !important; }
 
-/* Menú flotante debajo de Salir (mismo tamaño visual) */
-#btnLogout, #btnLogout2 {
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  padding: 12px 16px;
-  font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+/* Salir: visible y flotante */
+#btnLogout, #btnLogout2{
+  background:#ef4444;color:#fff;border:none;border-radius:12px;
+  padding:12px 16px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.12);
 }
-#punchCard .floating{
-  position: fixed;
-  right: 12px;
-  top: 72px;
-  z-index: 999;
-  background:#cfd6df;
-  color:#111;
-  padding:12px 16px;
-  font-weight:700;
-  border-radius:12px;
+@media (max-width:480px){
+  #btnLogout, #btnLogout2{ position:fixed; top:10px; right:12px; z-index:1000; }
+}
+
+/* Menú flotante debajo de Salir (mismo tamaño, gris más oscuro) */
+.floatingMenu{
+  position:fixed; right:12px; top:72px; z-index:999;
+  background:#cfd6df; color:#111;
+  padding:12px 16px; font-weight:700; border-radius:12px;
   box-shadow:0 4px 12px rgba(0,0,0,.12);
 }
 
-/* ENTRADA/SALIDA */
+/* Logo arriba (centrado) con tamaño moderado */
+.logoHero{ flex:1; display:flex; justify-content:center; }
+.punchLogo{
+  max-width:560px; width:100%; height:auto;
+  border-radius:16px; background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.08);
+}
+
+/* Header de estado (debajo del logo) con etiquetas en negrita */
+.statusHdr{ margin-top:12px; }
+.statusHdr strong{ font-weight:800; }
+
+/* Ligerísimo corrimiento del nombre hacia adentro */
+.shift-in{ margin-left:6px; }
+
+/* ENTRADA/SALIDA: ancho completo y tipografía un poco mayor */
 .btnFull{ width:100%; display:block; font-size:18px; }
-#btnIn:disabled{ opacity:.5 }
+
+/* Botón SALIDA en verde */
 .btn.success{ background:#10b981; color:#fff; }
 
-/* ====== Últimas marcas ====== */
+/* ===== Últimas marcas centradas ===== */
 .listTitle{ font-weight:800; color:#111827; text-align:center; }
 .punchItem{ padding:10px 4px; border-bottom:1px solid #eef2f7; }
-.punchItem:last-child{ border-bottom:0 }
+.punchItem:last-child{ border-bottom:0; }
 .punchItem .dir{ text-align:center; font-weight:800; letter-spacing:.4px; }
 .punchItem .dt{ text-align:center; color:#6b7280; font-size:13px; margin-top:2px; }
 .punchItem .coords{ text-align:center; color:#6b7280; font-size:12px; margin-top:2px; }
 
-/* ====== Asignación de proyectos ====== */
-.allocHeadTitle{ text-align:center; font-size:18px; font-weight:800; color:#6b7280; }
-.allocHeadSub{ text-align:center; font-size:14px; color:#6b7280; margin-top:2px; }
+/* ===== Asignación de proyectos ===== */
+/* Encabezado centrado */
+.allocHeadTitle{ text-align:center; font-size:22px; font-weight:800; color:#4b5563; }
+.allocHeadSub{ text-align:center; font-size:15px; color:#6b7280; margin-top:2px; }
 .allocHeadWarn{ text-align:center; font-size:14px; color:#6b7280; margin-top:8px; }
 
-/* Botones iguales de ancho (+Proyecto y Guardar) */
-.btn.block{ width:100%; display:block; }
-
-/* Divisor y cliente simple (sin “cajón” extra) */
-.allocDivider{
-  border-top:2px dashed #e5e7eb;
-  margin:16px 0 10px;
+/* +Proyecto y Guardar con el mismo ancho visual */
+.actionsRow{ margin:10px 0 8px; }
+.actionWide{
+  min-width:240px;
+  padding:14px 18px;
+  border-radius:14px;
+  font-weight:700;
+}
+@media (max-width:640px){
+  .actionWide{ width:100%; }
 }
 
-/* Filas de proyecto */
+/* Selector de Cliente en formato simple (sin “cajón” grande) */
+.pillLabel{
+  display:inline-block;
+  background:#eef2f7;
+  color:#374151;
+  font-weight:700;
+  font-size:13px;
+  padding:6px 10px;
+  border-radius:999px;
+  margin:4px 0 6px;
+}
+
+/* Separador elegante entre Cliente y Proyectos */
+.sectionDivider{
+  height:1px;
+  background: linear-gradient(90deg, rgba(0,0,0,0) 0%, #e5e7eb 20%, #e5e7eb 80%, rgba(0,0,0,0) 100%);
+  margin:12px 0 10px;
+}
+
+/* --- Filas de asignación --- */
 .allocRow{
   display:grid;
   grid-template-columns: 1fr auto auto; /* Select | Duración | Quitar */
@@ -162,40 +182,25 @@ input, select{
   margin-bottom:8px;
 }
 .allocSelect{ width:100%; min-width:0; }
+
+/* Control HH:MM */
 .allocDuration{display:flex;align-items:center;gap:6px}
 .allocH,.allocM{
-  width:64px;
-  padding:10px 12px;
-  border:1px solid #d8dee9;
-  border-radius:12px;
-  background:#fff;
-  font-size:14px;
+  width:64px; padding:10px 12px;
+  border:1px solid #d8dee9; border-radius:12px; background:#fff; font-size:14px;
 }
 .allocSep{font-weight:700}
 
-/* Quitar (rojo) */
+/* Botón Quitar rojo */
 .btn.small{
-  padding:10px 14px;
-  font-size:14px;
-  border-radius:12px;
-  white-space:nowrap;
-  justify-self:end;
-  background:#fff;
-  color:#d32f2f;
-  border:2px solid #d32f2f;
-  font-weight:600;
+  padding:10px 14px; font-size:14px; border-radius:12px; white-space:nowrap;
+  justify-self:end; background:#fff; color:#d32f2f; border:2px solid #d32f2f; font-weight:600;
 }
-.btn.small:hover{background:#fdecea}
+.btn.small:hover{ background:#fdecea }
 
-/* Responsive asignación */
+/* Responsive filas */
 @media (max-width:640px){
-  .allocRow{
-    grid-template-columns:1fr auto;
-    grid-auto-rows:auto;
-  }
-  .allocRow .allocSelect{grid-column:1 / -1}
-  .btn.small{justify-self:start}
+  .allocRow{ grid-template-columns:1fr auto; grid-auto-rows:auto; }
+  .allocRow .allocSelect{ grid-column:1 / -1 }
+  .btn.small{ justify-self:start }
 }
-
-/* Ocultar employee_uid extras */
-#empUid, #empUid2 { display: none !important; }
