@@ -79,16 +79,16 @@
     <!-- MARCAS -->
     <div class="card" id="punchCard" style="display:none;">
       <div class="topbar">
-        <!-- Logo arriba (mismo ancho visual que el cajón) -->
-        <div class="brand-row no-gap" style="flex:1">
-          <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
-        </div>
+        <!-- Menú flotante y Salir flotante -->
         <div class="row">
-          <!-- Menú flotante (debajo de Salir) -->
-          <button class="btn light floating" data-nav="/app">← Menú</button>
-          <!-- Salir (flotante) -->
+          <button class="btn light floating left" data-nav="/app">← Menú</button>
           <button class="btn light" id="btnLogout2">Salir</button>
         </div>
+      </div>
+
+      <!-- LOGO ancho como el “Estado actual” -->
+      <div class="card inner logoHdr">
+        <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
       </div>
 
       <!-- Estado + Horas de hoy -->
@@ -97,60 +97,61 @@
         <div><strong>Horas de hoy:</strong> <span id="hoursTodayText">00:00</span></div>
       </div>
 
-      <!-- Identidad -->
+      <!-- Identidad (más aire hacia el centro) -->
       <div class="muted">Marcas IN/OUT como</div>
       <div id="empName2" class="big shift-in">—</div>
       <div id="empUid2" class="muted">—</div>
 
       <!-- ENTRADA: ancho completo -->
       <div class="m-t">
-        <button class="btn btnFull" id="btnIn">Marcar ENTRADA</button>
+        <button class="btn btnFull btnBig" id="btnIn">Marcar ENTRADA</button>
       </div>
 
       <div id="punchMsg" class="muted m-t"></div>
 
       <!-- Últimas marcas -->
       <div class="card inner">
-        <div class="listTitle m-b-sm">Últimas marcas</div>
+        <div class="listTitle center m-b-sm">Últimas marcas</div>
         <div id="recentPunches" class="punchList">—</div>
       </div>
 
       <!-- ASIGNACIÓN DE PROYECTOS -->
       <div class="card inner">
-        <div class="row between">
-          <div class="center" style="width:100%">
-            <div class="allocHeadTitle">Asignación de proyectos</div>
-            <div class="allocHeadSub">(obligatorio para cerrar)</div>
-            <div class="allocHeadWarn" id="allocInfo">Debes asignar 00:00 más.</div>
-          </div>
-          <button class="btn darker" id="btnAddAlloc">+ Proyecto</button>
+        <div class="assignHeader">
+          <div class="assignTitle">Asignación de proyectos</div>
+          <div class="assignSub">(obligatorio para cerrar)</div>
+          <div class="assignHint" id="allocInfo">Debes asignar 00:00 más.</div>
         </div>
 
-        <!-- Cliente -->
-        <div class="allocClientBox m-t">
+        <!-- Franja de filtro Cliente + divisor elegante -->
+        <div class="filterStrip">
           <label for="allocClient">Cliente</label>
           <select id="allocClient">
             <option value="">— Todos los clientes —</option>
           </select>
         </div>
+        <div class="sectionDivider" aria-hidden="true"></div>
 
-        <!-- Proyectos -->
-        <div class="allocProjectsBox">
-          <div id="allocContainer"></div>
+        <!-- Proyectos (select más grande) -->
+        <div id="allocContainer" class="m-t"></div>
+
+        <!-- Acciones: +Proyecto y Guardar del mismo ancho -->
+        <div class="row column m-t">
+          <button class="btn btnWide btnDarker" id="btnAddAlloc">+ Proyecto</button>
+          <button class="btn btnWide btnLg" id="btnSaveAlloc">Guardar asignación</button>
         </div>
 
-        <!-- Totales + Guardar -->
+        <!-- Totales -->
         <div class="row between m-t">
           <div class="muted">
             <strong><span id="allocTotalHM">00:00</span> / <span id="allocRequiredHM">00:00</span></strong> asignados
           </div>
-          <button class="btn btnLg" id="btnSaveAlloc">Guardar asignación</button>
         </div>
       </div>
 
-      <!-- SALIDA: última acción del día -->
+      <!-- SALIDA: última acción del día (al final) -->
       <div class="m-t">
-        <button class="btn success btnFull" id="btnOut">Marcar SALIDA</button>
+        <button class="btn success btnFull btnBig" id="btnOut">Marcar SALIDA</button>
       </div>
 
       <!-- Placeholders -->
