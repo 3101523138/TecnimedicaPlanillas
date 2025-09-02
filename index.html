@@ -123,14 +123,16 @@
           <div class="assignHint" id="allocInfo">Debes asignar 00:00 más.</div>
         </div>
 
-        <!-- Franja de filtro Cliente + divisor elegante -->
-        <div class="filterStrip">
-          <label for="allocClient">Cliente</label>
-          <select id="allocClient">
-            <option value="">— Todos los clientes —</option>
-          </select>
-        </div>
-        <div class="sectionDivider" aria-hidden="true"></div>
+        <!-- Reemplaza TODO el bloque de “Cliente” anterior por esto -->
+        <label class="muted" for="allocClient">Cliente</label>
+        <select id="allocClient">
+        <option value="">— Todos los clientes —</option>
+        </select>
+
+          <div class="sectionLine"></div>
+          <!-- (aquí sigue el contenedor de proyectos) -->
+          <div id="allocContainer"></div>
+
 
         <!-- Proyectos (select más grande) -->
         <div id="allocContainer" class="m-t"></div>
