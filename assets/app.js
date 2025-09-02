@@ -341,28 +341,36 @@ async function loadStatusAndRecent() {
 
   // 5) Últimas marcas (desde medianoche local)
   {
-    const { data: tps, error: eTP } = await supabase
-      .from('time_punches')
-      .select('direction, punch_at, latitude, longitude')
-      .eq('employee_uid', st.employee.uid)
-      .gte('punch_at', midnightISO)
-      .order('punch_at', { ascending: false })
-      .limit(10);
-    if (eTP) console.error('[APP] time_punches error:', eTP);
+    // 5) Últimas marcas (centradas: línea 1 dir, línea 2 fecha/hora, línea 3 coords)
+{
+  const { data: tps, error: eTP } = await supabase
+    .from('time_punches')
+    .select('direction, punch_at, latitude, longitude')
+    .eq('employee_uid', st.employee.uid)
+    .gte('punch_at', midnightISO)
+    .order('punch_at', { ascending: false })
+    .limit(10);
+  if (eTP) console.error('[APP] time_punches error:', eTP);
 
-    const recentEl = $('#recentPunches');
-    if (recentEl) {
-      recentEl.innerHTML = (!tps || !tps.length)
-        ? 'Sin marcas aún.'
-        : tps.map(tp => {
-            const d = new Date(tp.punch_at);
-            const loc = (tp.latitude && tp.longitude)
-              ? ` (${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)})`
-              : '';
-            return `<div><strong>${tp.direction}</strong> — ${d.toLocaleString()}${loc}</div>`;
-          }).join('');
-    }
+  const recentEl = $('#recentPunches');
+  if (recentEl) {
+    recentEl.innerHTML = (!tps || !tps.length)
+      ? 'Sin marcas aún.'
+      : tps.map(tp => {
+          const d = new Date(tp.punch_at);
+          const dt = d.toLocaleString();
+          const coords = (tp.latitude && tp.longitude)
+            ? `${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)}`
+            : '';
+          return `
+            <div class="punchItem">
+              <div class="dir">${tp.direction}</div>
+              <div class="dt">${dt}</div>
+              ${coords ? `<div class="coords">(${coords})</div>` : ``}
+            </div>`;
+        }).join('');
   }
+}
 
   // 6) Trabajado (UI) y Requerido (validación OUT)
   if (st.sessionOpen) {
