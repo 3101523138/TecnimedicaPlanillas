@@ -217,12 +217,16 @@ async function signIn(email, password) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
 }
+
+// Envío del correo de reseteo con redirect correcto (hash)
 async function sendReset(email) {
   console.log('[APP] sendReset', email);
-  const redirectTo = `${location.origin}/reset`;
+  // El enlace de Supabase trae el token en el #hash + type=recovery
+  const redirectTo = `${location.origin}/#type=recovery`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
+
 async function signOut() {
   console.log('[APP] signOut');
   await supabase.auth.signOut();
@@ -656,22 +660,23 @@ async function mark(direction) {
   if (error) throw error;
 }
 
+// ───────── Marcar ENTRADA con emergente si ya hubo jornada ─────────
 async function onMarkIn() {
   try {
     console.log('[APP] CLICK ENTRADA]');
 
-    // Advertir si ya hubo una jornada cerrada hoy (no bloquea)
     const alreadyClosedToday = await hasClosedSessionToday();
     if (alreadyClosedToday) {
-      const ok = window.confirm(
-        'Ya registraste una jornada para este día.\n' +
-        '¿Quieres iniciar otra? Esto puede afectar cálculos de planilla y generar reclamos posteriores.'
-      );
-      if (!ok) return; // cancela
+      const ok = await showConfirmModal({
+        title: 'Ya registraste una jornada hoy',
+        html: 'Iniciar otra puede afectar cálculos de planilla y generar reclamos.<br><br><strong>¿Deseas iniciar otra jornada?</strong>',
+        confirmText: 'Sí, iniciar',
+        cancelText: 'No, cancelar'
+      });
+      if (!ok) return;
     }
 
     const bi = $('#btnIn'); if (bi) bi.disabled = true;
-
     await mark('IN');
     toast($('#punchMsg'), 'Entrada registrada.');
   } catch (e) {
@@ -681,6 +686,7 @@ async function onMarkIn() {
     await loadStatusAndRecent();
   }
 }
+
 
 async function onMarkOut() {
   try {
@@ -863,10 +869,15 @@ function applyMobilePolish() {
 // === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
-  const hash = location.pathname;
-  const params = new URLSearchParams(location.hash?.split('?')[1] || location.search);
-  const type = params.get('type');
-  if (hash.startsWith('/reset') || type === 'recovery') routeTo('/reset');
+
+  // Detectar recovery tanto en hash (#...) como en query (por si acaso)
+  const hashParams   = new URLSearchParams(location.hash ? location.hash.slice(1) : '');
+  const searchParams = new URLSearchParams(location.search || '');
+  const type = hashParams.get('type') || searchParams.get('type');
+
+  if (location.pathname.startsWith('/reset') || type === 'recovery') {
+    routeTo('/reset');
+  }
 
   setNavListeners();
 
