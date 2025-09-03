@@ -68,6 +68,52 @@ const show = (el) => el && (el.style.display = '');
 const hide = (el) => el && (el.style.display = 'none');
 function toast(el, msg){ if(!el) return; el.textContent = msg || ''; if(!msg) return; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; },6000); }
 
+// ───────────────── Modal simple (Promesa) ─────────────────
+function showConfirmModal({ title = 'Confirmar', html = '', confirmText = 'Aceptar', cancelText = 'Cancelar' } = {}) {
+  return new Promise((resolve) => {
+    // CSS del modal (se inyecta una vez)
+    if (!document.getElementById('tmi-modal-css')) {
+      const css = document.createElement('style');
+      css.id = 'tmi-modal-css';
+      css.textContent = `
+        .tmiModalBack{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:2000}
+        .tmiModal{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:440px;width:90vw;padding:18px}
+        .tmiModal h3{margin:0 0 8px;font-size:18px}
+        .tmiModal p{margin:0 0 14px;color:#374151}
+        .tmiRow{display:flex;gap:10px;justify-content:flex-end}
+        .tmiBtn{padding:10px 14px;border-radius:12px;border:0;font-weight:700;cursor:pointer}
+        .tmiCancel{background:#e5e7eb;color:#111}
+        .tmiOk{background:#1e88e5;color:#fff}
+      `;
+      document.head.appendChild(css);
+    }
+
+    // DOM del modal
+    const back = document.createElement('div');
+    back.className = 'tmiModalBack';
+    back.innerHTML = `
+      <div class="tmiModal" role="dialog" aria-modal="true">
+        <h3>${title}</h3>
+        <p>${html}</p>
+        <div class="tmiRow">
+          <button class="tmiBtn tmiCancel">${cancelText}</button>
+          <button class="tmiBtn tmiOk">${confirmText}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(back);
+
+    const finish = (value)=>{ back.remove(); resolve(value); };
+    back.querySelector('.tmiCancel').onclick = ()=>finish(false);
+    back.querySelector('.tmiOk').onclick     = ()=>finish(true);
+    const onKey = (e)=>{ if(e.key==='Escape') finish(false); };
+    document.addEventListener('keydown', onKey, { once:true });
+  });
+}
+
+
+
+
 // === ROUTER ===
 function routeTo(path) {
   console.log('[APP] routeTo', path);
