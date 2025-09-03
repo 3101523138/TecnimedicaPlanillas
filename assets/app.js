@@ -352,7 +352,7 @@ async function loadStatusAndRecent() {
     const { data: tps, error: eTP } = await supabase
       .from('time_punches')
       .select('direction, punch_at, latitude, longitude')
-      .eq('employee_uid', st.employee.uid')
+      .eq('employee_uid', st.employee.uid)
       .gte('punch_at', midnightISO)
       .order('punch_at', { ascending: false })
       .limit(10);
