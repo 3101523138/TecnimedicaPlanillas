@@ -266,6 +266,7 @@ async function loadEmployeeContext() {
 }
 
 // === STATUS + RECIENTES ===
+// === STATUS + RECIENTES ===
 async function loadStatusAndRecent() {
   console.log('[APP] loadStatusAndRecent');
 
@@ -278,6 +279,7 @@ async function loadStatusAndRecent() {
   midnightLocal.setHours(0, 0, 0, 0);
   const midnightTs  = midnightLocal.getTime();
   const midnightISO = midnightLocal.toISOString();
+  const nowTs = Date.now();
 
   // 1) Última sesión (para saber si está OPEN)
   {
@@ -296,7 +298,6 @@ async function loadStatusAndRecent() {
 
   // 2) Sesiones de HOY → guardamos para el ticker y calculamos “Horas de hoy”
   {
-    const nowTs = Date.now();
     const { data, error } = await supabase
       .from('work_sessions')
       .select('start_at, end_at, status')
@@ -312,85 +313,97 @@ async function loadStatusAndRecent() {
     }, 0);
   }
 
-  // 3) Header
-  const punch = $('#punchCard');
-  if (punch) {
+  // 3) Header “Estado actual / Horas de hoy” —> debajo del LOGO
+  {
+    const punch = $('#punchCard');
+    const anchor = $('#logoHero') || punch;
+    // elimina header anterior si existiera
     const old = punch.querySelector('.card.inner.statusHdr');
     if (old) old.remove();
+
     const hdr = document.createElement('div');
     hdr.className = 'card inner statusHdr';
     hdr.innerHTML = `
       <div><strong>Estado actual:</strong> ${estado}</div>
-      <div class="muted">Horas de hoy: <span id="hoursTodayText">${minToHM(minsHoy)}</span></div>
+      <div><strong>Horas de hoy:</strong> <span id="hoursTodayText">${minToHM(minsHoy)}</span></div>
     `;
-    const ref = punch.querySelector('.row.gap.m-t');
-    if (ref) punch.insertBefore(hdr, ref);
-    else punch.prepend(hdr);
+    if (anchor && anchor.insertAdjacentElement) {
+      anchor.insertAdjacentElement('afterend', hdr);
+    } else {
+      punch.prepend(hdr);
+    }
   }
 
-  // 4) Botones IN/OUT (NO deshabilitar SALIDA: solo estilo base)
-  const btnIn  = $('#btnIn');
-  const btnOut = $('#btnOut');
-  if (btnIn)  btnIn.disabled  = (estado === 'Dentro'); // ENTRADA sí puede bloquearse
-  if (btnOut) {
-    btnOut.disabled = false;            // SALIDA siempre clicable para explicar
-    btnOut.classList.remove('light');
-    btnOut.classList.add('success');    // verde (CSS)
+  // 4) Botones IN/OUT (SALIDA siempre clicable para explicar; ENTRADA sí se bloquea)
+  {
+    const btnIn  = $('#btnIn');
+    const btnOut = $('#btnOut');
+    if (btnIn)  btnIn.disabled  = (estado === 'Dentro');  // ENTRADA bloquea si ya está dentro
+    if (btnOut) {
+      btnOut.disabled = false;            // SALIDA no se deshabilita (solo estilo visual luego)
+      btnOut.classList.remove('light');
+      btnOut.classList.add('success');    // verde
+    }
+    toast($('#punchMsg'), '');
   }
-  toast($('#punchMsg'), '');
 
-    // 5) Últimas marcas (centradas: línea 1 dir, línea 2 fecha/hora, línea 3 coords)
-{
-  const { data: tps, error: eTP } = await supabase
-    .from('time_punches')
-    .select('direction, punch_at, latitude, longitude')
-    .eq('employee_uid', st.employee.uid)
-    .gte('punch_at', midnightISO)
-    .order('punch_at', { ascending: false })
-    .limit(10);
-  if (eTP) console.error('[APP] time_punches error:', eTP);
+  // 5) Últimas marcas (centradas: línea 1 dir, línea 2 fecha/hora, línea 3 coords)
+  {
+    const { data: tps, error: eTP } = await supabase
+      .from('time_punches')
+      .select('direction, punch_at, latitude, longitude')
+      .eq('employee_uid', st.employee.uid')
+      .gte('punch_at', midnightISO)
+      .order('punch_at', { ascending: false })
+      .limit(10);
+    if (eTP) console.error('[APP] time_punches error:', eTP);
 
-  const recentEl = $('#recentPunches');
-  if (recentEl) {
-    recentEl.innerHTML = (!tps || !tps.length)
-      ? 'Sin marcas aún.'
-      : tps.map(tp => {
-          const d = new Date(tp.punch_at);
-          const dt = d.toLocaleString();
-          const coords = (tp.latitude && tp.longitude)
-            ? `${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)}`
-            : '';
-          return `
-            <div class="punchItem">
-              <div class="dir">${tp.direction}</div>
-              <div class="dt">${dt}</div>
-              ${coords ? `<div class="coords">(${coords})</div>` : ``}
-            </div>`;
-        }).join('');
+    const recentEl = $('#recentPunches');
+    if (recentEl) {
+      recentEl.innerHTML = (!tps || !tps.length)
+        ? 'Sin marcas aún.'
+        : tps.map(tp => {
+            const d = new Date(tp.punch_at);
+            const dt = d.toLocaleString();
+            const coords = (tp.latitude && tp.longitude)
+              ? `${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)}`
+              : '';
+            return `
+              <div class="punchItem">
+                <div class="dir">${tp.direction}</div>
+                <div class="dt">${dt}</div>
+                ${coords ? `<div class="coords">(${coords})</div>` : ``}
+              </div>`;
+          }).join('');
+    }
   }
-}
 
-  // 6) Trabajado (UI) y Requerido (validación OUT)
+  // 6) Trabajado (UI) y Requerido (validación de OUT)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
     const effStart = (start < midnightTs) ? midnightTs : start;
     const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
-    st.workedMinutes   = diffMin;
-    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
+    st.workedMinutes   = diffMin;                         // real trabajado para UI/precarga
+    st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES); // usado para validar OUT
   } else {
     st.workedMinutes = 0;
     st.requiredMinutes = 0;
   }
-  $('#allocRequiredHM') && ($('#allocRequiredHM').textContent = minToHM(st.workedMinutes));
+  const reqEl = $('#allocRequiredHM'); // mostramos TRABAJADO a la derecha
+  if (reqEl) reqEl.textContent = minToHM(st.workedMinutes);
 
   // 7) UI asignaciones
   await prepareAllocUI();
 
   // 8) Ticker en vivo
-  const mLocal = new Date(); mLocal.setHours(0,0,0,0);
-  st._midnightTs = mLocal.getTime();
-  if (st.sessionOpen) startSessionTicker(); else stopSessionTicker();
+  st._midnightTs = midnightTs;
+  if (st.sessionOpen) {
+    startSessionTicker();
+  } else {
+    stopSessionTicker();
+  }
 }
+
 
 // === PROYECTOS ===
 async function loadProjects(client = null) {
