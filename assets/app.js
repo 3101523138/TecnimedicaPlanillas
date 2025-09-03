@@ -111,7 +111,76 @@ function showConfirmModal({ title = 'Confirmar', html = '', confirmText = 'Acept
   });
 }
 
+// ───────────────── Modales reutilizables ─────────────────
+function ensureModalCSS() {
+  if (document.getElementById('tmi-modal-css')) return;
+  const css = document.createElement('style');
+  css.id = 'tmi-modal-css';
+  css.textContent = `
+    .tmiModalBack{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:2000}
+    .tmiModal{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.28);max-width:460px;width:92vw;padding:18px}
+    .tmiModal h3{margin:0 0 10px;font-size:18px;font-weight:800;color:#111827}
+    .tmiModal .body{margin:0 0 14px;color:#374151;line-height:1.45}
+    .tmiRow{display:flex;gap:10px;justify-content:flex-end}
+    .tmiBtn{padding:10px 14px;border-radius:12px;border:0;font-weight:700;cursor:pointer}
+    .tmiCancel{background:#e5e7eb;color:#111}
+    .tmiOk{background:#1e88e5;color:#fff}
+  `;
+  document.head.appendChild(css);
+}
 
+// Modal de confirmación (Sí/No)
+function showConfirmModal({ title='Confirmar', html='', confirmText='Aceptar', cancelText='Cancelar' } = {}) {
+  ensureModalCSS();
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'tmiModalBack';
+    back.innerHTML = `
+      <div class="tmiModal" role="dialog" aria-modal="true">
+        <h3>${title}</h3>
+        <div class="body">${html}</div>
+        <div class="tmiRow">
+          <button class="tmiBtn tmiCancel">${cancelText}</button>
+          <button class="tmiBtn tmiOk">${confirmText}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(back);
+    const finish = v => { back.remove(); resolve(v); };
+    back.querySelector('.tmiCancel').onclick = () => finish(false);
+    back.querySelector('.tmiOk').onclick     = () => finish(true);
+    const onKey = e => { if (e.key === 'Escape') finish(false); };
+    document.addEventListener('keydown', onKey, { once:true });
+  });
+}
+
+// Modal informativo (1 botón)
+function showInfoModal({ title='Información', html='', okText='Entendido' } = {}) {
+  ensureModalCSS();
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'tmiModalBack';
+    back.innerHTML = `
+      <div class="tmiModal" role="dialog" aria-modal="true">
+        <h3>${title}</h3>
+        <div class="body">${html}</div>
+        <div class="tmiRow">
+          <button class="tmiBtn tmiOk">${okText}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(back);
+    const finish = () => { back.remove(); resolve(true); };
+    back.querySelector('.tmiOk').onclick = finish;
+    const onKey = e => { if (e.key === 'Escape') finish(); };
+    document.addEventListener('keydown', onKey, { once:true });
+  });
+}
+
+// Utilidad para hora “am/pm” legible
+function fmtTime(ts = Date.now()) {
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: 'numeric', minute: '2-digit', hour12: true
+  });
+}
 
 
 // === ROUTER ===
@@ -707,6 +776,7 @@ async function mark(direction) {
 }
 
 // ───────── Marcar ENTRADA con emergente si ya hubo jornada ─────────
+// ───────── ENTRADA con confirm previo (si ya hubo jornada) y emergente de bienvenida ─────────
 async function onMarkIn() {
   try {
     console.log('[APP] CLICK ENTRADA]');
@@ -723,7 +793,17 @@ async function onMarkIn() {
     }
 
     const bi = $('#btnIn'); if (bi) bi.disabled = true;
+
     await mark('IN');
+
+    // Emergente: Bienvenida
+    const nombre = st.employee?.full_name || 'Usuario';
+    await showInfoModal({
+      title: '¡Bienvenido!',
+      html: `Hola <strong>${nombre}</strong>. Iniciaste jornada a las <strong>${fmtTime()}</strong>.`,
+      okText: 'Continuar'
+    });
+
     toast($('#punchMsg'), 'Entrada registrada.');
   } catch (e) {
     console.error('[APP] onMarkIn error:', e);
@@ -733,28 +813,30 @@ async function onMarkIn() {
   }
 }
 
-
+// ───────── SALIDA con emergente de agradecimiento ─────────
 async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
 
-    // NO refrescar antes (no pisar lo que ajustó el usuario)
-    // await loadStatusAndRecent();
-
-    // Validar y guardar asignación
+    // Validar y guardar asignación (para cerrar)
     const ok = await onSaveAlloc(true);
     if (!ok) return;
 
-    // Marcar salida
     const bo = $('#btnOut'); if (bo) bo.disabled = true;
     await mark('OUT');
+
+    const nombre = st.employee?.full_name || 'Usuario';
+    await showInfoModal({
+      title: '¡Gracias por tu labor!',
+      html: `Gracias, <strong>${nombre}</strong>. Marcaste salida a las <strong>${fmtTime()}</strong>.`,
+      okText: 'Listo'
+    });
 
     toast($('#punchMsg'), 'Salida registrada.');
   } catch (e) {
     console.error('[APP] onMarkOut error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
-    // refrescar después
     await loadStatusAndRecent();
   }
 }
