@@ -1009,20 +1009,50 @@ function applyMobilePolish() {
 
 
 // === BOOT ===
+// === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
 
-  // Detectar recovery tanto en hash (#...) como en query (por si acaso)
-  const hashParams   = new URLSearchParams(location.hash ? location.hash.slice(1) : '');
+  // Detecta "recovery" tanto en hash (#...) como en query (por si acaso)
+  const hash = location.hash ? location.hash.slice(1) : '';
+  const hashParams = new URLSearchParams(hash);
   const searchParams = new URLSearchParams(location.search || '');
-  const type = hashParams.get('type') || searchParams.get('type');
+  const typeFromHash = hashParams.get('type');
+  const typeFromQuery = searchParams.get('type');
 
-  if (location.pathname.startsWith('/reset') || type === 'recovery') {
-    routeTo('/reset');
-  }
+  // Además de type=recovery, el enlace de Supabase trae access_token en el hash
+  const hasAccessToken = hash.includes('access_token=');
+  const isRecoveryFlow = (typeFromHash === 'recovery') || (typeFromQuery === 'recovery') || hasAccessToken;
 
+  // Listeners de navegación básicos (siempre)
   setNavListeners();
 
+  if (isRecoveryFlow) {
+    // 1) Fuerza la pantalla de reset y no continúes con la rama de login.
+    routeTo('/reset');
+
+    // 2) Asegura que los botones del reset están enlazados aquí también
+    //    (por si el usuario llegó directo con el link del correo)
+    $('#btnSetNew')?.addEventListener('click', async () => {
+      try {
+        console.log('[APP] CLICK SetNew (recovery)');
+        const pw = $('#newPassword').value;
+        if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        const { error } = await supabase.auth.updateUser({ password: pw });
+        if (error) throw error;
+        toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
+      } catch (e) {
+        console.error('[APP] update password error:', e);
+        toast($('#msg2'), e.message);
+      }
+    });
+    $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
+
+    // 3) Importante: SALIR AQUÍ. No sigas a la rama de login.
+    return;
+  }
+
+  // ---- Flujo normal (no recovery) ----
   const user = await loadSession();
   if (!user) {
     console.log('[APP] Sin sesión → login');
@@ -1037,7 +1067,7 @@ async function boot() {
         await loadSession();
         await loadEmployeeContext();
         routeTo('/app');
-        applyMobilePolish(); // <— ajustes visuales
+        applyMobilePolish();
       } catch (e) {
         console.error('[APP] signIn error:', e);
         toast($('#msg'), e.message);
@@ -1050,7 +1080,7 @@ async function boot() {
         console.log('[APP] CLICK Forgot');
         const email = $('#email').value.trim();
         if (!email) throw new Error('Escribe tu correo y vuelve a pulsar “¿Olvidaste…?”');
-        await sendReset(email);
+        await sendReset(email); // usa el redirectTo fijo a /#type=recovery
         toast($('#msg'), 'Te enviamos un correo con el enlace para restablecer.');
       } catch (e) {
         console.error('[APP] reset error:', e);
@@ -1078,7 +1108,7 @@ async function boot() {
     console.log('[APP] Sesión activa → cargar contexto empleado');
     await loadEmployeeContext();
     routeTo('/app');
-    applyMobilePolish(); // <— aplicar cambios visuales también en sesión ya activa
+    applyMobilePolish();
   } catch (e) {
     console.error('[APP] loadEmployeeContext error:', e);
     toast($('#msg'), e.message);
@@ -1086,3 +1116,4 @@ async function boot() {
   }
 }
 boot();
+
