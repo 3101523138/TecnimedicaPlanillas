@@ -19,6 +19,8 @@ body{
   margin-bottom:18px;
 }
 .card.inner{padding:14px}
+
+/* ===== Brand (logo + título) ===== */
 .brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
 .brand-row.no-gap{margin:0}
 .brand-row img{
@@ -30,11 +32,31 @@ body{
   box-shadow:0 6px 20px rgba(0,0,0,.12);
 }
 .brand-row .title{
-  font-size:26px;font-weight:800;color:var(--text);letter-spacing:.2px
+  font-size:24px;            /* ↓ más contenido en móvil */
+  font-weight:800;
+  color:var(--text);
+  letter-spacing:.2px;
+  line-height:1.05;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  hyphens:auto;
 }
+/* En pantallas medianas/desktop subimos un poco */
+@media (min-width:768px){
+  .brand-row .title{ font-size:26px; }
+}
+
+/* En /home dejamos espacio para el botón "Salir" flotante */
+#homeCard{ position:relative; padding-right:96px; }
+
 h1,h2{margin:8px 0 14px;color:var(--text)}
-h1{font-size:32px}
-h2{font-size:26px}
+h1{font-size:28px}   /* ↓ ligero ajuste móvil */
+h2{font-size:22px}
+@media (min-width:768px){
+  h1{font-size:32px}
+  h2{font-size:26px}
+}
+
 label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
 input, select{
   width:100%;
@@ -76,7 +98,7 @@ input, select{
   box-shadow:0 4px 16px rgba(0,0,0,.06);
   cursor:pointer;
 }
-.tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
+.tile .k{font-size:20px;font-weight:800;margin-bottom:4px}  /* ↓ un toque */
 .tile .s{color:#6b7280}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .gap{gap:12px}
@@ -93,6 +115,10 @@ input, select{
   border-radius:14px;
   background:#fff;
   box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+/* En móvil, logotipo un poco más bajo */
+@media (max-width:640px){
+  .brand-row img{ max-height:var(--logo-max-h-sm); }
 }
 
 /* Ocultar employee_uid */
@@ -133,7 +159,7 @@ input, select{
 .punchItem .dt{ text-align:center; color:#6b7280; font-size:13px; margin-top:2px; }
 .punchItem .coords{ text-align:center; color:#6b7280; font-size:12px; margin-top:2px; }
 
-/* Asignación de proyectos */
+/* ===== Asignación de proyectos ===== */
 .allocRow{
   display:grid;
   grid-template-columns: 1fr auto auto; /* Select | Duración | Quitar */
@@ -143,10 +169,11 @@ input, select{
 }
 .allocSelect{ width:100%; min-width:0; }
 
-/* Duración HH:MM */
+/* Duración HH:MM (unificada, sin duplicados) */
 .allocDuration{display:flex;align-items:center;gap:6px}
-.allocH,.allocM{
-  width:64px;
+.allocH, .allocM{
+  width:auto;
+  min-width:80px;              /* accesible en móvil */
   padding:10px 12px;
   border:1px solid #d8dee9;
   border-radius:12px;
@@ -204,6 +231,7 @@ input, select{
   0%{ outline-offset: 0; opacity:1 }
   100%{ outline-offset: 6px; opacity:1 }
 }
+
 /* ── Mejoras asignación ───────────────────────────── */
 .allocRowHeader{
   font-weight:800;
@@ -226,19 +254,6 @@ input, select{
   color:#1e3a8a !important;
 }
 
-/* Selects de tiempo (sustituyen a inputs number) */
-.allocH, .allocM{
-  width:auto;
-  min-width:80px;
-  padding:10px 12px;
-  border:1px solid #d8dee9;
-  border-radius:12px;
-  background:#fff;
-  font-size:14px;
-}
-.allocDuration{
-  display:flex;align-items:center;gap:6px;
-}
-.allocSep{
-  font-weight:700;
-}
+/* Selects de tiempo (mantener cohesión con .allocH/.allocM) */
+.allocDuration{ display:flex; align-items:center; gap:6px; }
+.allocSep{ font-weight:700; }
