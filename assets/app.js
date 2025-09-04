@@ -900,6 +900,31 @@ async function onSaveAlloc(forClosing = false) {
       if (error) throw error;
     }
 
+    // --- EMERGENTE para guardar asignación (cuando NO se está cerrando) ---
+if (!forClosing) {
+  const worked = st.workedMinutes; // ya calculado en status
+  const faltan = Math.max(0, worked - tot);
+
+  if (faltan > 0) {
+    await showInfoModal({
+      title: 'Asignación incompleta',
+      html: `Recuerda asignar <strong>${minToHM(faltan)}</strong> más a proyectos para poder cerrar la jornada.`,
+      okText: 'Entendido'
+    });
+  } else {
+    // resumen de lo asignado (usamos st.allocRows por si no hay "rows" cuando tot=0)
+    const resumen = (st.allocRows || []).filter(r => r.project_code && r.minutes > 0)
+      .map(r => `• <strong>${r.project_code}</strong> — ${minToHM(r.minutes)}`)
+      .join('<br>') || 'Sin proyectos asignados.';
+
+    await showInfoModal({
+      title: 'Asignación guardada',
+      html: `Quedó así:<br><br>${resumen}`,
+      okText: 'Perfecto'
+    });
+  }
+}
+
     toast($('#punchMsg'), forClosing ? 'Asignación válida. Puedes marcar salida.' : 'Asignación guardada.');
     console.log('[APP] saveAlloc OK:', rows);
     return true;
