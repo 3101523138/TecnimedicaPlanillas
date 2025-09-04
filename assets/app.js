@@ -339,13 +339,15 @@ async function signIn(email, password) {
 }
 
 // Envío del correo de reseteo con redirect correcto (hash)
+// Envío del correo de reseteo con redirect correcto (hash)
 async function sendReset(email) {
   console.log('[APP] sendReset', email);
-  // El enlace de Supabase trae el token en el #hash + type=recovery
-  const redirectTo = `${location.origin}/#type=recovery`;
+  // Redirige SIEMPRE al dominio oficial de producción
+  const redirectTo = `https://nominatmi.netlify.app/#type=recovery`;
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
+
 
 async function signOut() {
   console.log('[APP] signOut');
