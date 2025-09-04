@@ -1075,34 +1075,52 @@ async function boot() {
         $('#btnLogin').disabled = false;
       }
     });
-    $('#btnForgot')?.addEventListener('click', async () => {
-      try {
-        console.log('[APP] CLICK Forgot');
-        const email = $('#email').value.trim();
-        if (!email) throw new Error('Escribe tu correo y vuelve a pulsar “¿Olvidaste…?”');
-        await sendReset(email); // usa el redirectTo fijo a /#type=recovery
-        toast($('#msg'), 'Te enviamos un correo con el enlace para restablecer.');
-      } catch (e) {
-        console.error('[APP] reset error:', e);
-        toast($('#msg'), e.message);
-      }
+    // "¿Olvidaste tu contraseña?" → siempre modal
+$('#btnForgot')?.addEventListener('click', async () => {
+  try {
+    const emailInput = $('#email');
+    const email = (emailInput?.value || '').trim();
+
+    // Validación básica de formato antes de llamar a Supabase
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      await showInfoModal({
+        title: 'Necesitamos tu correo',
+        html: 'Escribe un <strong>correo válido</strong> y vuelve a pulsar “¿Olvidaste tu contraseña?”.',
+        okText: 'Entendido'
+      });
+      emailInput?.focus();
+      return;
+    }
+
+    // Deshabilita temporalmente para evitar múltiples envíos
+    const btn = $('#btnForgot');
+    if (btn) btn.disabled = true;
+
+    await sendReset(email);
+
+    // Mensaje neutral (no revela si el correo existe o no)
+    await showInfoModal({
+      title: 'Revisa tu correo',
+      html: 'Si la dirección existe, te enviamos un mensaje con el <strong>enlace para restablecer</strong> tu contraseña. Revisa también la carpeta <em>Spam</em> o <em>Promociones</em>.',
+      okText: 'Listo'
     });
-    $('#btnSetNew')?.addEventListener('click', async () => {
-      try {
-        console.log('[APP] CLICK SetNew');
-        const pw = $('#newPassword').value;
-        if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
-        const { error } = await supabase.auth.updateUser({ password: pw });
-        if (error) throw error;
-        toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
-      } catch (e) {
-        console.error('[APP] update password error:', e);
-        toast($('#msg2'), e.message);
-      }
+
+    // Opcional: llevar el foco al campo de contraseña
+    $('#password')?.focus();
+
+  } catch (e) {
+    console.error('[APP] reset error:', e);
+    await showInfoModal({
+      title: 'No pudimos enviar el enlace',
+      html: `Inténtalo de nuevo en unos segundos.<br><small>${e?.message || 'Error desconocido'}</small>`,
+      okText: 'Cerrar'
     });
-    $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
-    return;
+  } finally {
+    const btn = $('#btnForgot');
+    if (btn) btn.disabled = false;
   }
+});
+
 
   try {
     console.log('[APP] Sesión activa → cargar contexto empleado');
