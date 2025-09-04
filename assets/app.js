@@ -1007,8 +1007,6 @@ function applyMobilePolish() {
   uidEls.forEach(el => { if (el) el.textContent = ''; });
 }
 
-
-// === BOOT ===
 // === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
@@ -1053,10 +1051,12 @@ async function boot() {
   }
 
   // ---- Flujo normal (no recovery) ----
+    // ---- Flujo normal (no recovery) ----
   const user = await loadSession();
   if (!user) {
     console.log('[APP] Sin sesión → login');
     routeTo('/');
+
     $('#btnLogin')?.addEventListener('click', async () => {
       try {
         console.log('[APP] CLICK Entrar');
@@ -1075,53 +1075,53 @@ async function boot() {
         $('#btnLogin').disabled = false;
       }
     });
+
     // "¿Olvidaste tu contraseña?" → siempre modal
-$('#btnForgot')?.addEventListener('click', async () => {
-  try {
-    const emailInput = $('#email');
-    const email = (emailInput?.value || '').trim();
+    $('#btnForgot')?.addEventListener('click', async () => {
+      try {
+        const emailInput = $('#email');
+        const email = (emailInput?.value || '').trim();
 
-    // Validación básica de formato antes de llamar a Supabase
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      await showInfoModal({
-        title: 'Necesitamos tu correo',
-        html: 'Escribe un <strong>correo válido</strong> y vuelve a pulsar “¿Olvidaste tu contraseña?”.',
-        okText: 'Entendido'
-      });
-      emailInput?.focus();
-      return;
-    }
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          await showInfoModal({
+            title: 'Necesitamos tu correo',
+            html: 'Escribe un <strong>correo válido</strong> y vuelve a pulsar “¿Olvidaste tu contraseña?”.',
+            okText: 'Entendido'
+          });
+          emailInput?.focus();
+          return;
+        }
 
-    // Deshabilita temporalmente para evitar múltiples envíos
-    const btn = $('#btnForgot');
-    if (btn) btn.disabled = true;
+        const btn = $('#btnForgot');
+        if (btn) btn.disabled = true;
 
-    await sendReset(email);
+        await sendReset(email);
 
-    // Mensaje neutral (no revela si el correo existe o no)
-    await showInfoModal({
-      title: 'Revisa tu correo',
-      html: 'Si la dirección existe, te enviamos un mensaje con el <strong>enlace para restablecer</strong> tu contraseña. Revisa también la carpeta <em>Spam</em> o <em>Promociones</em>.',
-      okText: 'Listo'
+        await showInfoModal({
+          title: 'Revisa tu correo',
+          html: 'Si la dirección existe, te enviamos un mensaje con el <strong>enlace para restablecer</strong> tu contraseña. Revisa también la carpeta <em>Spam</em> o <em>Promociones</em>.',
+          okText: 'Listo'
+        });
+
+        $('#password')?.focus();
+      } catch (e) {
+        console.error('[APP] reset error:', e);
+        await showInfoModal({
+          title: 'No pudimos enviar el enlace',
+          html: `Inténtalo de nuevo en unos segundos.<br><small>${e?.message || 'Error desconocido'}</small>`,
+          okText: 'Cerrar'
+        });
+      } finally {
+        const btn = $('#btnForgot');
+        if (btn) btn.disabled = false;
+      }
     });
 
-    // Opcional: llevar el foco al campo de contraseña
-    $('#password')?.focus();
-
-  } catch (e) {
-    console.error('[APP] reset error:', e);
-    await showInfoModal({
-      title: 'No pudimos enviar el enlace',
-      html: `Inténtalo de nuevo en unos segundos.<br><small>${e?.message || 'Error desconocido'}</small>`,
-      okText: 'Cerrar'
-    });
-  } finally {
-    const btn = $('#btnForgot');
-    if (btn) btn.disabled = false;
+    // Muy importante: salimos de boot aquí para esperar interacción en la pantalla de login
+    return;
   }
-});
 
-
+  // ---- Usuario con sesión activa ----
   try {
     console.log('[APP] Sesión activa → cargar contexto empleado');
     await loadEmployeeContext();
@@ -1132,6 +1132,5 @@ $('#btnForgot')?.addEventListener('click', async () => {
     toast($('#msg'), e.message);
     await signOut();
   }
-}
+} // ← cierre correcto de boot()
 boot();
-
