@@ -666,24 +666,34 @@ function updateAllocTotals() {
   const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
   const worked = st.workedMinutes;
 
-  const totalEl = $('#allocTotalHM');
-  if (totalEl) totalEl.textContent = minToHM(tot);
+  const totalEl = $('#allocTotalHM'); if (totalEl) totalEl.textContent = minToHM(tot);
+  const rightEl = $('#allocRequiredHM'); if (rightEl) rightEl.textContent = minToHM(worked);
 
-  const rightEl = $('#allocRequiredHM'); // “/ trabajados”
-  if (rightEl) rightEl.textContent = minToHM(worked);
+  const lower = Math.max(0, worked - GRACE_MINUTES);
+  const upper = worked + GRACE_MINUTES;
 
   const info = $('#allocInfo');
-
-  // ¿está dentro de la ventana válida? (worked .. worked+GRACE)
   let ok = false;
-  if (tot < worked) {
-    info && (info.textContent = `Debes asignar ${minToHM(worked - tot)} más.`);
-  } else if (tot > worked + GRACE_MINUTES) {
-    info && (info.textContent = `Asignaste ${minToHM(tot - worked)} de más. Ajusta los proyectos.`);
+  if (tot < lower) {
+    info && (info.textContent = `Debes asignar ${minToHM(lower - tot)} más.`);
+  } else if (tot > upper) {
+    info && (info.textContent = `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos.`);
   } else {
     info && (info.textContent = 'Listo: la jornada está cubierta.');
     ok = true;
   }
+
+  st.outReady = !!(st.sessionOpen && ok);
+
+  const outBtn = $('#btnOut');
+  if (outBtn) {
+    outBtn.classList.remove('light');
+    outBtn.classList.add('success');
+    outBtn.classList.toggle('is-disabled', !st.outReady);
+    outBtn.setAttribute('aria-disabled', String(!st.outReady));
+  }
+}
+
 
   // Guardamos en estado (lo usa handleOutClick)
   st.outReady = !!(st.sessionOpen && ok);
@@ -862,30 +872,20 @@ function onAddAlloc() {
 // - Las filas posteriores quedan en 00:00 (y se limpian si no tienen proyecto).
 function rebalanceFrom(changedIdx) {
   if (!st.sessionOpen) return;
-
-  // Estado desde UI
   syncAllocFromInputs();
 
-  const maxTotal = st.workedMinutes;
+  const maxTotal = st.workedMinutes + GRACE_MINUTES; // permitir +10'
   const rows = st.allocRows;
 
-  // Suma de las otras filas (excluyendo la cambiada)
-  const sumOthers = rows.reduce((acc, r, i) => {
-    if (i === changedIdx) return acc;
-    return acc + (parseInt(r.minutes || 0, 10) || 0);
-  }, 0);
-
-  // Clampear solo la fila editada al máximo disponible
+  const sumOthers = rows.reduce((acc, r, i) => i === changedIdx ? acc : acc + (parseInt(r.minutes || 0, 10) || 0), 0);
   const maxForThis = Math.max(0, maxTotal - sumOthers);
-  rows[changedIdx].minutes = Math.min(
-    maxForThis,
-    parseInt(rows[changedIdx].minutes || 0, 10) || 0
-  );
 
-  // NO se tocan las otras filas, NO se eliminan automáticamente
+  rows[changedIdx].minutes = Math.min(maxForThis, parseInt(rows[changedIdx].minutes || 0, 10) || 0);
+
   renderAllocContainer();
   updateAllocTotals();
 }
+
 
 
 // Guardar asignación (parcial o para cerrar)
@@ -893,21 +893,24 @@ async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
 
-    // fuerza estado desde inputs
+    // 1) Asegura estado desde inputs
     syncAllocFromInputs();
 
-    // Limpieza previa: elimina filas 00:00 sin proyecto
+    // 2) Limpieza: quita filas 00:00 sin proyecto
     st.allocRows = st.allocRows.filter(r => (parseInt(r.minutes || 0, 10) > 0) || r.project_code);
 
-    const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+    // 3) Totales y ventana de tolerancia ±GRACE_MINUTES
+    const tot   = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+    const lower = Math.max(0, st.workedMinutes - GRACE_MINUTES);
+    const upper = st.workedMinutes + GRACE_MINUTES;
 
+    // 4) Si es para cerrar, exige que esté dentro de la ventana
     if (forClosing) {
-      const lower = Math.max(0, st.workedMinutes - 1);
-      const upper = st.workedMinutes + GRACE_MINUTES;
-      if (tot < lower) throw new Error(`Faltan ${minToHM(st.workedMinutes - tot)}.`);
-      if (tot > upper) throw new Error(`Te pasaste ${minToHM(tot - st.workedMinutes)}.`);
+      if (tot < lower) throw new Error(`Faltan ${minToHM(lower - tot)}.`);
+      if (tot > upper) throw new Error(`Te pasaste ${minToHM(tot - upper)}.`);
     }
 
+    // 5) Persiste (replace)
     const sid = st.sessionOpen.id;
     await supabase.from('work_session_allocations').delete().eq('session_id', sid);
 
@@ -920,30 +923,48 @@ async function onSaveAlloc(forClosing = false) {
       if (error) throw error;
     }
 
-    // --- EMERGENTE para guardar asignación (cuando NO se está cerrando) ---
-if (!forClosing) {
-  const worked = st.workedMinutes; // ya calculado en status
-  const faltan = Math.max(0, worked - tot);
+    // 6) Feedback
+    if (forClosing) {
+      toast($('#punchMsg'), 'Asignación válida. Puedes marcar salida.');
+    } else {
+      // Modal informativo según el estado respecto a la ventana
+      if (tot < lower) {
+        await showInfoModal({
+          title: 'Asignación incompleta',
+          html: `Recuerda asignar <strong>${minToHM(lower - tot)}</strong> más a proyectos para poder cerrar la jornada.`,
+          okText: 'Entendido'
+        });
+      } else if (tot > upper) {
+        await showInfoModal({
+          title: 'Asignación excedida',
+          html: `Has asignado <strong>${minToHM(tot - upper)}</strong> de más. Reduce tiempo en algún proyecto para poder cerrar.`,
+          okText: 'Ok'
+        });
+      } else {
+        const resumen = (st.allocRows || [])
+          .filter(r => r.project_code && r.minutes > 0)
+          .map(r => `• <strong>${r.project_code}</strong> — ${minToHM(r.minutes)}`)
+          .join('<br>') || 'Sin proyectos asignados.';
+        await showInfoModal({
+          title: 'Asignación guardada',
+          html: `Quedó así:<br><br>${resumen}`,
+          okText: 'Perfecto'
+        });
+        toast($('#punchMsg'), 'Asignación guardada.');
+      }
+    }
 
-  if (faltan > 0) {
-    await showInfoModal({
-      title: 'Asignación incompleta',
-      html: `Recuerda asignar <strong>${minToHM(faltan)}</strong> más a proyectos para poder cerrar la jornada.`,
-      okText: 'Entendido'
-    });
-  } else {
-    // resumen de lo asignado (usamos st.allocRows por si no hay "rows" cuando tot=0)
-    const resumen = (st.allocRows || []).filter(r => r.project_code && r.minutes > 0)
-      .map(r => `• <strong>${r.project_code}</strong> — ${minToHM(r.minutes)}`)
-      .join('<br>') || 'Sin proyectos asignados.';
-
-    await showInfoModal({
-      title: 'Asignación guardada',
-      html: `Quedó así:<br><br>${resumen}`,
-      okText: 'Perfecto'
-    });
+    return true;
+  } catch (e) {
+    console.error('[APP] onSaveAlloc error:', e);
+    toast($('#punchMsg'), `Error al guardar: ${e.message}`);
+    return false;
+  } finally {
+    renderAllocContainer();
+    updateAllocTotals();
   }
 }
+
 
     toast($('#punchMsg'), forClosing ? 'Asignación válida. Puedes marcar salida.' : 'Asignación guardada.');
     console.log('[APP] saveAlloc OK:', rows);
