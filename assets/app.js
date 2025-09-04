@@ -47,8 +47,12 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // Verificar si ya existe una jornada cerrada hoy (solo para ADVERTIR al IN)
 // ¿Ya hubo alguna jornada hoy? (OPEN o CLOSED)
+// Verificar si ya existe una jornada hoy (OPEN o CLOSED)
 async function hasSessionToday() {
   try {
+    // Evita consultar si aún no hay empleado cargado
+    if (!st.employee?.uid) return false;
+
     const midnightLocal = new Date();
     midnightLocal.setHours(0, 0, 0, 0);
     const midnightISO = midnightLocal.toISOString();
@@ -70,6 +74,7 @@ async function hasSessionToday() {
     return false;
   }
 }
+
 
 
 // === HELPERS UI ===
@@ -549,31 +554,29 @@ async function loadExistingAllocations() {
 }
 
 // === UI ASIGNACIONES ===
+// === UI ASIGNACIONES ===
 function renderAllocContainer() {
   const cont = $('#allocContainer');
+  if (!cont) return; // ← guard: evita errores si no existe el contenedor
   cont.innerHTML = '';
   const filter = st.clientFilter || '';
   const totalRows = st.allocRows.length;
 
   st.allocRows.forEach((row, idx) => {
-    // Divider entre filas (desde la 2ª)
     if (idx > 0) {
       const hr = document.createElement('hr');
       hr.className = 'allocDivider';
       cont.appendChild(hr);
     }
 
-    // Título de la fila
     const hdr = document.createElement('div');
     hdr.className = 'allocRowHeader';
     hdr.textContent = (totalRows === 1) ? 'Proyecto' : `Proyecto ${idx+1}`;
     cont.appendChild(hdr);
 
-    // Contenedor fila
     const line = document.createElement('div');
     line.className = 'allocRow';
 
-    // SELECT proyectos
     const sel = document.createElement('select');
     sel.className = 'allocSelect';
     const optEmpty = document.createElement('option');
@@ -588,7 +591,6 @@ function renderAllocContainer() {
       if (p.project_code === row.project_code) o.selected = true;
       sel.appendChild(o);
     });
-    // Estado visual rojo/azul
     updateSelectStateClass(sel);
 
     sel.addEventListener('change', () => {
@@ -598,7 +600,6 @@ function renderAllocContainer() {
       updateAllocTotals();
     });
 
-    // HH:MM como SELECTS (sin teclear)
     const curMin = parseInt(row.minutes || 0, 10) || 0;
     const h = buildHourSelect(Math.floor(curMin / 60));
     const m = buildMinuteSelect(curMin % 60, 5);
@@ -608,9 +609,7 @@ function renderAllocContainer() {
       const hv = parseInt(h.value || '0', 10) || 0;
       const mv = parseInt(m.value || '0', 10) || 0;
       row.minutes = hv * 60 + mv;
-
-      // Clampea solo la fila editada; NO borra otras filas
-      rebalanceFrom(idx);
+      rebalanceFrom(idx); // no borra otras filas
     };
     h.addEventListener('change', onDurChange);
     m.addEventListener('change', onDurChange);
@@ -621,7 +620,6 @@ function renderAllocContainer() {
     sep.textContent = ':'; sep.className = 'allocSep';
     dur.appendChild(h); dur.appendChild(sep); dur.appendChild(m);
 
-    // Botón eliminar (solo borra si el usuario lo decide)
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'btn light small'; del.textContent = 'Quitar';
     del.addEventListener('click', () => {
@@ -630,13 +628,13 @@ function renderAllocContainer() {
       updateAllocTotals();
     });
 
-    // ENSAMBLE
     line.appendChild(sel);
     line.appendChild(dur);
     line.appendChild(del);
     cont.appendChild(line);
   });
 }
+
 
 // --- Sincroniza minutos desde los inputs al estado antes de guardar ---
 function syncAllocFromInputs() {
@@ -876,6 +874,7 @@ function rebalanceFrom(changedIdx) {
 
 
 // Guardar asignación (parcial o para cerrar)
+// Guardar asignación (parcial o para cerrar)
 async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
@@ -885,6 +884,18 @@ async function onSaveAlloc(forClosing = false) {
 
     // 2) Limpieza: quita filas 00:00 sin proyecto
     st.allocRows = st.allocRows.filter(r => (parseInt(r.minutes || 0, 10) > 0) || r.project_code);
+
+    // 2.1) Unifica proyectos duplicados sumando minutos
+    const byCode = new Map();
+    for (const r of st.allocRows) {
+      const code = r.project_code || '';
+      const mins = parseInt(r.minutes || 0, 10) || 0;
+      if (!code) continue; // ignora filas sin proyecto
+      byCode.set(code, (byCode.get(code) || 0) + mins);
+    }
+    st.allocRows = [
+      ...Array.from(byCode.entries()).map(([project_code, minutes]) => ({ project_code, minutes }))
+    ];
 
     // 3) Totales y ventana de tolerancia ±GRACE_MINUTES
     const tot   = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
@@ -914,7 +925,6 @@ async function onSaveAlloc(forClosing = false) {
     if (forClosing) {
       toast($('#punchMsg'), 'Asignación válida. Puedes marcar salida.');
     } else {
-      // Modal informativo según el estado respecto a la ventana
       if (tot < lower) {
         await showInfoModal({
           title: 'Asignación incompleta',
@@ -953,7 +963,13 @@ async function onSaveAlloc(forClosing = false) {
 }
 
 // === NAV ===
+// === NAV ===
+let listenersBound = false; // ← evita duplicar listeners
+
 function setNavListeners() {
+  if (listenersBound) return;
+  listenersBound = true;
+
   console.log('[APP] setNavListeners');
   document.querySelectorAll('[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
@@ -965,10 +981,11 @@ function setNavListeners() {
   $('#btnLogout')?.addEventListener('click', signOut);
   $('#btnLogout2')?.addEventListener('click', signOut);
   $('#btnIn')?.addEventListener('click', onMarkIn);
-  $('#btnOut')?.addEventListener('click', handleOutClick); // <-- aquí
+  $('#btnOut')?.addEventListener('click', handleOutClick);
   $('#btnAddAlloc')?.addEventListener('click', onAddAlloc);
   $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false));
 }
+
 
 // === POLISH VISUAL MOVIL ===
 function applyMobilePolish() {
