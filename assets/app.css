@@ -204,3 +204,41 @@ input, select{
   0%{ outline-offset: 0; opacity:1 }
   100%{ outline-offset: 6px; opacity:1 }
 }
+/* ── Mejoras asignación ───────────────────────────── */
+.allocRowHeader{
+  font-weight:800;
+  color:#374151;
+  margin:6px 0 8px;
+}
+.allocDivider{
+  border:0;
+  border-top:1px solid #e5e7eb;
+  margin:12px 0;
+}
+
+/* Estado del selector de proyecto */
+.allocSelect.pending{
+  border-color:#ef4444 !important;
+  color:#b91c1c !important;
+}
+.allocSelect.ready{
+  border-color:#1e88e5 !important;
+  color:#1e3a8a !important;
+}
+
+/* Selects de tiempo (sustituyen a inputs number) */
+.allocH, .allocM{
+  width:auto;
+  min-width:80px;
+  padding:10px 12px;
+  border:1px solid #d8dee9;
+  border-radius:12px;
+  background:#fff;
+  font-size:14px;
+}
+.allocDuration{
+  display:flex;align-items:center;gap:6px;
+}
+.allocSep{
+  font-weight:700;
+}
