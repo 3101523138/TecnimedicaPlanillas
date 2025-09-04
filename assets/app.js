@@ -695,19 +695,6 @@ function updateAllocTotals() {
 }
 
 
-  // Guardamos en estado (lo usa handleOutClick)
-  st.outReady = !!(st.sessionOpen && ok);
-
-  // Botón SALIDA en verde siempre, con estado visual si aún no se puede cerrar
-  const outBtn = $('#btnOut');
-  if (outBtn) {
-    outBtn.classList.remove('light');         // quitamos el gris
-    outBtn.classList.add('success');          // verde
-    outBtn.classList.toggle('is-disabled', !st.outReady); // solo visual
-    outBtn.setAttribute('aria-disabled', String(!st.outReady));
-  }
-}
-
 async function prepareAllocUI() {
   // Al entrar a la vista, el selector aún no ha sido tocado
   st.selectorDirty = false;
