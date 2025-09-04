@@ -952,21 +952,6 @@ async function onSaveAlloc(forClosing = false) {
   }
 }
 
-
-    toast($('#punchMsg'), forClosing ? 'Asignación válida. Puedes marcar salida.' : 'Asignación guardada.');
-    console.log('[APP] saveAlloc OK:', rows);
-    return true;
-  } catch (e) {
-    console.error('[APP] onSaveAlloc error:', e);
-    toast($('#punchMsg'), `Error al guardar: ${e.message}`);
-    return false;
-  } finally {
-    renderAllocContainer();
-    updateAllocTotals();
-  }
-}
-
-
 // === NAV ===
 function setNavListeners() {
   console.log('[APP] setNavListeners');
