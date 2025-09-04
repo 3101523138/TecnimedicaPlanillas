@@ -46,21 +46,31 @@ const hmToMin = (hhmm) => { if (!hhmm) return 0; const [h, m] = hhmm.split(':').
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // Verificar si ya existe una jornada cerrada hoy (solo para ADVERTIR al IN)
-async function hasClosedSessionToday() {
-  const { data, error } = await supabase
-    .from('work_sessions')
-    .select('id')
-    .eq('employee_uid', st.employee.uid)
-    .eq('session_date', todayStr())
-    .eq('status', 'CLOSED')
-    .limit(1);
+// ¿Ya hubo alguna jornada hoy? (OPEN o CLOSED)
+async function hasSessionToday() {
+  try {
+    const midnightLocal = new Date();
+    midnightLocal.setHours(0, 0, 0, 0);
+    const midnightISO = midnightLocal.toISOString();
 
-  if (error) {
-    console.error('[APP] hasClosedSessionToday error:', error);
+    const { data, error } = await supabase
+      .from('work_sessions')
+      .select('id')
+      .eq('employee_uid', st.employee.uid)
+      .gte('start_at', midnightISO)
+      .limit(1);
+
+    if (error) {
+      console.error('[APP] hasSessionToday error:', error);
+      return false;
+    }
+    return !!(data && data.length);
+  } catch (e) {
+    console.error('[APP] hasSessionToday catch:', e);
     return false;
   }
-  return (data && data.length > 0);
 }
+
 
 // === HELPERS UI ===
 const $ = (s) => document.querySelector(s);
@@ -734,26 +744,29 @@ async function mark(direction) {
 
 // ───────── Marcar ENTRADA con emergente si ya hubo jornada ─────────
 // ───────── ENTRADA con confirm previo (si ya hubo jornada) y emergente de bienvenida ─────────
+// ───────── ENTRADA con advertencia si ya hubo jornada hoy + bienvenida ─────────
 async function onMarkIn() {
   try {
     console.log('[APP] CLICK ENTRADA]');
 
-    const alreadyClosedToday = await hasClosedSessionToday();
-    if (alreadyClosedToday) {
+    // Si ya hubo una jornada HOY (open o closed), pide confirmación
+    const alreadyToday = await hasSessionToday();
+    if (alreadyToday) {
       const ok = await showConfirmModal({
-        title: 'Ya registraste una jornada hoy',
-        html: 'Iniciar otra puede afectar cálculos de planilla y generar reclamos.<br><br><strong>¿Deseas iniciar otra jornada?</strong>',
+        title: 'Segunda jornada hoy',
+        html: 'Ya registraste una jornada hoy.<br>Iniciar otra puede afectar cálculos de planilla y generar reclamos.<br><br><strong>¿Deseas iniciar otra jornada?</strong>',
         confirmText: 'Sí, iniciar',
         cancelText: 'No, cancelar'
       });
-      if (!ok) return;
+      if (!ok) return; // usuario canceló
     }
 
     const bi = $('#btnIn'); if (bi) bi.disabled = true;
 
+    // Marca entrada
     await mark('IN');
 
-    // Emergente: Bienvenida
+    // Modal de bienvenida SIEMPRE después de marcar con éxito
     const nombre = st.employee?.full_name || 'Usuario';
     await showInfoModal({
       title: '¡Bienvenido!',
