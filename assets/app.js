@@ -365,39 +365,80 @@ function clearLocalSupabaseSession() {
   }
 }
 
-async function signOut() {
-  console.log('[APP] signOut');
+// Limpia tokens locales de Supabase (localStorage + cookies sb-*)
+function clearAuthStorage() {
   try {
-    // 1) Intenta logout global (servidor)
-    const { error } = await supabase.auth.signOut({ scope: 'global' });
-    if (error) {
-      console.warn('[APP] signOut global error:', error?.message || error);
-      // 2) Si el backend responde 403 u otro error, haz signOut local
-      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-    }
+    // 1) localStorage: elimina todas las claves que usa Supabase
+    const keys = Object.keys(localStorage);
+    keys.forEach(k => {
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) {
+        localStorage.removeItem(k);
+      }
+    });
+
+    // 2) sessionStorage por si acaso
+    const skeys = Object.keys(sessionStorage);
+    skeys.forEach(k => {
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) {
+        sessionStorage.removeItem(k);
+      }
+    });
+
+    // 3) Cookies sb-* (algunas libs guardan refrescos aquí)
+    const cookieStr = document.cookie || '';
+    cookieStr.split(';').forEach(c => {
+      const name = c.split('=')[0]?.trim();
+      if (!name) return;
+      if (name.startsWith('sb-') || name.startsWith('supabase.')) {
+        // Expira la cookie en el pasado (ruta raíz)
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        // Intenta también borrar con el dominio actual (cuando aplica)
+        const host = location.hostname.replace(/^www\./, '');
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${host}`;
+      }
+    });
   } catch (e) {
-    console.warn('[APP] signOut catch:', e);
-    // 3) Pase lo que pase, limpia tokens locales
-    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
-  } finally {
-    clearLocalSupabaseSession();
-
-    // Limpia estado de la app
-    st.user = null;
-    st.employee = null;
-    st.sessionOpen = null;
-    st.todaySessions = [];
-    stopSessionTicker();
-
-    // Vuelve al login y fuerza que NO se reutilice la sesión cacheada
-    routeTo('/');
-    // Pequeño delay para que DOM pinte el login y reatachar listeners si hace falta
-    setTimeout(() => {
-      // por si el navegador cacheó algo, fuerza el refresco suave
-      location.replace(`${location.origin}/`);
-    }, 50);
+    console.warn('[APP] clearAuthStorage warn:', e);
   }
 }
+
+// Cierre de sesión robusto: intenta signOut, limpia credenciales y resetea UI
+async function signOut() {
+  console.log('[APP] signOut (robusto)');
+
+  try {
+    // Intenta cerrar sesión con Supabase (invalidar sesión actual)
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.warn('[APP] supabase.auth.signOut error/skip:', e?.message || e);
+    // Si falla, continuamos limpiando de todas formas
+  }
+
+  // Limpia tokens locales que puedan quedar colgados
+  clearAuthStorage();
+
+  // Resetea estado en memoria
+  st.user = null;
+  st.employee = null;
+  st.sessionOpen = null;
+  st.todaySessions = [];
+  st.workedMinutes = 0;
+  st.requiredMinutes = 0;
+  st.allocRows = [];
+
+  // Limpia hash y query (por si veníamos de un flujo de recovery)
+  try { history.replaceState({}, '', '/'); } catch (_) {}
+  location.hash = '';
+  // Si tienes SPA bajo subruta, ajusta la línea anterior a la base correcta
+
+  // Vuelve a login y asegura que el ticker se detenga
+  try { routeTo('/'); } catch (_) {}
+
+  // Mensaje amable
+  const msgEl = document.getElementById('msg'); // label del login
+  if (msgEl) msgEl.textContent = 'Sesión cerrada.';
+}
+
 
 
 // === EMPLEADO ===
@@ -1052,29 +1093,27 @@ function applyMobilePolish() {
 }
 
 // === BOOT ===
+// === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
 
-  // Detecta "recovery" tanto en hash (#...) como en query (por si acaso)
+  // Enlaza navegación una sola vez
+  setNavListeners();
+
+  // --- Detectar flujo de recuperación desde el email ---
   const hash = location.hash ? location.hash.slice(1) : '';
   const hashParams = new URLSearchParams(hash);
   const searchParams = new URLSearchParams(location.search || '');
-  const typeFromHash = hashParams.get('type');
-  const typeFromQuery = searchParams.get('type');
-
-  // Además de type=recovery, el enlace de Supabase trae access_token en el hash
-  const hasAccessToken = hash.includes('access_token=');
-  const isRecoveryFlow = (typeFromHash === 'recovery') || (typeFromQuery === 'recovery') || hasAccessToken;
-
-  // Listeners de navegación básicos (siempre)
-  setNavListeners();
+  const isRecoveryFlow =
+    hash.includes('access_token=') ||
+    hashParams.get('type') === 'recovery' ||
+    searchParams.get('type') === 'recovery';
 
   if (isRecoveryFlow) {
-    // 1) Fuerza la pantalla de reset y no continúes con la rama de login.
+    // Forzar pantalla de restablecer contraseña
     routeTo('/reset');
 
-    // 2) Asegura que los botones del reset están enlazados aquí también
-    //    (por si el usuario llegó directo con el link del correo)
+    // Botón "Guardar nueva contraseña"
     $('#btnSetNew')?.addEventListener('click', async () => {
       try {
         console.log('[APP] CLICK SetNew (recovery)');
@@ -1085,27 +1124,31 @@ async function boot() {
         toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
       } catch (e) {
         console.error('[APP] update password error:', e);
-        toast($('#msg2'), e.message);
+        toast($('#msg2'), e.message || 'Error al actualizar la contraseña.');
       }
     });
+
+    // Botón "Cancelar"
     $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
 
-    // 3) Importante: SALIR AQUÍ. No sigas a la rama de login.
+    // Importante: NO continúes a la rama de login
     return;
   }
 
-  // ---- Flujo normal (no recovery) ----
-    // ---- Flujo normal (no recovery) ----
+  // --- Flujo normal ---
   const user = await loadSession();
+
+  // Si NO hay sesión → ir a login y wirear acciones
   if (!user) {
     console.log('[APP] Sin sesión → login');
     routeTo('/');
 
+    // Entrar
     $('#btnLogin')?.addEventListener('click', async () => {
       try {
         console.log('[APP] CLICK Entrar');
-        const email = $('#email').value.trim();
-        const password = $('#password').value;
+        const email = ($('#email')?.value || '').trim();
+        const password = $('#password')?.value || '';
         $('#btnLogin').disabled = true;
         await signIn(email, password);
         await loadSession();
@@ -1114,13 +1157,13 @@ async function boot() {
         applyMobilePolish();
       } catch (e) {
         console.error('[APP] signIn error:', e);
-        toast($('#msg'), e.message);
+        toast($('#msg'), e.message || 'No se pudo iniciar sesión.');
       } finally {
         $('#btnLogin').disabled = false;
       }
     });
 
-    // "¿Olvidaste tu contraseña?" → siempre modal
+    // ¿Olvidaste tu contraseña? → SIEMPRE modal (no revela si existe el correo)
     $('#btnForgot')?.addEventListener('click', async () => {
       try {
         const emailInput = $('#email');
@@ -1143,7 +1186,7 @@ async function boot() {
 
         await showInfoModal({
           title: 'Revisa tu correo',
-          html: 'Si la dirección existe, te enviamos un mensaje con el <strong>enlace para restablecer</strong> tu contraseña. Revisa también la carpeta <em>Spam</em> o <em>Promociones</em>.',
+          html: 'Si la dirección existe, te enviamos un mensaje con el <strong>enlace para restablecer</strong> tu contraseña. Revisa también <em>Spam</em> o <em>Promociones</em>.',
           okText: 'Listo'
         });
 
@@ -1152,7 +1195,7 @@ async function boot() {
         console.error('[APP] reset error:', e);
         await showInfoModal({
           title: 'No pudimos enviar el enlace',
-          html: `Inténtalo de nuevo en unos segundos.<br><small>${e?.message || 'Error desconocido'}</small>`,
+          html: `Inténtalo en unos segundos.<br><small>${e?.message || 'Error desconocido'}</small>`,
           okText: 'Cerrar'
         });
       } finally {
@@ -1161,20 +1204,28 @@ async function boot() {
       }
     });
 
-    // Muy importante: salimos de boot aquí para esperar interacción en la pantalla de login
-    return;
+    return; // fin rama sin sesión
   }
 
-  // ---- Usuario con sesión activa ----
+  // Hay "sesión" → intentar cargar contexto del empleado.
+  // Si falla, asumimos token corrupto/inválido, limpiamos y volvemos al login.
   try {
     console.log('[APP] Sesión activa → cargar contexto empleado');
     await loadEmployeeContext();
     routeTo('/app');
     applyMobilePolish();
   } catch (e) {
-    console.error('[APP] loadEmployeeContext error:', e);
-    toast($('#msg'), e.message);
-    await signOut();
+    console.warn('[APP] sesión/tokens corruptos, limpiando…', e?.message);
+    try {
+      // Limpia tokens sb-* y cierra sesión a nivel local
+      clearAuthStorage();
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (_) {}
+    // Reset de estado en memoria
+    st.user = null; st.employee = null;
+    // Volver al login
+    routeTo('/');
+    // Mensaje amable
+    toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
-} // ← cierre correcto de boot()
-boot();
+}
