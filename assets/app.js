@@ -349,12 +349,56 @@ async function sendReset(email) {
 }
 
 
+// Limpia cualquier rastro de sesión en el storage (por si el logout global falla)
+function clearLocalSupabaseSession() {
+  try {
+    // Claves que usa supabase-js v2: "sb-<ref>-auth-token"
+    Object.keys(localStorage).forEach((k) => {
+      if (/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
+    });
+    // También en sessionStorage por si acaso
+    Object.keys(sessionStorage).forEach((k) => {
+      if (/^sb-.*-auth-token$/.test(k)) sessionStorage.removeItem(k);
+    });
+  } catch (e) {
+    console.warn('[APP] clearLocalSupabaseSession warn:', e);
+  }
+}
+
 async function signOut() {
   console.log('[APP] signOut');
-  await supabase.auth.signOut();
-  st.user = null; st.employee = null;
-  routeTo('/');
+  try {
+    // 1) Intenta logout global (servidor)
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    if (error) {
+      console.warn('[APP] signOut global error:', error?.message || error);
+      // 2) Si el backend responde 403 u otro error, haz signOut local
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('[APP] signOut catch:', e);
+    // 3) Pase lo que pase, limpia tokens locales
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+  } finally {
+    clearLocalSupabaseSession();
+
+    // Limpia estado de la app
+    st.user = null;
+    st.employee = null;
+    st.sessionOpen = null;
+    st.todaySessions = [];
+    stopSessionTicker();
+
+    // Vuelve al login y fuerza que NO se reutilice la sesión cacheada
+    routeTo('/');
+    // Pequeño delay para que DOM pinte el login y reatachar listeners si hace falta
+    setTimeout(() => {
+      // por si el navegador cacheó algo, fuerza el refresco suave
+      location.replace(`${location.origin}/`);
+    }, 50);
+  }
 }
+
 
 // === EMPLEADO ===
 
