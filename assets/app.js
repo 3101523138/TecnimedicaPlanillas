@@ -1229,3 +1229,11 @@ async function boot() {
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
 }
+// === START APP ===
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+
+
