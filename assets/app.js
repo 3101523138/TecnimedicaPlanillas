@@ -340,13 +340,16 @@ async function signIn(email, password) {
 
 // Envío del correo de reseteo con redirect correcto (hash)
 // Envío del correo de reseteo con redirect correcto (hash)
+// === AUTH RESET ===
+// Envío del correo de reseteo con redirect correcto (SIN hash)
 async function sendReset(email) {
   console.log('[APP] sendReset', email);
-  // Redirige SIEMPRE al dominio oficial de producción
-  const redirectTo = `https://nominatmi.netlify.app/#type=recovery`;
+  // Redirige a la raíz de la app o a /reset, pero nunca con #
+  const redirectTo = 'https://nominatmi.netlify.app';
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
+
 
 
 // Limpia cualquier rastro de sesión en el storage (por si el logout global falla)
@@ -1093,7 +1096,7 @@ function applyMobilePolish() {
 }
 
 // === BOOT ===
-// === BOOT (BEGIN) ===
+// === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
 
@@ -1101,50 +1104,43 @@ async function boot() {
   setNavListeners();
 
   // --- Detectar flujo de recuperación desde el email ---
-  const hash = (location.hash || '').replace(/^#/, '');
-  const hashParams = new URLSearchParams(hash);
-  const searchParams = new URLSearchParams(location.search || '');
+  const rawHash = (location.hash || '').replace(/^#/, '');
+  const hashParams = new URLSearchParams(rawHash);
+  const queryParams = new URLSearchParams(location.search || '');
 
-  const hasHashTokens  = hash.includes('access_token=');
-  const isRecoveryQuery = (hashParams.get('type') === 'recovery') || (searchParams.get('type') === 'recovery');
-  const hasPkceCode    = !!searchParams.get('code'); // formato nuevo (PKCE)
+  // v2 (hash tokens)
+  const access_token  = hashParams.get('access_token');
+  const refresh_token = hashParams.get('refresh_token');
+  const typeFromHash  = hashParams.get('type');
 
-  const isRecoveryFlow = hasHashTokens || isRecoveryQuery || hasPkceCode;
+  // v2 con PKCE (query ?code=...)
+  const code = queryParams.get('code');
+  const typeFromQuery = queryParams.get('type');
+
+  const isRecoveryFlow =
+    (typeFromHash === 'recovery') ||
+    (typeFromQuery === 'recovery') ||
+    (!!access_token && !!refresh_token) ||
+    !!code;
 
   if (isRecoveryFlow) {
-    // Mostrar pantalla de reset
+    try {
+      // 1) Establecer sesión a partir de tokens o code
+      if (access_token && refresh_token) {
+        const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (setErr) console.warn('[APP] setSession error:', setErr.message);
+      } else if (code) {
+        const { error: exErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (exErr) console.warn('[APP] exchangeCodeForSession error:', exErr.message);
+      }
+    } catch (e) {
+      console.warn('[APP] recovery session warn:', e);
+    }
+
+    // 2) Mostrar pantalla de reset
     routeTo('/reset');
 
-    // 1) Formato nuevo (PKCE): ?code=... → canjear por sesión
-    try {
-      if (hasPkceCode) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-        console.log('[APP] exchangeCodeForSession:', error ? error.message : 'OK', !!data?.session);
-        // Limpia query/hash para evitar reintentos
-        try { history.replaceState({}, '', '/reset'); } catch (_) {}
-      }
-    } catch (e) {
-      console.warn('[APP] exchangeCode warn:', e);
-    }
-
-    // 2) Formato viejo: tokens en el hash (#access_token & #refresh_token)
-    try {
-      if (hasHashTokens) {
-        const access_token  = hashParams.get('access_token');
-        const refresh_token = hashParams.get('refresh_token');
-        if (access_token && refresh_token) {
-          const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token });
-          if (setErr) console.warn('[APP] setSession error:', setErr.message);
-        }
-        // Limpia el hash
-        try { history.replaceState({}, '', '/reset'); } catch (_) {}
-        location.hash = '';
-      }
-    } catch (e) {
-      console.warn('[APP] setSession hash warn:', e);
-    }
-
-    // 3) Guardar nueva contraseña (requiere sesión activa)
+    // 3) Guardar nueva contraseña
     $('#btnSetNew')?.addEventListener('click', async () => {
       try {
         console.log('[APP] CLICK SetNew (recovery)');
@@ -1158,14 +1154,20 @@ async function boot() {
         if (error) throw error;
 
         toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
+
+        // Limpia hash y query para evitar reentradas
+        history.replaceState({}, '', '/');
+        location.hash = '';
       } catch (e) {
         console.error('[APP] update password error:', e);
         toast($('#msg2'), e.message || 'Error al actualizar la contraseña.');
       }
     });
 
+    // 4) Cancelar
     $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
-    return; // No continuar a la rama de login
+
+    return; // no sigas al login normal
   }
 
   // --- Flujo normal ---
@@ -1257,7 +1259,6 @@ async function boot() {
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
 }
-// === BOOT (END) ===
 
 // === START APP ===
 if (document.readyState === 'loading') {
