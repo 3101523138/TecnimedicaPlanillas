@@ -1109,33 +1109,64 @@ async function boot() {
     hashParams.get('type') === 'recovery' ||
     searchParams.get('type') === 'recovery';
 
+  // === BOOT ===
+async function boot() {
+  console.log('[APP] BOOT start…');
+
+  // Enlaza navegación una sola vez
+  setNavListeners();
+
+  // --- Detectar flujo de recuperación desde el email ---
+  const hash = (location.hash || '').replace(/^#/, '');
+  const hashParams = new URLSearchParams(hash);
+  const searchParams = new URLSearchParams(location.search || '');
+
+  const hasHashTokens = hash.includes('access_token=');
+  const isRecoveryQuery = (hashParams.get('type') === 'recovery') || (searchParams.get('type') === 'recovery');
+  const hasPkceCode = !!searchParams.get('code'); // formato nuevo (PKCE)
+
+  const isRecoveryFlow = hasHashTokens || isRecoveryQuery || hasPkceCode;
+
   if (isRecoveryFlow) {
-    // Forzar pantalla de restablecer contraseña
+    // Mostrar pantalla de reset
     routeTo('/reset');
 
-    // 1) Tomar tokens del hash (#access_token & #refresh_token) e iniciar sesión local
+    // 1) Formato nuevo (PKCE): ?code=... → canjear por sesión
     try {
-      const raw = (location.hash || '').replace(/^#/, '');
-      const params = new URLSearchParams(raw);
-      const access_token  = params.get('access_token');
-      const refresh_token = params.get('refresh_token');
-
-      if (access_token && refresh_token) {
-        const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token });
-        if (setErr) console.warn('[APP] setSession error:', setErr.message);
+      if (hasPkceCode) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        console.log('[APP] exchangeCodeForSession:', error ? error.message : 'OK', !!data?.session);
+        // Limpia query/hash para evitar reintentos o errores al refrescar
+        try { history.replaceState({}, '', '/reset'); } catch (_) {}
       }
     } catch (e) {
-      console.warn('[APP] parse/setSession warn:', e);
+      console.warn('[APP] exchangeCode warn:', e);
     }
 
-    // 2) Guardar nueva contraseña
+    // 2) Formato viejo: tokens en el hash (#access_token & #refresh_token)
+    try {
+      if (hasHashTokens) {
+        const access_token  = hashParams.get('access_token');
+        const refresh_token = hashParams.get('refresh_token');
+        if (access_token && refresh_token) {
+          const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (setErr) console.warn('[APP] setSession error:', setErr.message);
+        }
+        // Limpia el hash
+        try { history.replaceState({}, '', '/reset'); } catch (_) {}
+        location.hash = '';
+      }
+    } catch (e) {
+      console.warn('[APP] setSession hash warn:', e);
+    }
+
+    // 3) Guardar nueva contraseña (requiere sesión activa)
     $('#btnSetNew')?.addEventListener('click', async () => {
       try {
         console.log('[APP] CLICK SetNew (recovery)');
         const pw = ($('#newPassword')?.value || '').trim();
         if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
 
-        // Asegura que la sesión de recuperación esté activa
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No hay sesión de recuperación activa. Abre el enlace del correo nuevamente.');
 
@@ -1143,21 +1174,15 @@ async function boot() {
         if (error) throw error;
 
         toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
-        // (Opcional) limpiar hash para evitar reentradas:
-        // history.replaceState({}, '', '/'); location.hash = '';
       } catch (e) {
         console.error('[APP] update password error:', e);
         toast($('#msg2'), e.message || 'Error al actualizar la contraseña.');
       }
     });
 
-    // 3) Cancelar
     $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
-
-    // Importante: no continuar a la rama de login
-    return;
+    return; // No continuar a la rama de login
   }
-
 
   // --- Flujo normal ---
   const user = await loadSession();
@@ -1206,6 +1231,7 @@ async function boot() {
         const btn = $('#btnForgot');
         if (btn) btn.disabled = true;
 
+        // Tu sendReset ya apunta a /reset
         await sendReset(email);
 
         await showInfoModal({
@@ -1231,8 +1257,7 @@ async function boot() {
     return; // fin rama sin sesión
   }
 
-  // Hay "sesión" → intentar cargar contexto del empleado.
-  // Si falla, asumimos token corrupto/inválido, limpiamos y volvemos al login.
+  // Con "sesión" → cargar contexto empleado
   try {
     console.log('[APP] Sesión activa → cargar contexto empleado');
     await loadEmployeeContext();
@@ -1241,23 +1266,19 @@ async function boot() {
   } catch (e) {
     console.warn('[APP] sesión/tokens corruptos, limpiando…', e?.message);
     try {
-      // Limpia tokens sb-* y cierra sesión a nivel local
       clearAuthStorage();
       await supabase.auth.signOut({ scope: 'local' });
     } catch (_) {}
-    // Reset de estado en memoria
     st.user = null; st.employee = null;
-    // Volver al login
     routeTo('/');
-    // Mensaje amable
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
 }
+
 // === START APP ===
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', boot);
 } else {
   boot();
 }
-
 
