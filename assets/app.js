@@ -1093,23 +1093,7 @@ function applyMobilePolish() {
 }
 
 // === BOOT ===
-// === BOOT ===
-async function boot() {
-  console.log('[APP] BOOT start…');
-
-  // Enlaza navegación una sola vez
-  setNavListeners();
-
-  // --- Detectar flujo de recuperación desde el email ---
-  const hash = location.hash ? location.hash.slice(1) : '';
-  const hashParams = new URLSearchParams(hash);
-  const searchParams = new URLSearchParams(location.search || '');
-  const isRecoveryFlow =
-    hash.includes('access_token=') ||
-    hashParams.get('type') === 'recovery' ||
-    searchParams.get('type') === 'recovery';
-
-  // === BOOT ===
+// === BOOT (BEGIN) ===
 async function boot() {
   console.log('[APP] BOOT start…');
 
@@ -1121,9 +1105,9 @@ async function boot() {
   const hashParams = new URLSearchParams(hash);
   const searchParams = new URLSearchParams(location.search || '');
 
-  const hasHashTokens = hash.includes('access_token=');
+  const hasHashTokens  = hash.includes('access_token=');
   const isRecoveryQuery = (hashParams.get('type') === 'recovery') || (searchParams.get('type') === 'recovery');
-  const hasPkceCode = !!searchParams.get('code'); // formato nuevo (PKCE)
+  const hasPkceCode    = !!searchParams.get('code'); // formato nuevo (PKCE)
 
   const isRecoveryFlow = hasHashTokens || isRecoveryQuery || hasPkceCode;
 
@@ -1136,7 +1120,7 @@ async function boot() {
       if (hasPkceCode) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
         console.log('[APP] exchangeCodeForSession:', error ? error.message : 'OK', !!data?.session);
-        // Limpia query/hash para evitar reintentos o errores al refrescar
+        // Limpia query/hash para evitar reintentos
         try { history.replaceState({}, '', '/reset'); } catch (_) {}
       }
     } catch (e) {
@@ -1231,7 +1215,6 @@ async function boot() {
         const btn = $('#btnForgot');
         if (btn) btn.disabled = true;
 
-        // Tu sendReset ya apunta a /reset
         await sendReset(email);
 
         await showInfoModal({
@@ -1274,6 +1257,7 @@ async function boot() {
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
 }
+// === BOOT (END) ===
 
 // === START APP ===
 if (document.readyState === 'loading') {
@@ -1281,4 +1265,3 @@ if (document.readyState === 'loading') {
 } else {
   boot();
 }
-
