@@ -1113,27 +1113,51 @@ async function boot() {
     // Forzar pantalla de restablecer contraseña
     routeTo('/reset');
 
-    // Botón "Guardar nueva contraseña"
+    // 1) Tomar tokens del hash (#access_token & #refresh_token) e iniciar sesión local
+    try {
+      const raw = (location.hash || '').replace(/^#/, '');
+      const params = new URLSearchParams(raw);
+      const access_token  = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+
+      if (access_token && refresh_token) {
+        const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (setErr) console.warn('[APP] setSession error:', setErr.message);
+      }
+    } catch (e) {
+      console.warn('[APP] parse/setSession warn:', e);
+    }
+
+    // 2) Guardar nueva contraseña
     $('#btnSetNew')?.addEventListener('click', async () => {
       try {
         console.log('[APP] CLICK SetNew (recovery)');
-        const pw = $('#newPassword').value;
+        const pw = ($('#newPassword')?.value || '').trim();
         if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+
+        // Asegura que la sesión de recuperación esté activa
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('No hay sesión de recuperación activa. Abre el enlace del correo nuevamente.');
+
         const { error } = await supabase.auth.updateUser({ password: pw });
         if (error) throw error;
+
         toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
+        // (Opcional) limpiar hash para evitar reentradas:
+        // history.replaceState({}, '', '/'); location.hash = '';
       } catch (e) {
         console.error('[APP] update password error:', e);
         toast($('#msg2'), e.message || 'Error al actualizar la contraseña.');
       }
     });
 
-    // Botón "Cancelar"
+    // 3) Cancelar
     $('#btnCancelReset')?.addEventListener('click', () => routeTo('/'));
 
-    // Importante: NO continúes a la rama de login
+    // Importante: no continuar a la rama de login
     return;
   }
+
 
   // --- Flujo normal ---
   const user = await loadSession();
