@@ -1108,6 +1108,69 @@ function applyMobilePolish() {
   uidEls.forEach(el => { if (el) el.textContent = ''; });
 }
 
+// ───────────────── Auth error → modal amigable ─────────────────
+function parseAuthError(err, ctx = '') {
+  // ctx: "login", "recovery", "reset", etc. (solo para ajustar textos)
+  const raw = (err && (err.message || err.error_description || err.error || String(err))) || 'Error desconocido';
+  const low = raw.toLowerCase();
+
+  // Casos frecuentes Supabase:
+  if (low.includes('invalid login') || low.includes('invalid_grant') || low.includes('email or password')) {
+    return {
+      title: 'Credenciales inválidas',
+      html: 'El correo o la contraseña no son correctos. Verifica e inténtalo de nuevo.',
+    };
+  }
+  if (low.includes('email not confirmed') || low.includes('email not verified')) {
+    return {
+      title: 'Correo sin confirmar',
+      html: 'Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada o solicita un nuevo enlace.',
+    };
+  }
+  if (low.includes('auth session missing') || low.includes('no current user')) {
+    return {
+      title: 'Sesión de recuperación no activa',
+      html: 'Abre el enlace del correo nuevamente. Si el enlace ya expiró, solicita otro desde “¿Olvidaste tu contraseña?”.',
+    };
+  }
+  if (low.includes('password should be at least') || low.includes('password is too short')) {
+    return {
+      title: 'Contraseña demasiado corta',
+      html: 'La contraseña debe tener al menos <strong>6 caracteres</strong>.',
+    };
+  }
+  if (low.includes('same as the previous') || low.includes('must be different')) {
+    return {
+      title: 'Usa una contraseña distinta',
+      html: 'La nueva contraseña <strong>no puede ser igual</strong> a la anterior.',
+    };
+  }
+  if (low.includes('user disabled') || low.includes('deshabilitado') || low.includes('login_enabled') ) {
+    return {
+      title: 'Usuario deshabilitado',
+      html: 'Tu acceso está deshabilitado por administración. Contacta a RRHH o al administrador.',
+    };
+  }
+  if (ctx === 'reset' && low.includes('rate limit')) {
+    return {
+      title: 'Demasiados intentos',
+      html: 'Has solicitado varios cambios en poco tiempo. Espera unos minutos e inténtalo de nuevo.',
+    };
+  }
+  // Genérico
+  return {
+    title: 'Algo salió mal',
+    html: `${raw}`,
+  };
+}
+
+async function showAuthError(err, ctx = '') {
+  const msg = parseAuthError(err, ctx);
+  await showInfoModal({ title: msg.title, html: msg.html, okText: 'Entendido' });
+}
+
+
+
 // === BOOT ===
 // === BOOT ===
 async function boot() {
