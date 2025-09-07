@@ -1060,14 +1060,26 @@ function setNavListeners() {
   if (listenersBound) return;
   listenersBound = true;
 
-  console.log('[APP] setNavListeners');
   document.querySelectorAll('[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
       const to = el.getAttribute('data-nav');
+
+      // 👉 Si piden Proyectos, redirige a la página aparte
+      if (to === '/proyectos') {
+        window.location.href = 'proyectos.html';
+        return;
+      }
+
+      // resto de rutas internas (SPA dentro de index.html)
       routeTo(to);
-      if (to === '/marcas') loadStatusAndRecent();
+
+      if (to === '/marcas') {
+        loadStatusAndRecent();
+      }
     });
   });
+
+  // Botones globales
   $('#btnLogout')?.addEventListener('click', signOut);
   $('#btnLogout2')?.addEventListener('click', signOut);
   $('#btnIn')?.addEventListener('click', onMarkIn);
@@ -1075,6 +1087,7 @@ function setNavListeners() {
   $('#btnAddAlloc')?.addEventListener('click', onAddAlloc);
   $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false));
 }
+
 
 
 // === POLISH VISUAL MOVIL ===
