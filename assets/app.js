@@ -1144,6 +1144,7 @@ async function showAuthError(err, ctx = '') {
 }
 
 // === BOOT ===
+// === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
 
@@ -1187,27 +1188,43 @@ async function boot() {
     // 2) Mostrar pantalla de reset
     routeTo('/reset');
 
-    // 3) Guardar nueva contraseña
+    // 3) Guardar nueva contraseña (EMERGENTES)
     $('#btnSetNew')?.addEventListener('click', async () => {
+      const btn = $('#btnSetNew');
       try {
         console.log('[APP] CLICK SetNew (recovery)');
         const pw = ($('#newPassword')?.value || '').trim();
-        if (!pw || pw.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        if (!pw || pw.length < 6) {
+          await showInfoModal({ title: 'Contraseña muy corta', html: 'Debe tener <strong>6 o más</strong> caracteres.', okText: 'Entendido' });
+          $('#newPassword')?.focus(); return;
+        }
 
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('No hay sesión de recuperación activa. Abre el enlace del correo nuevamente.');
+        if (!session) {
+          await showAuthError(new Error('Auth session missing'), 'reset');
+          return;
+        }
+
+        btn && (btn.disabled = true);
 
         const { error } = await supabase.auth.updateUser({ password: pw });
         if (error) throw error;
 
-        toast($('#msg2'), 'Contraseña actualizada. Ya puedes iniciar sesión.');
+        await showInfoModal({
+          title: 'Contraseña actualizada',
+          html: 'Ya puedes iniciar sesión con tu nueva contraseña.',
+          okText: 'Ir al inicio'
+        });
 
-        // Limpia hash y query para evitar reentradas
+        // Limpia hash y query para evitar reentradas y vuelve al login
         history.replaceState({}, '', '/');
         location.hash = '';
+        routeTo('/');
       } catch (e) {
         console.error('[APP] update password error:', e);
-        toast($('#msg2'), e.message || 'Error al actualizar la contraseña.');
+        await showAuthError(e, 'reset');
+      } finally {
+        btn && (btn.disabled = false);
       }
     });
 
@@ -1225,28 +1242,42 @@ async function boot() {
     console.log('[APP] Sin sesión → login');
     routeTo('/');
 
-    // Entrar
+    // Entrar (EMERGENTES)
     $('#btnLogin')?.addEventListener('click', async () => {
+      const btn = $('#btnLogin');
       try {
         console.log('[APP] CLICK Entrar');
         const email = ($('#email')?.value || '').trim();
         const password = $('#password')?.value || '';
-        $('#btnLogin').disabled = true;
+
+        // Validaciones rápidas de UX
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          await showInfoModal({ title: 'Correo inválido', html: 'Escribe un <strong>correo válido</strong> para continuar.', okText: 'Entendido' });
+          $('#email')?.focus(); return;
+        }
+        if (!password) {
+          await showInfoModal({ title: 'Contraseña requerida', html: 'Escribe tu <strong>contraseña</strong> para iniciar sesión.', okText: 'Entendido' });
+          $('#password')?.focus(); return;
+        }
+
+        btn && (btn.disabled = true);
+
         await signIn(email, password);
         await loadSession();
-        await loadEmployeeContext();
+        await loadEmployeeContext(); // puede lanzar "Usuario deshabilitado"
         routeTo('/app');
         applyMobilePolish();
       } catch (e) {
         console.error('[APP] signIn error:', e);
-        toast($('#msg'), e.message || 'No se pudo iniciar sesión.');
+        await showAuthError(e, 'login');    // emergente amigable
       } finally {
-        $('#btnLogin').disabled = false;
+        btn && (btn.disabled = false);
       }
     });
 
-    // ¿Olvidaste tu contraseña? → SIEMPRE modal (no revela si existe el correo)
+    // ¿Olvidaste tu contraseña? (EMERGENTES)
     $('#btnForgot')?.addEventListener('click', async () => {
+      const btn = $('#btnForgot');
       try {
         const emailInput = $('#email');
         const email = (emailInput?.value || '').trim();
@@ -1257,32 +1288,25 @@ async function boot() {
             html: 'Escribe un <strong>correo válido</strong> y vuelve a pulsar “¿Olvidaste tu contraseña?”.',
             okText: 'Entendido'
           });
-          emailInput?.focus();
-          return;
+          emailInput?.focus(); return;
         }
 
-        const btn = $('#btnForgot');
-        if (btn) btn.disabled = true;
+        btn && (btn.disabled = true);
 
         await sendReset(email);
 
         await showInfoModal({
           title: 'Revisa tu correo',
-          html: 'Si la dirección existe, te enviamos un mensaje con el <strong>enlace para restablecer</strong> tu contraseña. Revisa también <em>Spam</em> o <em>Promociones</em>.',
+          html: 'Si la dirección existe, te enviamos el <strong>enlace para restablecer</strong> la contraseña. Revisa también <em>Spam</em> o <em>Promociones</em>.',
           okText: 'Listo'
         });
 
         $('#password')?.focus();
       } catch (e) {
         console.error('[APP] reset error:', e);
-        await showInfoModal({
-          title: 'No pudimos enviar el enlace',
-          html: `Inténtalo en unos segundos.<br><small>${e?.message || 'Error desconocido'}</small>`,
-          okText: 'Cerrar'
-        });
+        await showAuthError(e, 'recovery'); // emergente amigable
       } finally {
-        const btn = $('#btnForgot');
-        if (btn) btn.disabled = false;
+        btn && (btn.disabled = false);
       }
     });
 
@@ -1303,6 +1327,7 @@ async function boot() {
     } catch (_) {}
     st.user = null; st.employee = null;
     routeTo('/');
+    await showAuthError(e, 'login');       // emergente adicional
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
 }
