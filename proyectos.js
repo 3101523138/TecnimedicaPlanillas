@@ -1,6 +1,6 @@
 // ===============================
 // TMI · Proyectos (Etapa 1)
-// Página independiente (NO toca index.html, app.js ni app.css)
+// 
 // ===============================
 
 // === CONFIG SUPABASE ===
