@@ -409,12 +409,7 @@ frmCreate?.addEventListener('submit', async (ev) => {
   }
 });
 
-const t = await supabase
-  .from('projects')
-  .select('project_code,status,is_active')
-  .eq('project_code', 'PROJECT-000001');
 
-console.info('[debug 000001]', t.data, t.error);
 
 
 // === Navegación ===
