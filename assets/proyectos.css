@@ -1,1 +1,107 @@
+:root{
+  --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
+  --border:#d8dee8; --radius:24px;
+}
 
+/* Base */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:var(--bg); margin:0; padding:16px; color:var(--text);
+}
+.wrap{width:min(92vw,1100px); margin:24px auto}
+
+/* Topbar (solo título) */
+.topbar{display:flex; align-items:center; gap:8px; margin:0 0 8px}
+.title{font-weight:800; font-size:clamp(22px,5vw,32px)}
+
+/* Logo igual a Marcas */
+.logoHero{display:flex; justify-content:center; margin:6px 0 10px}
+.punchLogo{
+  width:100%; max-width:260px; height:auto; border-radius:14px; background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+
+/* Botones */
+.btn{
+  padding:13px 18px; border:0; border-radius:14px; font-weight:700; cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.08); background:var(--primary); color:#fff;
+}
+.btn-slim{
+  padding:10px 14px; border-radius:12px; background:#fff; color:#111827;
+  border:1px solid var(--border); font-weight:700; cursor:pointer;
+}
+.btn:disabled{opacity:.6; cursor:not-allowed}
+
+/* Botones flotantes (Crear=azul, Inicio=gris, Salir=rojo) */
+.floatBtn{
+  position:fixed; right:14px; z-index:1000; padding:12px 16px; border-radius:14px; font-weight:700;
+  box-shadow:0 4px 12px rgba(0,0,0,.12);
+}
+.floatBtn.blue{ background:var(--primary); color:#fff; }
+.floatBtn.grey{ background:#cfd6df; color:#111; }
+.floatBtn.red { background:#ef4444; color:#fff; }
+#btnSignOut{ top:14px; }
+#btnHome{    top:68px; }
+#btnCreate{  top:122px; }
+@media (min-width:1024px){
+  .floatBtn{ position:absolute; }
+  #btnSignOut{ top:14px; right:14px; }
+  #btnHome{    top:68px; right:14px; }
+  #btnCreate{  top:122px; right:14px; }
+}
+
+/* Filtros (NO sticky) */
+.filters{ position:static; top:auto; z-index:auto; margin-bottom:12px }
+.filterbar{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  background:var(--card); padding:12px; border-radius:18px; border:1px solid var(--border);
+  box-shadow:0 8px 24px rgba(2,6,23,.06);
+}
+.select{
+  min-width:160px; padding:14px 16px; border-radius:14px; border:1px solid var(--border);
+  background:#fff; font-size:16px; outline:none;
+}
+.chip{ padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-weight:800; font-size:12px }
+
+/* Lista de proyectos */
+.list{ display:flex; flex-direction:column; gap:12px }
+.row{
+  display:grid; grid-template-columns:1fr auto auto auto;
+  gap:12px; align-items:center;
+  background:#fff; border:1px solid #eef2f7; border-radius:18px; padding:14px 16px;
+  box-shadow:0 4px 16px rgba(0,0,0,.06);
+}
+.row.open{ outline:3px solid #A7F3D0; outline-offset:2px; background:#f8fffb }
+.id{ font-weight:900; font-size:14px; color:#111827 }
+.name{ font-weight:800; margin-top:2px }
+.client{ color:var(--muted); font-size:13px }
+.pill{ padding:6px 10px; border-radius:999px; font-weight:800; font-size:12px; justify-self:end }
+.pill.act{ background:#ecfdf5; color:#065f46 }
+.pill.cer{ background:#f5f3ff; color:#5b21b6 }
+.meta{ display:flex; gap:10px; justify-self:end; color:var(--muted); font-size:12px }
+
+/* Cajón detalle */
+.drawer{ grid-column:1/-1; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:10px }
+.drawer .grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px }
+.kv{ background:#f8fafc; border:1px solid #eef2f7; border-radius:14px; padding:12px }
+.kv .k{ font-size:12px; color:var(--muted) }
+.kv .v{ font-weight:700 }
+
+/* Mensajes */
+.ok { background:#ecfdf5; border:1px solid #d1fae5; color:#065f46; padding:10px; border-radius:12px; margin:8px 0; display:none }
+.err{ background:#fef2f2; border:1px solid #fee2e2; color:#7f1d1d; padding:10px; border-radius:12px; margin:8px 0; display:none }
+.empty{ color:var(--muted); text-align:center; padding:20px; display:none }
+
+/* Modal + layout form */
+dialog{ border:none; border-radius:20px; max-width:760px; width:96%; padding:0 }
+form.card{ margin:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:14px; box-shadow:0 8px 28px rgba(2,6,23,.06) }
+.grid2{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px }
+.full{ grid-column:1/-1 }
+
+/* Responsive */
+@media (max-width:720px){
+  .row{ grid-template-columns:1fr auto auto }
+  .drawer .grid{ grid-template-columns:1fr }
+}
