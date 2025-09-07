@@ -12,7 +12,6 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // === UI refs ===
-// === UI refs ===
 const $ = (q) => document.querySelector(q);
 const listEl = $('#list');
 const emptyEl = $('#empty');
@@ -51,12 +50,21 @@ const st = {
   clients: []
 };
 
-
 // === Helpers ===
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
-function pillCls(status){ return (String(status||'').toLowerCase()==='cerrado')?'pill cer':'pill act'; }
+
+// Usa status o is_active para decidir visual
+function isActivo(p){
+  const s = String(p.status || '').toLowerCase();
+  return p.is_active === true || s === 'activo';
+}
+function isCerrado(p){
+  const s = String(p.status || '').toLowerCase();
+  return p.is_active === false || s === 'cerrado';
+}
+function pillClsFromProj(p){ return isActivo(p) ? 'pill act' : 'pill cer'; }
 
 async function getUser(){
   try{
@@ -87,10 +95,10 @@ async function resolveIsAdmin(user){
 // === Data ===
 async function fetchProjects(){
   const cols = 'project_code,name,description,status,start_date,end_date,client_id,client_name,is_active,presupuesto,afectacion,updated_at';
+  // IMPORTANTE: NO filtrar por is_active aquí.
   const { data, error } = await supabase
     .from('projects')
     .select(cols)
-    .eq('is_active', true)
     .order('project_code', { ascending: true });
   if (error) throw error;
   return data || [];
@@ -146,7 +154,6 @@ function populateClientSelects(){
   }
 }
 
-
 // === Render ===
 function render(){
   listEl.innerHTML = '';
@@ -161,7 +168,6 @@ function render(){
     if (st.openCode === p.project_code) row.classList.add('open');
     row.dataset.code = p.project_code;
 
-
     const left = document.createElement('div');
     left.innerHTML = `
       <div class="id">${esc(p.project_code)}</div>
@@ -170,8 +176,10 @@ function render(){
     `;
 
     const pill = document.createElement('div');
-    pill.className = pillCls(p.status);
-    pill.textContent = p.status || '—';
+    pill.className = pillClsFromProj(p);
+    // Texto del pill: prioriza status; si no está, deriva de is_active
+    const pillTxt = p.status || (p.is_active === false ? 'Cerrado' : 'Activo');
+    pill.textContent = pillTxt;
 
     const meta = document.createElement('div');
     meta.className = 'meta';
@@ -202,7 +210,7 @@ function render(){
       drawer.innerHTML = `
         <div class="grid">
           <div class="kv"><div class="k">Código</div><div class="v">${esc(p.project_code)}</div></div>
-          <div class="kv"><div class="k">Estado</div><div class="v">${esc(p.status)}</div></div>
+          <div class="kv"><div class="k">Estado</div><div class="v">${esc(pillTxt)}</div></div>
           <div class="kv"><div class="k">Cliente</div><div class="v">${esc(p.client_name || '—')}</div></div>
           <div class="kv"><div class="k">Client ID</div><div class="v">${esc(p.client_id || '—')}</div></div>
           <div class="kv"><div class="k">Inicio</div><div class="v">${esc(p.start_date || '—')}</div></div>
@@ -228,13 +236,20 @@ function toggleDrawer(code, proj){
 }
 
 function applyFilter(){
-  const estado  = (fEstado.value || '').trim().toLowerCase();
+  const estado  = (fEstado.value || '').trim().toLowerCase(); // '', 'activo', 'cerrado'
   const cliente = (fClienteSel.value || '').trim().toLowerCase();
 
   st.filtered = st.all.filter(p => {
-    const hitE = !estado  || (p.status||'').toLowerCase() === estado;
-    const hitC = !cliente || (p.client_name||'').toLowerCase().includes(cliente);
-    return hitE && hitC && p.is_active !== false;
+    // Filtro por estado:
+    let matchEstado = true;
+    if (estado === 'activo')   matchEstado = isActivo(p);
+    else if (estado === 'cerrado') matchEstado = isCerrado(p);
+    // Si estado === '' => "Todos", no filtra
+
+    // Filtro por cliente (por nombre contiene)
+    const matchCliente = !cliente || (p.client_name || '').toLowerCase().includes(cliente);
+
+    return matchEstado && matchCliente;
   });
 
   st.openCode = null;
@@ -264,7 +279,6 @@ chkNewClient?.addEventListener('change', () => {
   // Si es nuevo, deselecciona el select
   if (isNew) cliSelect.value = '';
 });
-
 
 frmCreate?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -381,12 +395,10 @@ frmCreate?.addEventListener('submit', async (ev) => {
   }
 });
 
-
 // === Navegación ===
 btnHome?.addEventListener('click', () => location.href = './');
 btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.signOut(); }catch{} location.href='./'; });
 
-// === Init ===
 // === Init ===
 (async function init(){
   // sesión
@@ -409,7 +421,7 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     console.warn('[clients]', e?.message);
   }
 
-  // ➋ Cargar proyectos
+  // ➋ Cargar proyectos (sin filtro previo por is_active)
   try{
     const data = await fetchProjects();
     st.all = data;
@@ -421,7 +433,6 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     show(errEl,true);
   }
 
-  // ➌ Listeners de filtros (usa fClienteSel)
+  // ➌ Listeners de filtros
   [fEstado, fClienteSel].forEach(el => el?.addEventListener('input', applyFilter));
 })();
-
