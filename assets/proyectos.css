@@ -1,261 +1,135 @@
-:root{
+/* ====== PROYECTOS (aislado) ====== */
+/* Tokens locales (solo viven dentro de .proyectos) */
+.proyectos{
   --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
   --border:#d8dee8; --radius:24px;
 }
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  background:var(--bg);
-  margin:0;
-  padding:16px;
-  color:var(--text);
-}
-.wrap{width:min(92vw,1100px);margin:24px auto}
 
-/* ─────────── Topbar ─────────── */
-.topbar{
-  position:sticky; top:0; z-index:20;
-  display:flex; gap:8px; align-items:center;
-  padding:12px 14px;
-  background:transparent;
-  color:var(--text);
-}
-.title{font-weight:800;font-size:24px}
-.spacer{flex:1}
+/* Base local */
+.proyectos *{ box-sizing:border-box }
+.proyectos{ background:var(--bg); color:var(--text); }
+.proyectos .wrap{ width:min(92vw,1100px); margin:24px auto; padding:0 0 }
 
-/* ─────────── Botones básicos ─────────── */
-.btn{
-  padding:13px 18px;
-  border:0;
-  border-radius:14px;
-  font-weight:700;
-  cursor:pointer;
+/* Topbar (solo título) */
+.proyectos .topbar{
+  display:flex; align-items:center; gap:8px;
+  padding:12px 14px; margin:0 0 8px;
+  background:transparent; color:var(--text);
+}
+.proyectos .title{ font-weight:800; font-size:clamp(22px,5vw,32px) }
+
+/* Botones base locales */
+.proyectos .btn{
+  padding:13px 18px; border:0; border-radius:14px; font-weight:700; cursor:pointer;
   box-shadow:0 6px 18px rgba(0,0,0,.08);
 }
-.btn.grey{background:#cfd6df;color:#111}
-.btn.red{background:#ef4444;color:#fff}
-.btn-slim{
-  padding:10px 14px;
-  border-radius:12px;
-  background:#fff;
-  color:#111827;
-  border:1px solid var(--border);
-  font-weight:700;
-  cursor:pointer;
+.proyectos .btn-slim{
+  padding:10px 14px; border-radius:12px; background:#fff; color:#111827;
+  border:1px solid var(--border); font-weight:700; cursor:pointer;
 }
 
-/* ─────────── Logo Hero ─────────── */
-.logoHero{display:flex;justify-content:center;margin:6px 0 10px}
-.punchLogo{
-  width:100%; max-width:260px; height:auto;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.12);
-}
-
-/* ─────────── Filtros ─────────── */
-/* ya no son sticky */
-.filters{position:static; top:auto; z-index:auto; margin-bottom:12px}
-.filterbar{
-  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-  background:var(--card);
-  padding:12px;
-  border-radius:18px;
-  border:1px solid var(--border);
-  box-shadow:0 8px 24px rgba(2,6,23,.06);
-}
-.select{
-  min-width:160px;
-  padding:14px 16px;
-  border-radius:14px;
-  border:1px solid var(--border);
-  background:#fff;
-  font-size:16px;
-  outline:none;
-}
-.chip{
-  padding:6px 10px;
-  border-radius:999px;
-  background:#eef2ff;
-  color:#1e3a8a;
-  font-weight:800;
-  font-size:12px;
-}
-
-/* ─────────── Lista de proyectos ─────────── */
-.list{display:flex;flex-direction:column;gap:12px}
-.row{
-  display:grid;
-  grid-template-columns:1fr auto auto auto;
-  gap:12px;
-  align-items:center;
-  background:#fff;
-  border:1px solid #eef2f7;
-  border-radius:18px;
-  padding:14px 16px;
-  box-shadow:0 4px 16px rgba(0,0,0,.06);
-}
-.row.open{
-  outline:3px solid #A7F3D0;
-  outline-offset:2px;
-  background:#f8fffb;
-}
-.id{font-weight:900;font-size:14px;color:#111827}
-.name{font-weight:800;margin-top:2px}
-.client{color:var(--muted);font-size:13px}
-.pill{
-  padding:6px 10px;
-  border-radius:999px;
-  font-weight:800;
-  font-size:12px;
-  justify-self:end;
-}
-.pill.act{background:#ecfdf5;color:#065f46}
-.pill.cer{background:#f5f3ff;color:#5b21b6}
-.meta{display:flex;gap:10px;justify-self:end;color:var(--muted);font-size:12px}
-
-/* ─────────── Cajón detalle ─────────── */
-.drawer{
-  grid-column:1/-1;
-  margin-top:6px;
-  border-top:1px dashed #e2e8f0;
-  padding-top:10px;
-}
-.drawer .grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:10px;
-}
-.kv{
-  background:#f8fafc;
-  border:1px solid #eef2f7;
-  border-radius:14px;
-  padding:12px;
-}
-.kv .k{font-size:12px;color:var(--muted)}
-.kv .v{font-weight:700}
-
-/* ─────────── Mensajes ─────────── */
-.ok{
-  background:#ecfdf5;
-  border:1px solid #d1fae5;
-  color:#065f46;
-  padding:10px;
-  border-radius:12px;
-  margin:8px 0;
-  display:none;
-}
-.err{
-  background:#fef2f2;
-  border:1px solid #fee2e2;
-  color:#7f1d1d;
-  padding:10px;
-  border-radius:12px;
-  margin:8px 0;
-  display:none;
-}
-.empty{color:var(--muted);text-align:center;padding:20px;display:none}
-
-/* ─────────── Modal Crear Proyecto ─────────── */
-dialog{
-  border:none; border-radius:24px;
-  max-width:800px; width:96%;
-  padding:0;
-}
-dialog::backdrop{
-  background: rgba(15,23,42,.45);
-  backdrop-filter: blur(2px);
-}
-form.card{
-  margin:0;
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:18px;
-  box-shadow:0 16px 48px rgba(0,0,0,.14);
-}
-form.card h3{
-  font-size:22px; font-weight:800;
-  margin:0 0 6px;
-  color:#111827;
-}
-form.card .muted{color:var(--muted);font-size:13px}
-.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.full{grid-column:1/-1}
-
-form.card label{
-  display:block;
-  font-size:13px;
-  color:var(--muted);
-  font-weight:600;
-  margin:2px 0 4px;
-}
-form.card .input,
-form.card .select,
-form.card textarea{
-  width:100%;
-  padding:12px 14px;
-  border-radius:14px;
-  border:1px solid var(--border);
-  background:#fff;
-  font-size:16px;
-  outline:none;
-}
-form.card textarea{resize:vertical;min-height:96px}
-
-/* Bloque Admin */
-#adminFields{
-  margin-top:6px;
-  border:1px dashed #e5e7eb;
-  border-radius:16px;
-  padding:10px;
-  background:#f9fafb;
-}
-
-/* Acciones del modal */
-form.card .actions{
-  display:flex;
-  gap:10px;
-  justify-content:flex-end;
-  margin-top:14px;
-}
-form.card .btn-slim{background:#f8fafc}
-form.card .btn-slim:hover{background:#eef2f7}
-
-/* ─────────── Botones flotantes ─────────── */
-.floatBtn{
+/* Botones flotantes (SOLO en Proyectos) */
+.proyectos .floatBtn{
   position: fixed;
   right: 16px;
   z-index: 1100;
   padding: 12px 18px;
-  border:0;
-  border-radius:16px;
-  font-weight:800;
-  font-size:16px;
-  letter-spacing:.2px;
+  border:0; border-radius:16px; font-weight:800; font-size:16px; letter-spacing:.2px;
   box-shadow:0 8px 20px rgba(0,0,0,.12);
-  -webkit-tap-highlight-color:transparent;
+  -webkit-tap-highlight-color: transparent;
 }
-.floatBtn.blue{ background: var(--primary); color:#fff; }
-.floatBtn.grey{ background:#cfd6df; color:#111; }
-.floatBtn.red{ background:#ef4444; color:#fff; }
-
+.proyectos .floatBtn.blue{ background: var(--primary); color:#fff; }
+.proyectos .floatBtn.grey{ background:#cfd6df; color:#111; }
+.proyectos .floatBtn.red { background:#ef4444; color:#fff; }
 /* Orden vertical (sin montarse) */
-#btnSignOut{ top: calc(env(safe-area-inset-top, 0px) + 14px); }
-#btnHome   { top: calc(env(safe-area-inset-top, 0px) + 68px); }
-#btnCreate { top: calc(env(safe-area-inset-top, 0px) + 122px); }
-
-/* Desktop */
+.proyectos #btnSignOut{ top: calc(env(safe-area-inset-top, 0px) + 14px); }
+.proyectos #btnHome   { top: calc(env(safe-area-inset-top, 0px) + 68px); }
+.proyectos #btnCreate { top: calc(env(safe-area-inset-top, 0px) + 122px); }
 @media (min-width:1024px){
-  .floatBtn{ position:absolute; right:14px; }
-  #btnSignOut{ top:14px; }
-  #btnHome   { top:68px; }
-  #btnCreate { top:122px; }
+  .proyectos .floatBtn{ position:absolute; right:14px; }
+  .proyectos #btnSignOut{ top:14px; }
+  .proyectos #btnHome   { top:68px; }
+  .proyectos #btnCreate { top:122px; }
 }
 
-/* ─────────── Responsive extra ─────────── */
+/* Logo (solo aquí) */
+.proyectos .logoHero{ display:flex; justify-content:center; margin:6px 0 10px }
+.proyectos .punchLogo{
+  width:100%; max-width:260px; height:auto; border-radius:14px; background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+
+/* Filtros (no sticky) */
+.proyectos .filters{ position:static; margin-bottom:12px }
+.proyectos .filterbar{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  background:var(--card); padding:12px; border-radius:18px;
+  border:1px solid var(--border); box-shadow:0 8px 24px rgba(2,6,23,.06);
+}
+.proyectos .select{
+  min-width:160px; padding:14px 16px; border-radius:14px;
+  border:1px solid var(--border); background:#fff; font-size:16px; outline:none;
+}
+.proyectos .chip{ padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-weight:800; font-size:12px }
+
+/* Lista */
+.proyectos .list{ display:flex; flex-direction:column; gap:12px }
+.proyectos .row{
+  display:grid; grid-template-columns:1fr auto auto auto; gap:12px; align-items:center;
+  background:#fff; border:1px solid #eef2f7; border-radius:18px; padding:14px 16px;
+  box-shadow:0 4px 16px rgba(0,0,0,.06);
+}
+.proyectos .row.open{ outline:3px solid #A7F3D0; outline-offset:2px; background:#f8fffb }
+.proyectos .id{ font-weight:900; font-size:14px; color:#111827 }
+.proyectos .name{ font-weight:800; margin-top:2px }
+.proyectos .client{ color:var(--muted); font-size:13px }
+.proyectos .pill{ padding:6px 10px; border-radius:999px; font-weight:800; font-size:12px; justify-self:end }
+.proyectos .pill.act{ background:#ecfdf5; color:#065f46 }
+.proyectos .pill.cer{ background:#f5f3ff; color:#5b21b6 }
+.proyectos .meta{ display:flex; gap:10px; justify-self:end; color:var(--muted); font-size:12px }
+
+/* Detalle */
+.proyectos .drawer{ grid-column:1/-1; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:10px }
+.proyectos .drawer .grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px }
+.proyectos .kv{ background:#f8fafc; border:1px solid #eef2f7; border-radius:14px; padding:12px }
+.proyectos .kv .k{ font-size:12px; color:var(--muted) }
+.proyectos .kv .v{ font-weight:700 }
+
+/* Mensajes */
+.proyectos .ok { background:#ecfdf5; border:1px solid #d1fae5; color:#065f46; padding:10px; border-radius:12px; margin:8px 0; display:none }
+.proyectos .err{ background:#fef2f2; border:1px solid #fee2e2; color:#7f1d1d; padding:10px; border-radius:12px; margin:8px 0; display:none }
+.proyectos .empty{ color:var(--muted); text-align:center; padding:20px; display:none }
+
+/* Modal Crear Proyecto (solo aquí) */
+.proyectos dialog{ border:none; border-radius:24px; max-width:800px; width:96%; padding:0 }
+.proyectos dialog::backdrop{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px) }
+.proyectos form.card{
+  margin:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px; box-shadow:0 16px 48px rgba(0,0,0,.14);
+}
+.proyectos form.card h3{ font-size:22px; font-weight:800; margin:0 0 6px; color:#111827 }
+.proyectos form.card .muted{ color:var(--muted); font-size:13px }
+.proyectos .grid2{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px }
+.proyectos .full{ grid-column:1/-1 }
+
+.proyectos form.card label{ display:block; font-size:13px; color:var(--muted); font-weight:600; margin:2px 0 4px }
+.proyectos form.card .input,
+.proyectos form.card .select,
+.proyectos form.card textarea{
+  width:100%; padding:12px 14px; border-radius:14px; border:1px solid var(--border);
+  background:#fff; font-size:16px; outline:none;
+}
+.proyectos form.card textarea{ resize:vertical; min-height:96px }
+
+.proyectos #adminFields{
+  margin-top:6px; border:1px dashed #e5e7eb; border-radius:16px; padding:10px; background:#f9fafb;
+}
+.proyectos form.card .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:14px }
+.proyectos form.card .btn-slim{ background:#f8fafc }
+.proyectos form.card .btn-slim:hover{ background:#eef2f7 }
+
+/* Responsive local */
 @media (max-width:720px){
-  .row{grid-template-columns:1fr auto auto}
-  .drawer .grid{grid-template-columns:1fr}
+  .proyectos .row{ grid-template-columns:1fr auto auto }
+  .proyectos .drawer .grid{ grid-template-columns:1fr }
 }
