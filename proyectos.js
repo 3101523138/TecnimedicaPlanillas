@@ -19,8 +19,6 @@ const msgEl = $('#msg');
 const errEl = $('#err');
 const chipCount = $('#chipCount');
 const fEstado = $('#fEstado');
-
-// Filtro - cliente select
 const fClienteSel = $('#fClienteSel');
 
 const dlgCreate = $('#dlgCreate');
@@ -55,16 +53,22 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&
 function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
 
-// Usa status o is_active para decidir visual
-function isActivo(p){
-  const s = String(p.status || '').toLowerCase();
-  return p.is_active === true || s === 'activo';
+// Estado normalizado del proyecto (usa status; fallback a is_active)
+function estadoDe(p){
+  const s = (p.status || '').toString().trim().toLowerCase();
+  if (s === 'activo' || s === 'activa')  return 'activo';
+  if (s === 'cerrado' || s === 'cerrada') return 'cerrado';
+  // fallback por booleano si status viene vacío
+  if (p.is_active === true)  return 'activo';
+  if (p.is_active === false) return 'cerrado';
+  return 'activo'; // por defecto
 }
-function isCerrado(p){
-  const s = String(p.status || '').toLowerCase();
-  return p.is_active === false || s === 'cerrado';
+function pillClass(p){ return estadoDe(p) === 'activo' ? 'pill act' : 'pill cer'; }
+function pillText(p){
+  const s = (p.status || '').toString().trim();
+  if (s) return s; // muestra tal como está guardado ("Activo"/"Cerrado")
+  return estadoDe(p) === 'activo' ? 'Activo' : 'Cerrado';
 }
-function pillClsFromProj(p){ return isActivo(p) ? 'pill act' : 'pill cer'; }
 
 async function getUser(){
   try{
@@ -94,18 +98,31 @@ async function resolveIsAdmin(user){
 
 // === Data ===
 async function fetchProjects(){
-  const cols = 'project_code,name,description,status,start_date,end_date,client_id,client_name,is_active,presupuesto,afectacion,updated_at';
   // IMPORTANTE: NO filtrar por is_active aquí.
+  // Incluimos status (principal) y is_active (respaldo si existe).
   const { data, error } = await supabase
     .from('projects')
-    .select(cols)
+    .select(`
+      project_code,
+      name,
+      description,
+      status,
+      start_date,
+      end_date,
+      client_id,
+      client_name,
+      is_active,
+      presupuesto,
+      afectacion,
+      updated_at
+    `)
     .order('project_code', { ascending: true });
   if (error) throw error;
   return data || [];
 }
 
 async function fetchClients(){
-  // 1) Intentar desde tabla clients (recomendada)
+  // 1) Desde tabla clients (si la usas)
   try{
     const { data, error } = await supabase
       .from('clients')
@@ -148,7 +165,7 @@ function populateClientSelects(){
     fClienteSel.appendChild(opt1);
 
     const opt2 = document.createElement('option');
-    opt2.value = c.id ? `${c.id}::${c.name}` : `::${c.name}`; // "id::name" o "::name" si no hay id
+    opt2.value = c.id ? `${c.id}::${c.name}` : `::${c.name}`;
     opt2.textContent = c.name;
     cliSelect.appendChild(opt2);
   }
@@ -176,9 +193,8 @@ function render(){
     `;
 
     const pill = document.createElement('div');
-    pill.className = pillClsFromProj(p);
-    // Texto del pill: prioriza status; si no está, deriva de is_active
-    const pillTxt = p.status || (p.is_active === false ? 'Cerrado' : 'Activo');
+    pill.className = pillClass(p);
+    const pillTxt = pillText(p);
     pill.textContent = pillTxt;
 
     const meta = document.createElement('div');
@@ -230,25 +246,19 @@ function render(){
   }
 }
 
-function toggleDrawer(code, proj){
-  st.openCode = (st.openCode === code) ? null : code;
-  render();
-}
+function toggleDrawer(code){ st.openCode = (st.openCode === code) ? null : code; render(); }
 
 function applyFilter(){
   const estado  = (fEstado.value || '').trim().toLowerCase(); // '', 'activo', 'cerrado'
   const cliente = (fClienteSel.value || '').trim().toLowerCase();
 
   st.filtered = st.all.filter(p => {
-    // Filtro por estado:
+    const e = estadoDe(p); // 'activo' | 'cerrado'
     let matchEstado = true;
-    if (estado === 'activo')   matchEstado = isActivo(p);
-    else if (estado === 'cerrado') matchEstado = isCerrado(p);
-    // Si estado === '' => "Todos", no filtra
+    if (estado === 'activo')   matchEstado = (e === 'activo');
+    else if (estado === 'cerrado') matchEstado = (e === 'cerrado');
 
-    // Filtro por cliente (por nombre contiene)
     const matchCliente = !cliente || (p.client_name || '').toLowerCase().includes(cliente);
-
     return matchEstado && matchCliente;
   });
 
@@ -262,7 +272,6 @@ function closeCreate(){
   dlgCreate.close();
   show(createMsg,false); show(createErr,false);
   frmCreate.reset();
-  // ocultar campos admin si no aplica
   adminFields.style.display = st.isAdmin ? '' : 'none';
 }
 
@@ -276,7 +285,6 @@ btnCancel?.addEventListener('click', closeCreate);
 chkNewClient?.addEventListener('change', () => {
   const isNew = chkNewClient.checked;
   newClientFields.style.display = isNew ? '' : 'none';
-  // Si es nuevo, deselecciona el select
   if (isNew) cliSelect.value = '';
 });
 
@@ -285,21 +293,21 @@ frmCreate?.addEventListener('submit', async (ev) => {
   show(createMsg,false); show(createErr,false);
 
   try{
-    // Validaciones base del proyecto
     const fd = new FormData(frmCreate);
     const base = {
       project_code: (fd.get('project_code')||'').trim(),
       name: (fd.get('name')||'').trim(),
       description: (fd.get('description')||'').trim() || null,
-      status: (fd.get('status')||'Activo').trim(),
+      status: (fd.get('status')||'Activo').trim(), // usamos status explícito
       start_date: (fd.get('start_date')||'') || null,
       end_date: (fd.get('end_date')||'') || null,
-      is_active: true
+      is_active: true  // se crea activo por defecto; podrás cerrarlo luego
     };
     if (!base.project_code || !base.name){
       throw new Error('Complete los campos obligatorios (*).');
     }
-    if (base.status !== 'Activo' && base.status !== 'Cerrado'){
+    const stLower = base.status.toLowerCase();
+    if (stLower !== 'activo' && stLower !== 'cerrado'){
       throw new Error('Estado inválido.');
     }
     if (base.start_date && base.end_date && base.end_date < base.start_date){
@@ -311,12 +319,10 @@ frmCreate?.addEventListener('submit', async (ev) => {
     let client_name = '';
 
     if (chkNewClient.checked){
-      // Crear cliente nuevo (requiere tabla clients)
       const cname = (newClientName.value||'').trim();
       const ctax  = (newClientTaxId.value||'').trim() || null;
       if (!cname) throw new Error('Ingrese el nombre del nuevo cliente.');
 
-      // upsert simple por nombre
       const { data: existing, error: eFind } = await supabase
         .from('clients')
         .select('id,name')
@@ -336,24 +342,18 @@ frmCreate?.addEventListener('submit', async (ev) => {
         if (eIns) throw eIns;
         client_id = ins.id;
         client_name = ins.name;
-        // Actualizar cache local y selects
         st.clients.push({ id: client_id, name: client_name });
         populateClientSelects();
       }
     }else{
-      // Cliente seleccionado del dropdown
-      const sel = cliSelect.value;        // formato "id::name" o "::name"
+      const sel = cliSelect.value; // "id::name" o "::name"
       if (!sel) throw new Error('Seleccione un cliente o marque "Nuevo cliente".');
       const [cid, cname] = sel.split('::');
       client_id = cid || null;
       client_name = cname || '';
     }
 
-    const payload = {
-      ...base,
-      client_id,
-      client_name
-    };
+    const payload = { ...base, client_id, client_name };
 
     // Solo admin puede enviar presupuesto/afectación
     if (st.isAdmin){
@@ -374,7 +374,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
     createMsg.textContent = '✅ Proyecto creado correctamente.';
     show(createMsg,true);
 
-    // refrescar lista + clientes (por si creaste uno nuevo)
     const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
     st.all = freshProjects;
     st.clients = freshClients;
@@ -401,7 +400,6 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
 
 // === Init ===
 (async function init(){
-  // sesión
   st.user = await getUser();
   if (!st.user){
     errEl.textContent = 'Sesión no válida. Inicie sesión.';
@@ -410,10 +408,9 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     return;
   }
 
-  // rol
   st.isAdmin = await resolveIsAdmin(st.user);
 
-  // ➊ Cargar clientes y poblar selects (antes de proyectos)
+  // Cargar clientes y proyectos
   try{
     st.clients = await fetchClients();
     populateClientSelects();
@@ -421,11 +418,9 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     console.warn('[clients]', e?.message);
   }
 
-  // ➋ Cargar proyectos (sin filtro previo por is_active)
   try{
-    const data = await fetchProjects();
-    st.all = data;
-    // filtro por defecto: Activo
+    st.all = await fetchProjects();
+    // Por defecto: Activo
     fEstado.value = 'Activo';
     applyFilter();
   }catch(e){
@@ -433,6 +428,5 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     show(errEl,true);
   }
 
-  // ➌ Listeners de filtros
   [fEstado, fClienteSel].forEach(el => el?.addEventListener('input', applyFilter));
 })();
