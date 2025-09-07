@@ -17,14 +17,12 @@
   <button id="btnHome"    class="btn floatBtn grey">Inicio</button>
   <button id="btnSignOut" class="btn floatBtn red">Salir</button>
 
-  <!-- Título (topbar sin botones) -->
+  <!-- Topbar con logo reubicado (izquierda) y título; se elimina logoHero para evitar solape -->
   <div class="topbar">
-    <div class="title">Proyectos TMI</div>
-  </div>
-
-  <!-- Logo como en Marcas -->
-  <div class="logoHero">
-    <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <img src="Logo.png" alt="Tecnomedica" class="punchLogo" style="height:42px;width:auto;border-radius:10px;">
+      <div class="title">Proyectos TMI</div>
+    </div>
   </div>
 
   <div class="wrap">
