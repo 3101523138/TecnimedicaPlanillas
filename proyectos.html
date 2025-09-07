@@ -79,7 +79,9 @@
           <option value="Cerrado">Cerrado</option>
           <option value="">Todos</option>
         </select>
-        <input id="fCliente" class="input" placeholder="Cliente (client_name)" />
+        <select id="fClienteSel" class="select" title="Cliente">
+          <option value="">— Todos los clientes —</option>
+        </select>
         <input id="fQuery" class="input" placeholder="Buscar por código o nombre…" />
         <span id="chipCount" class="chip">0 resultados</span>
       </div>
@@ -118,8 +120,24 @@
         <label> Fecha inicio (start_date) <input name="start_date" type="date" class="input" /></label>
         <label> Fecha fin (end_date) <input name="end_date" type="date" class="input" /></label>
 
-        <label> Client ID (uuid) <input name="client_id" class="input" placeholder="opcional UUID" /></label>
-        <label> Cliente (client_name)* <input name="client_name" class="input" required /></label>
+          <!-- Cliente existente -->
+            <label class="full"> Cliente (seleccione)
+               <select id="cliSelect" class="select" required>
+                <option value="">— Seleccione un cliente —</option>
+             </select>
+           </label>
+
+<!-- Alternativa: Nuevo cliente -->
+          <div class="full" style="display:flex;align-items:center;gap:8px">
+            <input id="chkNewClient" type="checkbox" />
+            <label for="chkNewClient" class="muted">Nuevo cliente (ingresar manualmente)</label>
+          </div>
+
+          <div id="newClientFields" class="grid2" style="display:none">
+             <label> Nombre de cliente* <input id="newClientName" class="input" /></label>
+             <label> Identificación (opcional) <input id="newClientTaxId" class="input" /></label>   
+          </div>
+
 
         <!-- Solo Admin -->
         <div class="full" id="adminFields" style="display:none">
