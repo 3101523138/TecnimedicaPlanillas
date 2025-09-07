@@ -13,29 +13,33 @@
 </head>
 <body>
   <div class="topbar">
-    <div class="title">Proyectos</div>
-    <div class="spacer"></div>
-    <button id="btnCreate" class="btn">Crear proyecto</button>
-    <button id="btnHome" class="btn">Inicio</button>
-    <button id="btnSignOut" class="btn">Salir</button>
-  </div>
+  <div class="title">Proyectos</div>
+  <div class="spacer"></div>
+  <button id="btnCreate" class="btn">Crear proyecto</button>
+  <button id="btnHome" class="btn grey">Inicio</button>
+  <button id="btnSignOut" class="btn red">Salir</button>
+</div>
+
+  <div class="logoHero">
+  <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
+</div>
 
   <div class="wrap">
     <!-- Filtros -->
     <div class="filters">
       <div class="filterbar">
-        <select id="fEstado" class="select" title="Estado">
+         <select id="fEstado" class="select" title="Estado">
           <option value="Activo" selected>Activo</option>
           <option value="Cerrado">Cerrado</option>
           <option value="">Todos</option>
         </select>
-        <select id="fClienteSel" class="select" title="Cliente">
-          <option value="">— Todos los clientes —</option>
+      <select id="fClienteSel" class="select" title="Cliente">
+      <option value="">— Todos los clientes —</option>
         </select>
-        <input id="fQuery" class="input" placeholder="Buscar por código o nombre…" />
         <span id="chipCount" class="chip">0 resultados</span>
       </div>
-    </div>
+  </div>
+
 
     <!-- Mensajes -->
     <div id="msg" class="ok"></div>
