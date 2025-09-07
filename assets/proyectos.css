@@ -2,33 +2,55 @@
 .proyectos{
   --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
   --border:#d8dee8; --radius:24px;
+
+  /* nuevos tokens para outline verde */
+  --green-50:#f0fdf4; 
+  --green-600:#16a34a;
+  --slate-100:#f1f5f9;
+  --slate-400:#94a3b8;
+  --slate-600:#475569;
+
+  /* 1) Tipografía iOS */
+  --ios-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+              "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
 }
 
 /* Nada global: todo va con prefijo .proyectos */
 .proyectos *{ box-sizing:border-box }
-.proyectos{ background:var(--bg); color:var(--text); }
+.proyectos{ background:var(--bg); color:var(--text); font-family:var(--ios-font); }
 .proyectos .wrap{ width:min(92vw,1100px); margin:24px auto; }
 
-/* Topbar */
+/* Topbar (con logo) */
 .proyectos .topbar{
-  display:flex; align-items:center; gap:8px;
-  padding:12px 14px; margin:0 0 8px; background:transparent; color:var(--text);
+  display:flex; align-items:center; gap:12px;
+  padding:12px 16px; margin:0 0 8px; background:transparent; color:var(--text);
 }
 .proyectos .title{ font-weight:800; font-size:clamp(22px,5vw,32px) }
+
+/* 2) Logo dentro del topbar, tamaño reducido (evita solaparse con botones flotantes) */
+.proyectos .punchLogo{
+  height:42px; width:auto; border-radius:10px; background:#fff;
+  box-shadow:0 6px 20px rgba(0,0,0,.12); object-fit:contain;
+}
+/* Eliminamos el hero centrado (ya no se usa) */
+/* .proyectos .logoHero{ display:none } */
 
 /* Botones base locales */
 .proyectos .btn{
   padding:13px 18px; border:0; border-radius:14px; font-weight:700; cursor:pointer;
   box-shadow:0 6px 18px rgba(0,0,0,.08);
+  font-family:inherit;
 }
 .proyectos .btn-slim{
   padding:10px 14px; border-radius:12px; background:#fff; color:#111827;
-  border:1px solid var(--border); font-weight:700; cursor:pointer;
+  border:1px solid var(--border); font-weight:700; cursor:pointer; font-family:inherit;
 }
 
 /* Botones flotantes SOLO aquí */
 .proyectos .floatBtn{
-  position: fixed; right: 16px; z-index: 1100; padding: 12px 18px;
+  position: fixed; 
+  right: max(12px, env(safe-area-inset-right, 0px)); 
+  z-index: 1100; padding: 12px 18px;
   border:0; border-radius:16px; font-weight:800; font-size:16px; letter-spacing:.2px;
   box-shadow:0 8px 20px rgba(0,0,0,.12); -webkit-tap-highlight-color: transparent;
 }
@@ -46,13 +68,6 @@
   .proyectos #btnCreate { top:122px; }
 }
 
-/* Logo local */
-.proyectos .logoHero{ display:flex; justify-content:center; margin:6px 0 10px }
-.proyectos .punchLogo{
-  width:100%; max-width:260px; height:auto; border-radius:14px; background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.12);
-}
-
 /* Filtros (no sticky) */
 .proyectos .filters{ position:static; margin-bottom:12px }
 .proyectos .filterbar{
@@ -63,6 +78,7 @@
 .proyectos .select{
   min-width:160px; padding:14px 16px; border-radius:14px;
   border:1px solid var(--border); background:#fff; font-size:16px; outline:none;
+  font-family:inherit;
 }
 .proyectos .chip{
   padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-weight:800; font-size:12px;
@@ -79,9 +95,23 @@
 .proyectos .id{ font-weight:900; font-size:14px; color:#111827 }
 .proyectos .name{ font-weight:800; margin-top:2px }
 .proyectos .client{ color:var(--muted); font-size:13px }
-.proyectos .pill{ padding:6px 10px; border-radius:999px; font-weight:800; font-size:12px; justify-self:end }
-.proyectos .pill.act{ background:#ecfdf5; color:#065f46 }
-.proyectos .pill.cer{ background:#f5f3ff; color:#5b21b6 }
+
+/* 3) Badges con outline verde intenso */
+.proyectos .pill{ 
+  padding:6px 10px; border-radius:999px; font-weight:800; font-size:12px; justify-self:end; 
+  line-height:1; display:inline-flex; align-items:center; gap:6px;
+}
+.proyectos .pill.act{ 
+  color: var(--green-600);
+  background: var(--green-50);
+  border: 2px solid var(--green-600);
+}
+.proyectos .pill.cer{ 
+  color: var(--slate-600); 
+  background: var(--slate-100); 
+  border: 2px solid var(--slate-400);
+}
+
 .proyectos .meta{ display:flex; gap:10px; justify-self:end; color:var(--muted); font-size:12px }
 
 /* Detalle */
@@ -113,7 +143,7 @@
 .proyectos form.card .select,
 .proyectos form.card textarea{
   width:100%; padding:12px 14px; border-radius:14px; border:1px solid var(--border);
-  background:#fff; font-size:16px; outline:none;
+  background:#fff; font-size:16px; outline:none; font-family:inherit;
 }
 .proyectos form.card textarea{ resize:vertical; min-height:96px }
 
