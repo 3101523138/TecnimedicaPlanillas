@@ -8,41 +8,42 @@
   <!-- Supabase v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- CSS externo de la página de Proyectos -->
+  <!-- CSS exclusivo de Proyectos -->
   <link rel="stylesheet" href="./assets/proyectos.css">
 </head>
-<body>
-  <!-- Botones flotantes -->
-   <button id="btnCreate"  class="btn floatBtn blue">Crear proyecto</button>
-   <button id="btnHome"    class="btn floatBtn grey">Inicio</button>
-   <button id="btnSignOut" class="btn floatBtn red">Salir</button>
+<body class="proyectos">
+  <!-- Botones flotantes (no duplicar en topbar) -->
+  <button id="btnCreate"  class="btn floatBtn blue">Crear proyecto</button>
+  <button id="btnHome"    class="btn floatBtn grey">Inicio</button>
+  <button id="btnSignOut" class="btn floatBtn red">Salir</button>
 
-
-
+  <!-- Título (topbar sin botones) -->
   <div class="topbar">
-  <div class="title">Proyectos TMI</div>
-</div>
+    <div class="title">Proyectos TMI</div>
+  </div>
 
+  <!-- Logo como en Marcas -->
   <div class="logoHero">
-  <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
-</div>
+    <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
+  </div>
 
   <div class="wrap">
-    <!-- Filtros -->
+    <!-- Filtros (sin buscador) -->
     <div class="filters">
       <div class="filterbar">
-         <select id="fEstado" class="select" title="Estado">
+        <select id="fEstado" class="select" title="Estado">
           <option value="Activo" selected>Activo</option>
           <option value="Cerrado">Cerrado</option>
           <option value="">Todos</option>
         </select>
-      <select id="fClienteSel" class="select" title="Cliente">
-      <option value="">— Todos los clientes —</option>
+
+        <select id="fClienteSel" class="select" title="Cliente">
+          <option value="">— Todos los clientes —</option>
         </select>
+
         <span id="chipCount" class="chip">0 resultados</span>
       </div>
-  </div>
-
+    </div>
 
     <!-- Mensajes -->
     <div id="msg" class="ok"></div>
@@ -115,7 +116,7 @@
         <button type="button" id="btnCancel" class="btn-slim">Cancelar</button>
         <button type="submit" class="btn">Guardar</button>
       </div>
-      
+
       <div id="createMsg" class="ok"></div>
       <div id="createErr" class="err"></div>
     </form>
