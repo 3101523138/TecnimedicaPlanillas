@@ -63,19 +63,35 @@ form.card{margin:0;background:#fff;border:1px solid var(--border);border-radius:
   .drawer .grid{grid-template-columns:1fr}
 }
 /* ===== Botones flotantes (igual a Marcas) ===== */
+/* ===== Botones flotantes (tamaños + colores correctos) ===== */
 .floatBtn{
   position: fixed;
-  right: 14px;
-  z-index: 1000;
-  padding: 12px 16px;
-  border-radius: 14px;
-  font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  right: 16px;
+  z-index: 1100;                    /* por encima de la tarjeta/logo */
+  padding: 12px 18px;               /* tamaño compacto */
+  border: 0;
+  border-radius: 16px;              /* radios suaves como en marcas */
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing:.2px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.12);
+  -webkit-tap-highlight-color: transparent;
 }
-.floatBtn.red  { top: 14px; background:#ef4444; color:#fff; }
-.floatBtn.grey { top: 68px; background:#cfd6df; color:#111; }
 
-/* En desktop pueden ir dentro del card si prefieres */
+/* Colores coherentes */
+.floatBtn.blue{ background: var(--primary); color:#fff; }
+.floatBtn.grey{ background: #cfd6df;       color:#111; }
+.floatBtn.red { background: #ef4444;       color:#fff; }
+
+/* Orden vertical (no se montan) + safe-area iOS */
+#btnCreate  { top: calc(env(safe-area-inset-top, 0px) + 14px); }
+#btnHome    { top: calc(env(safe-area-inset-top, 0px) + 68px); }
+#btnSignOut { top: calc(env(safe-area-inset-top, 0px) + 122px); }
+
 @media (min-width:1024px){
-  .floatBtn{ position:absolute; }
+  .floatBtn{ position:absolute; right:14px; }
+  #btnCreate  { top:14px; }
+  #btnHome    { top:68px; }
+  #btnSignOut { top:122px; }
 }
+
