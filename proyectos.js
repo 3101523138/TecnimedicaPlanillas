@@ -12,6 +12,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // === UI refs ===
+// === UI refs ===
 const $ = (q) => document.querySelector(q);
 const listEl = $('#list');
 const emptyEl = $('#empty');
@@ -19,8 +20,10 @@ const msgEl = $('#msg');
 const errEl = $('#err');
 const chipCount = $('#chipCount');
 const fEstado = $('#fEstado');
-const fCliente = $('#fCliente');
 const fQuery = $('#fQuery');
+
+// Filtro - cliente select
+const fClienteSel = $('#fClienteSel');
 
 const dlgCreate = $('#dlgCreate');
 const frmCreate = $('#frmCreate');
@@ -32,16 +35,12 @@ const adminFields = $('#adminFields');
 const createMsg = $('#createMsg');
 const createErr = $('#createErr');
 
-// Filtros - cliente select
-const fClienteSel = $('#fClienteSel');
-
 // Formulario - cliente select & nuevo cliente
 const cliSelect = $('#cliSelect');
 const chkNewClient = $('#chkNewClient');
 const newClientFields = $('#newClientFields');
 const newClientName = $('#newClientName');
 const newClientTaxId = $('#newClientTaxId');
-
 
 // === Estado ===
 const st = {
@@ -425,7 +424,7 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     show(errEl,true);
   }
 
-  // ➌ Listeners de filtros (usa fClienteSel en lugar de fCliente)
+  // ➌ Listeners de filtros (usa fClienteSel)
   [fEstado, fClienteSel, fQuery].forEach(el => el?.addEventListener('input', applyFilter));
 })();
 
