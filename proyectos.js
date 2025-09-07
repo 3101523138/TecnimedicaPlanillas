@@ -47,28 +47,47 @@ const st = {
   openCode: null,
   clients: []
 };
+window.st = st; // para debug rápido en consola
 
 // === Helpers ===
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
 
-// Estado normalizado del proyecto (usa status; fallback a is_active)
+// ---- Normalización de filas (acepta columnas en ES o EN) ----
+function normalizeRow(r){
+  // detecta booleano en cualquiera de los dos nombres
+  const isActive = (typeof r.is_active === 'boolean') ? r.is_active
+                  : (typeof r.esta_activo === 'boolean') ? r.esta_activo
+                  : null;
+
+  return {
+    project_code: r.project_code ?? r.codigo_del_proyecto ?? r['código_del_proyecto'] ?? null,
+    name: r.name ?? r.nombre ?? null,
+    description: r.description ?? r.descripcion ?? null,
+    status: r.status ?? r.estado ?? '',            // preferimos status textual
+    start_date: r.start_date ?? r.fecha_inicio ?? null,
+    end_date: r.end_date ?? r.fecha_fin ?? null,
+    client_id: r.client_id ?? r.id_del_cliente ?? null,
+    client_name: r.client_name ?? r.nombre_del_cliente ?? '',
+    is_active: isActive,
+    presupuesto: r.presupuesto ?? null,
+    afectacion: r.afectacion ?? null,
+    updated_at: r.updated_at ?? r.actualizado_en ?? r.updatedAt ?? null,
+  };
+}
+
 function estadoDe(p){
+  // usa status textual si viene, si no, cae al booleano
   const s = (p.status || '').toString().trim().toLowerCase();
-  if (s === 'activo' || s === 'activa')  return 'activo';
+  if (s === 'activo' || s === 'activa') return 'activo';
   if (s === 'cerrado' || s === 'cerrada') return 'cerrado';
-  // fallback por booleano si status viene vacío
   if (p.is_active === true)  return 'activo';
   if (p.is_active === false) return 'cerrado';
-  return 'activo'; // por defecto
+  return 'activo';
 }
 function pillClass(p){ return estadoDe(p) === 'activo' ? 'pill act' : 'pill cer'; }
-function pillText(p){
-  const s = (p.status || '').toString().trim();
-  if (s) return s; // muestra tal como está guardado ("Activo"/"Cerrado")
-  return estadoDe(p) === 'activo' ? 'Activo' : 'Cerrado';
-}
+function pillText(p){ return (p.status ? p.status : (estadoDe(p) === 'activo' ? 'Activo' : 'Cerrado')); }
 
 async function getUser(){
   try{
@@ -98,31 +117,31 @@ async function resolveIsAdmin(user){
 
 // === Data ===
 async function fetchProjects(){
-  // IMPORTANTE: NO filtrar por is_active aquí.
-  // Incluimos status (principal) y is_active (respaldo si existe).
+  // SIN filtros. Tomamos todas las columnas para evitar errores de nombres.
   const { data, error } = await supabase
     .from('projects')
-    .select(`
-      project_code,
-      name,
-      description,
-      status,
-      start_date,
-      end_date,
-      client_id,
-      client_name,
-      is_active,
-      presupuesto,
-      afectacion,
-      updated_at
-    `)
-    .order('project_code', { ascending: true });
+    .select('*');
   if (error) throw error;
-  return data || [];
+
+  const normalized = (data || []).map(normalizeRow);
+
+  // orden local por código si existe
+  normalized.sort((a,b) => (a.project_code||'').localeCompare(b.project_code||''));
+
+  // debug útil
+  console.info('[projects] total filas:', normalized.length);
+  console.table(normalized.slice(0,10).map(p => ({
+    project_code: p.project_code,
+    status: p.status,
+    is_active: p.is_active,
+    client: p.client_name
+  })));
+
+  return normalized;
 }
 
 async function fetchClients(){
-  // 1) Desde tabla clients (si la usas)
+  // 1) Tabla clients
   try{
     const { data, error } = await supabase
       .from('clients')
@@ -135,17 +154,11 @@ async function fetchClients(){
     console.warn('[clients] no disponible o vacía:', e?.message);
   }
 
-  // 2) Fallback: distintos client_name desde projects
+  // 2) Fallback: desde projects normalizados
   try{
-    const { data, error } = await supabase
-      .from('projects')
-      .select('client_name')
-      .neq('client_name', null)
-      .neq('client_name', '')
-      .order('client_name', { ascending: true });
-    if (error) throw error;
-    const uniq = [...new Set((data||[]).map(r => r.client_name))];
-    return uniq.map(n => ({ id: null, name: n }));
+    const projs = st.all.length ? st.all : await fetchProjects();
+    const names = Array.from(new Set(projs.map(p => p.client_name).filter(Boolean))).sort();
+    return names.map(n => ({ id: null, name: n }));
   }catch(e){
     console.error('[clients fallback]', e);
     return [];
@@ -187,8 +200,8 @@ function render(){
 
     const left = document.createElement('div');
     left.innerHTML = `
-      <div class="id">${esc(p.project_code)}</div>
-      <div class="name">${esc(p.name)}</div>
+      <div class="id">${esc(p.project_code ?? '—')}</div>
+      <div class="name">${esc(p.name ?? '—')}</div>
       <div class="client">${esc(p.client_name || '—')}</div>
     `;
 
@@ -212,7 +225,7 @@ function render(){
     const btnToggle = document.createElement('button');
     btnToggle.className = 'btn-slim';
     btnToggle.textContent = (st.openCode === p.project_code) ? 'Ocultar' : 'Ver detalle';
-    btnToggle.addEventListener('click', () => toggleDrawer(p.project_code, p));
+    btnToggle.addEventListener('click', () => toggleDrawer(p.project_code));
     actions.appendChild(btnToggle);
 
     row.appendChild(left);
@@ -225,7 +238,7 @@ function render(){
       drawer.className = 'drawer';
       drawer.innerHTML = `
         <div class="grid">
-          <div class="kv"><div class="k">Código</div><div class="v">${esc(p.project_code)}</div></div>
+          <div class="kv"><div class="k">Código</div><div class="v">${esc(p.project_code ?? '—')}</div></div>
           <div class="kv"><div class="k">Estado</div><div class="v">${esc(pillTxt)}</div></div>
           <div class="kv"><div class="k">Cliente</div><div class="v">${esc(p.client_name || '—')}</div></div>
           <div class="kv"><div class="k">Client ID</div><div class="v">${esc(p.client_id || '—')}</div></div>
@@ -237,7 +250,7 @@ function render(){
             <div class="kv"><div class="k">Afectación</div><div class="v">${esc(p.afectacion ?? '—')}</div></div>
           `:''}
         </div>
-        <div style="margin-top:8px" class="client">Actualizado: ${esc(new Date(p.updated_at).toLocaleString())}</div>
+        <div style="margin-top:8px" class="client">Actualizado: ${p.updated_at ? esc(new Date(p.updated_at).toLocaleString()) : '—'}</div>
       `;
       row.appendChild(drawer);
     }
@@ -261,6 +274,10 @@ function applyFilter(){
     const matchCliente = !cliente || (p.client_name || '').toLowerCase().includes(cliente);
     return matchEstado && matchCliente;
   });
+
+  console.info('[filter] estado=', estado || 'todos',
+               'cliente=', cliente || 'todos',
+               'resultado=', st.filtered.length);
 
   st.openCode = null;
   render();
@@ -298,10 +315,10 @@ frmCreate?.addEventListener('submit', async (ev) => {
       project_code: (fd.get('project_code')||'').trim(),
       name: (fd.get('name')||'').trim(),
       description: (fd.get('description')||'').trim() || null,
-      status: (fd.get('status')||'Activo').trim(), // usamos status explícito
+      status: (fd.get('status')||'Activo').trim(),
       start_date: (fd.get('start_date')||'') || null,
       end_date: (fd.get('end_date')||'') || null,
-      is_active: true  // se crea activo por defecto; podrás cerrarlo luego
+      is_active: true
     };
     if (!base.project_code || !base.name){
       throw new Error('Complete los campos obligatorios (*).');
@@ -355,7 +372,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
 
     const payload = { ...base, client_id, client_name };
 
-    // Solo admin puede enviar presupuesto/afectación
     if (st.isAdmin){
       const pres = ($('#frmCreate [name="presupuesto"]')?.value || '').trim();
       const afe  = ($('#frmCreate [name="afectacion"]')?.value || '').trim() || null;
@@ -374,9 +390,8 @@ frmCreate?.addEventListener('submit', async (ev) => {
     createMsg.textContent = '✅ Proyecto creado correctamente.';
     show(createMsg,true);
 
-    const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
-    st.all = freshProjects;
-    st.clients = freshClients;
+    st.all = await fetchProjects();
+    st.clients = await fetchClients();
     populateClientSelects();
     applyFilter();
 
@@ -410,7 +425,14 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
 
   st.isAdmin = await resolveIsAdmin(st.user);
 
-  // Cargar clientes y proyectos
+  try{
+    st.all = await fetchProjects();
+  }catch(e){
+    errEl.textContent = 'Error al cargar proyectos: ' + (e.message || e);
+    show(errEl,true);
+    return;
+  }
+
   try{
     st.clients = await fetchClients();
     populateClientSelects();
@@ -418,15 +440,9 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     console.warn('[clients]', e?.message);
   }
 
-  try{
-    st.all = await fetchProjects();
-    // Por defecto: Activo
-    fEstado.value = 'Activo';
-    applyFilter();
-  }catch(e){
-    errEl.textContent = 'Error al cargar proyectos: ' + (e.message || e);
-    show(errEl,true);
-  }
+  // Por defecto: Activo
+  fEstado.value = 'Activo';
+  applyFilter();
 
   [fEstado, fClienteSel].forEach(el => el?.addEventListener('input', applyFilter));
 })();
