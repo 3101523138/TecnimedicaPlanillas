@@ -20,7 +20,6 @@ const msgEl = $('#msg');
 const errEl = $('#err');
 const chipCount = $('#chipCount');
 const fEstado = $('#fEstado');
-const fQuery = $('#fQuery');
 
 // Filtro - cliente select
 const fClienteSel = $('#fClienteSel');
@@ -159,7 +158,9 @@ function render(){
   for (const p of arr){
     const row = document.createElement('div');
     row.className = 'row';
+    if (st.openCode === p.project_code) row.classList.add('open');
     row.dataset.code = p.project_code;
+
 
     const left = document.createElement('div');
     left.innerHTML = `
@@ -226,20 +227,16 @@ function toggleDrawer(code, proj){
   render();
 }
 
-// === Filtro ===
 function applyFilter(){
-  const q = (fQuery.value || '').trim().toLowerCase();
-  const estado = (fEstado.value || '').trim().toLowerCase();
+  const estado  = (fEstado.value || '').trim().toLowerCase();
   const cliente = (fClienteSel.value || '').trim().toLowerCase();
 
   st.filtered = st.all.filter(p => {
-    const hitQ = !q || p.project_code.toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q);
-    const hitE = !estado || (p.status||'').toLowerCase() === estado;
+    const hitE = !estado  || (p.status||'').toLowerCase() === estado;
     const hitC = !cliente || (p.client_name||'').toLowerCase().includes(cliente);
-    return hitQ && hitE && hitC && p.is_active !== false;
+    return hitE && hitC && p.is_active !== false;
   });
 
-  // reset drawer al filtrar
   st.openCode = null;
   render();
 }
@@ -425,6 +422,6 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
   }
 
   // ➌ Listeners de filtros (usa fClienteSel)
-  [fEstado, fClienteSel, fQuery].forEach(el => el?.addEventListener('input', applyFilter));
+  [fEstado, fClienteSel].forEach(el => el?.addEventListener('input', applyFilter));
 })();
 
