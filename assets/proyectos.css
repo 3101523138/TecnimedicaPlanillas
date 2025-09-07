@@ -1,20 +1,18 @@
-/* ====== PROYECTOS (aislado) ====== */
-/* Tokens locales (solo viven dentro de .proyectos) */
+/* ====== PROYECTOS (aislado; NO toca otras pantallas) ====== */
 .proyectos{
   --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
   --border:#d8dee8; --radius:24px;
 }
 
-/* Base local */
+/* Nada global: todo va con prefijo .proyectos */
 .proyectos *{ box-sizing:border-box }
 .proyectos{ background:var(--bg); color:var(--text); }
-.proyectos .wrap{ width:min(92vw,1100px); margin:24px auto; padding:0 0 }
+.proyectos .wrap{ width:min(92vw,1100px); margin:24px auto; }
 
-/* Topbar (solo título) */
+/* Topbar */
 .proyectos .topbar{
   display:flex; align-items:center; gap:8px;
-  padding:12px 14px; margin:0 0 8px;
-  background:transparent; color:var(--text);
+  padding:12px 14px; margin:0 0 8px; background:transparent; color:var(--text);
 }
 .proyectos .title{ font-weight:800; font-size:clamp(22px,5vw,32px) }
 
@@ -28,15 +26,11 @@
   border:1px solid var(--border); font-weight:700; cursor:pointer;
 }
 
-/* Botones flotantes (SOLO en Proyectos) */
+/* Botones flotantes SOLO aquí */
 .proyectos .floatBtn{
-  position: fixed;
-  right: 16px;
-  z-index: 1100;
-  padding: 12px 18px;
+  position: fixed; right: 16px; z-index: 1100; padding: 12px 18px;
   border:0; border-radius:16px; font-weight:800; font-size:16px; letter-spacing:.2px;
-  box-shadow:0 8px 20px rgba(0,0,0,.12);
-  -webkit-tap-highlight-color: transparent;
+  box-shadow:0 8px 20px rgba(0,0,0,.12); -webkit-tap-highlight-color: transparent;
 }
 .proyectos .floatBtn.blue{ background: var(--primary); color:#fff; }
 .proyectos .floatBtn.grey{ background:#cfd6df; color:#111; }
@@ -52,7 +46,7 @@
   .proyectos #btnCreate { top:122px; }
 }
 
-/* Logo (solo aquí) */
+/* Logo local */
 .proyectos .logoHero{ display:flex; justify-content:center; margin:6px 0 10px }
 .proyectos .punchLogo{
   width:100%; max-width:260px; height:auto; border-radius:14px; background:#fff;
@@ -70,7 +64,9 @@
   min-width:160px; padding:14px 16px; border-radius:14px;
   border:1px solid var(--border); background:#fff; font-size:16px; outline:none;
 }
-.proyectos .chip{ padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-weight:800; font-size:12px }
+.proyectos .chip{
+  padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-weight:800; font-size:12px;
+}
 
 /* Lista */
 .proyectos .list{ display:flex; flex-direction:column; gap:12px }
@@ -100,7 +96,7 @@
 .proyectos .err{ background:#fef2f2; border:1px solid #fee2e2; color:#7f1d1d; padding:10px; border-radius:12px; margin:8px 0; display:none }
 .proyectos .empty{ color:var(--muted); text-align:center; padding:20px; display:none }
 
-/* Modal Crear Proyecto (solo aquí) */
+/* Modal Crear Proyecto */
 .proyectos dialog{ border:none; border-radius:24px; max-width:800px; width:96%; padding:0 }
 .proyectos dialog::backdrop{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px) }
 .proyectos form.card{
