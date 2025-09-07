@@ -32,14 +32,27 @@ const adminFields = $('#adminFields');
 const createMsg = $('#createMsg');
 const createErr = $('#createErr');
 
+// Filtros - cliente select
+const fClienteSel = $('#fClienteSel');
+
+// Formulario - cliente select & nuevo cliente
+const cliSelect = $('#cliSelect');
+const chkNewClient = $('#chkNewClient');
+const newClientFields = $('#newClientFields');
+const newClientName = $('#newClientName');
+const newClientTaxId = $('#newClientTaxId');
+
+
 // === Estado ===
 const st = {
   user: null,
   isAdmin: false,
   all: [],
   filtered: [],
-  openCode: null // cajón abierto
+  openCode: null,
+  clients: []
 };
+
 
 // === Helpers ===
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -84,6 +97,57 @@ async function fetchProjects(){
   if (error) throw error;
   return data || [];
 }
+
+async function fetchClients(){
+  // 1) Intentar desde tabla clients (recomendada)
+  try{
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id,name,status')
+      .eq('status','Activo')
+      .order('name', { ascending: true });
+    if (error) throw error;
+    if (data && data.length) return data.map(c => ({ id: c.id, name: c.name }));
+  }catch(e){
+    console.warn('[clients] no disponible o vacía:', e?.message);
+  }
+
+  // 2) Fallback: distintos client_name desde projects
+  try{
+    const { data, error } = await supabase
+      .from('projects')
+      .select('client_name')
+      .neq('client_name', null)
+      .neq('client_name', '')
+      .order('client_name', { ascending: true });
+    if (error) throw error;
+    const uniq = [...new Set((data||[]).map(r => r.client_name))];
+    return uniq.map(n => ({ id: null, name: n }));
+  }catch(e){
+    console.error('[clients fallback]', e);
+    return [];
+  }
+}
+
+function populateClientSelects(){
+  // Filtro
+  fClienteSel.innerHTML = `<option value="">— Todos los clientes —</option>`;
+  // Formulario
+  cliSelect.innerHTML = `<option value="">— Seleccione un cliente —</option>`;
+
+  for(const c of st.clients){
+    const opt1 = document.createElement('option');
+    opt1.value = c.name;
+    opt1.textContent = c.name;
+    fClienteSel.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = c.id ? `${c.id}::${c.name}` : `::${c.name}`; // "id::name" o "::name" si no hay id
+    opt2.textContent = c.name;
+    cliSelect.appendChild(opt2);
+  }
+}
+
 
 // === Render ===
 function render(){
@@ -167,7 +231,7 @@ function toggleDrawer(code, proj){
 function applyFilter(){
   const q = (fQuery.value || '').trim().toLowerCase();
   const estado = (fEstado.value || '').trim().toLowerCase();
-  const cliente = (fCliente.value || '').trim().toLowerCase();
+  const cliente = (fClienteSel.value || '').trim().toLowerCase();
 
   st.filtered = st.all.filter(p => {
     const hitQ = !q || p.project_code.toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q);
@@ -201,44 +265,85 @@ frmCreate?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   show(createMsg,false); show(createErr,false);
 
-  const fd = new FormData(frmCreate);
-  const payload = {
-    project_code: (fd.get('project_code')||'').trim(),
-    name: (fd.get('name')||'').trim(),
-    description: (fd.get('description')||'').trim() || null,
-    status: (fd.get('status')||'Activo').trim(),
-    start_date: (fd.get('start_date')||'') || null,
-    end_date: (fd.get('end_date')||'') || null,
-    client_id: (fd.get('client_id')||'').trim() || null,
-    client_name: (fd.get('client_name')||'').trim(),
-    is_active: true
-  };
-
-  // Solo admin puede enviar estos campos (aunque existan en el form)
-  if (st.isAdmin){
-    const pres = (fd.get('presupuesto')||'').trim();
-    payload.presupuesto = pres === '' ? null : Number(pres);
-    payload.afectacion = (fd.get('afectacion')||'').trim() || null;
-  }
-
-  // Validaciones mínimas
-  if (!payload.project_code || !payload.name || !payload.client_name){
-    createErr.textContent = 'Complete los campos obligatorios (*).';
-    show(createErr,true);
-    return;
-  }
-  if (payload.status !== 'Activo' && payload.status !== 'Cerrado'){
-    createErr.textContent = 'Estado inválido.';
-    show(createErr,true);
-    return;
-  }
-  if (payload.start_date && payload.end_date && payload.end_date < payload.start_date){
-    createErr.textContent = 'La fecha de fin no puede ser anterior al inicio.';
-    show(createErr,true);
-    return;
-  }
-
   try{
+    // Validaciones base del proyecto
+    const fd = new FormData(frmCreate);
+    const base = {
+      project_code: (fd.get('project_code')||'').trim(),
+      name: (fd.get('name')||'').trim(),
+      description: (fd.get('description')||'').trim() || null,
+      status: (fd.get('status')||'Activo').trim(),
+      start_date: (fd.get('start_date')||'') || null,
+      end_date: (fd.get('end_date')||'') || null,
+      is_active: true
+    };
+    if (!base.project_code || !base.name){
+      throw new Error('Complete los campos obligatorios (*).');
+    }
+    if (base.status !== 'Activo' && base.status !== 'Cerrado'){
+      throw new Error('Estado inválido.');
+    }
+    if (base.start_date && base.end_date && base.end_date < base.start_date){
+      throw new Error('La fecha de fin no puede ser anterior al inicio.');
+    }
+
+    // Resolver cliente
+    let client_id = null;
+    let client_name = '';
+
+    if (chkNewClient.checked){
+      // Crear cliente nuevo (requiere tabla clients)
+      const cname = (newClientName.value||'').trim();
+      const ctax  = (newClientTaxId.value||'').trim() || null;
+      if (!cname) throw new Error('Ingrese el nombre del nuevo cliente.');
+
+      // upsert simple por nombre
+      const { data: existing, error: eFind } = await supabase
+        .from('clients')
+        .select('id,name')
+        .eq('name', cname)
+        .limit(1);
+      if (eFind) throw eFind;
+
+      if (existing && existing.length){
+        client_id = existing[0].id;
+        client_name = existing[0].name;
+      }else{
+        const { data: ins, error: eIns } = await supabase
+          .from('clients')
+          .insert({ name: cname, tax_id: ctax, status: 'Activo' })
+          .select('id,name')
+          .single();
+        if (eIns) throw eIns;
+        client_id = ins.id;
+        client_name = ins.name;
+        // Actualizar cache local y selects
+        st.clients.push({ id: client_id, name: client_name });
+        populateClientSelects();
+      }
+    }else{
+      // Cliente seleccionado del dropdown
+      const sel = cliSelect.value;        // formato "id::name" o "::name"
+      if (!sel) throw new Error('Seleccione un cliente o marque "Nuevo cliente".');
+      const [cid, cname] = sel.split('::');
+      client_id = cid || null;
+      client_name = cname || '';
+    }
+
+    const payload = {
+      ...base,
+      client_id,
+      client_name
+    };
+
+    // Solo admin puede enviar presupuesto/afectación
+    if (st.isAdmin){
+      const pres = ($('#frmCreate [name="presupuesto"]')?.value || '').trim();
+      const afe  = ($('#frmCreate [name="afectacion"]')?.value || '').trim() || null;
+      payload.presupuesto = pres === '' ? null : Number(pres);
+      payload.afectacion  = afe;
+    }
+
     const { error } = await supabase.from('projects').insert(payload);
     if (error){
       if (String(error.message||'').includes('duplicate key')){
@@ -246,20 +351,31 @@ frmCreate?.addEventListener('submit', async (ev) => {
       }
       throw error;
     }
+
     createMsg.textContent = '✅ Proyecto creado correctamente.';
     show(createMsg,true);
 
-    // refrescar lista
-    const fresh = await fetchProjects();
-    st.all = fresh;
+    // refrescar lista + clientes (por si creaste uno nuevo)
+    const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
+    st.all = freshProjects;
+    st.clients = freshClients;
+    populateClientSelects();
     applyFilter();
 
-    setTimeout(() => closeCreate(), 800);
+    setTimeout(() => {
+      dlgCreate.close();
+      show(createMsg,false); show(createErr,false);
+      frmCreate.reset();
+      newClientFields.style.display = 'none';
+      chkNewClient.checked = false;
+    }, 800);
+
   }catch(e){
-    createErr.textContent = 'No se pudo crear el proyecto: ' + (e.message || e);
+    createErr.textContent = e.message || String(e);
     show(createErr,true);
   }
 });
+
 
 // === Navegación ===
 btnHome?.addEventListener('click', () => location.href = './');
