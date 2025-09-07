@@ -8,58 +8,8 @@
   <!-- Supabase v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Estilos locales (no usa app.css) -->
-  <style>
-    :root{
-      --bg:#f6f7f9; --card:#fff; --text:#0f172a; --muted:#64748b; --primary:#1e88e5;
-      --border:#e5e7eb; --radius:16px;
-      --ok:#10b981; --warn:#f59e0b; --vio:#5b21b6;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial}
-    .topbar{position:sticky;top:0;z-index:20;display:flex;gap:8px;align-items:center;padding:12px 14px;background:linear-gradient(180deg,rgba(30,136,229,.98),rgba(30,136,229,.92));color:#fff;box-shadow:0 6px 24px rgba(0,0,0,.08)}
-    .title{font-weight:800;font-size:18px}
-    .spacer{flex:1}
-    .btn{border:0;padding:10px 14px;border-radius:14px;background:#fff;color:#0f172a;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.08);cursor:pointer}
-    .wrap{max-width:1100px;margin:14px auto;padding:0 14px}
-
-    .filters{position:sticky;top:56px;z-index:10;margin-bottom:12px}
-    .filterbar{display:flex;gap:8px;flex-wrap:wrap;background:var(--card);padding:10px;border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 24px rgba(2,6,23,.06)}
-    .input,.select{min-width:150px;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:#fff;outline:none}
-    .chip{padding:6px 10px;border-radius:999px;background:#eef2ff;color:#1e3a8a;font-weight:800;font-size:12px}
-
-    .ok{background:#ecfdf5;border:1px solid #d1fae5;color:#065f46;padding:10px;border-radius:12px;margin:8px 0;display:none}
-    .err{background:#fef2f2;border:1px solid #fee2e2;color:#7f1d1d;padding:10px;border-radius:12px;margin:8px 0;display:none}
-
-    .list{display:flex;flex-direction:column;gap:10px}
-    .row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;border:1px solid #eef2f7;border-radius:16px;padding:12px;background:#fff}
-    .id{font-weight:900}
-    .name{font-weight:700}
-    .client{color:var(--muted);font-size:13px}
-    .pill{padding:6px 10px;border-radius:999px;font-weight:800;font-size:12px;justify-self:end}
-    .pill.act{background:#ecfdf5;color:#065f46}
-    .pill.cer{background:#f5f3ff;color:#5b21b6}
-    .meta{display:flex;gap:10px;justify-self:end;color:var(--muted);font-size:12px}
-    .actions{display:flex;gap:8px;justify-self:end}
-    .btn-slim{border:1px solid var(--border);background:#fff;border-radius:12px;padding:8px 10px;font-weight:700;cursor:pointer}
-    .drawer{grid-column:1/-1;margin-top:6px;border-top:1px dashed #e2e8f0;padding-top:8px}
-    .drawer .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-    .kv{background:#f8fafc;border:1px solid #eef2f7;border-radius:12px;padding:10px}
-    .kv .k{font-size:12px;color:var(--muted)}
-    .kv .v{font-weight:700}
-    .empty{color:var(--muted);text-align:center;padding:20px;display:none}
-    @media (max-width:720px){
-      .row{grid-template-columns:1fr auto}
-      .drawer .grid{grid-template-columns:1fr}
-      .filters{top:56px}
-    }
-
-    dialog{border:none;border-radius:16px;max-width:720px;width:96%;padding:0}
-    form.card{margin:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:0 8px 28px rgba(2,6,23,.06)}
-    .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-    .full{grid-column:1/-1}
-  </style>
+  <!-- CSS externo de la página de Proyectos -->
+  <link rel="stylesheet" href="./assets/proyectos.css">
 </head>
 <body>
   <div class="topbar">
@@ -120,24 +70,23 @@
         <label> Fecha inicio (start_date) <input name="start_date" type="date" class="input" /></label>
         <label> Fecha fin (end_date) <input name="end_date" type="date" class="input" /></label>
 
-          <!-- Cliente existente -->
-            <label class="full"> Cliente (seleccione)
-               <select id="cliSelect" class="select" required>
-                <option value="">— Seleccione un cliente —</option>
-             </select>
-           </label>
+        <!-- Cliente existente -->
+        <label class="full"> Cliente (seleccione)
+          <select id="cliSelect" class="select" required>
+            <option value="">— Seleccione un cliente —</option>
+          </select>
+        </label>
 
-<!-- Alternativa: Nuevo cliente -->
-          <div class="full" style="display:flex;align-items:center;gap:8px">
-            <input id="chkNewClient" type="checkbox" />
-            <label for="chkNewClient" class="muted">Nuevo cliente (ingresar manualmente)</label>
-          </div>
+        <!-- Alternativa: Nuevo cliente -->
+        <div class="full" style="display:flex;align-items:center;gap:8px">
+          <input id="chkNewClient" type="checkbox" />
+          <label for="chkNewClient" class="muted">Nuevo cliente (ingresar manualmente)</label>
+        </div>
 
-          <div id="newClientFields" class="grid2" style="display:none">
-             <label> Nombre de cliente* <input id="newClientName" class="input" /></label>
-             <label> Identificación (opcional) <input id="newClientTaxId" class="input" /></label>   
-          </div>
-
+        <div id="newClientFields" class="grid2" style="display:none">
+          <label> Nombre de cliente* <input id="newClientName" class="input" /></label>
+          <label> Identificación (opcional) <input id="newClientTaxId" class="input" /></label>
+        </div>
 
         <!-- Solo Admin -->
         <div class="full" id="adminFields" style="display:none">
