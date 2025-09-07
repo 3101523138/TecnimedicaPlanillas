@@ -261,6 +261,15 @@ btnCreate?.addEventListener('click', () => {
 });
 btnCancel?.addEventListener('click', closeCreate);
 
+// === Toggle Nuevo Cliente ===
+chkNewClient?.addEventListener('change', () => {
+  const isNew = chkNewClient.checked;
+  newClientFields.style.display = isNew ? '' : 'none';
+  // Si es nuevo, deselecciona el select
+  if (isNew) cliSelect.value = '';
+});
+
+
 frmCreate?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   show(createMsg,false); show(createErr,false);
@@ -382,6 +391,7 @@ btnHome?.addEventListener('click', () => location.href = './');
 btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.signOut(); }catch{} location.href='./'; });
 
 // === Init ===
+// === Init ===
 (async function init(){
   // sesión
   st.user = await getUser();
@@ -395,6 +405,15 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
   // rol
   st.isAdmin = await resolveIsAdmin(st.user);
 
+  // ➊ Cargar clientes y poblar selects (antes de proyectos)
+  try{
+    st.clients = await fetchClients();
+    populateClientSelects();
+  }catch(e){
+    console.warn('[clients]', e?.message);
+  }
+
+  // ➋ Cargar proyectos
   try{
     const data = await fetchProjects();
     st.all = data;
@@ -406,6 +425,7 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     show(errEl,true);
   }
 
-  // Listeners de filtro
-  [fEstado, fCliente, fQuery].forEach(el => el?.addEventListener('input', applyFilter));
+  // ➌ Listeners de filtros (usa fClienteSel en lugar de fCliente)
+  [fEstado, fClienteSel, fQuery].forEach(el => el?.addEventListener('input', applyFilter));
 })();
+
