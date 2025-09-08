@@ -56,7 +56,6 @@ function setText(el, t){ el.textContent = t; }
 
 // ---- Normalización de filas (acepta columnas en ES o EN) ----
 function normalizeRow(r){
-  // detecta booleano en cualquiera de los dos nombres
   const isActive = (typeof r.is_active === 'boolean') ? r.is_active
                   : (typeof r.esta_activo === 'boolean') ? r.esta_activo
                   : null;
@@ -65,29 +64,30 @@ function normalizeRow(r){
     project_code: r.project_code ?? r.codigo_del_proyecto ?? r['código_del_proyecto'] ?? null,
     name: r.name ?? r.nombre ?? null,
     description: r.description ?? r.descripcion ?? null,
-    status: r.status ?? r.estado ?? '',            // preferimos status textual
+    status: r.status ?? r.estado ?? '',
     start_date: r.start_date ?? r.fecha_inicio ?? null,
     end_date: r.end_date ?? r.fecha_fin ?? null,
     client_id: r.client_id ?? r.id_del_cliente ?? null,
     client_name: r.client_name ?? r.nombre_del_cliente ?? '',
-    is_active: isActive,
+    is_active: isActive, // queda por compatibilidad/back-end, la UI lo ignora
     presupuesto: r.presupuesto ?? null,
     afectacion: r.afectacion ?? null,
     updated_at: r.updated_at ?? r.actualizado_en ?? r.updatedAt ?? null,
   };
 }
 
+// === Estado SOLO por `status` ===
 function estadoDe(p){
-  // usa status textual si viene, si no, cae al booleano
   const s = (p.status || '').toString().trim().toLowerCase();
-  if (s === 'activo' || s === 'activa') return 'activo';
+  if (s === 'activo' || s === 'activa' || s === 'abierto' || s === 'abierta') return 'activo';
   if (s === 'cerrado' || s === 'cerrada') return 'cerrado';
-  if (p.is_active === true)  return 'activo';
-  if (p.is_active === false) return 'cerrado';
   return 'activo';
 }
 function pillClass(p){ return estadoDe(p) === 'activo' ? 'pill act' : 'pill cer'; }
-function pillText(p){ return (p.status ? p.status : (estadoDe(p) === 'activo' ? 'Activo' : 'Cerrado')); }
+function pillText(p){
+  const s = (p.status || '').toString().trim();
+  return s ? s : (estadoDe(p) === 'activo' ? 'Activo' : 'Cerrado');
+}
 
 async function getUser(){
   try{
@@ -128,12 +128,11 @@ async function fetchProjects(){
   // orden local por código si existe
   normalized.sort((a,b) => (a.project_code||'').localeCompare(b.project_code||''));
 
-  // debug útil
+  // debug útil (sin is_active para no confundir)
   console.info('[projects] total filas:', normalized.length);
   console.table(normalized.slice(0,10).map(p => ({
     project_code: p.project_code,
     status: p.status,
-    is_active: p.is_active,
     client: p.client_name
   })));
 
@@ -267,21 +266,15 @@ function applyFilter(){
 
   st.filtered = st.all.filter(p => {
     const e = estadoDe(p); // 'activo' | 'cerrado'
-    let matchEstado = true;
-    if (estado === 'activo')   matchEstado = (e === 'activo');
-    else if (estado === 'cerrado') matchEstado = (e === 'cerrado');
-
-    const matchCliente = !cliente || (p.client_name || '').toLowerCase().includes(cliente);
+    const matchEstado   = !estado || e === estado;
+    const matchCliente  = !cliente || (p.client_name || '').toLowerCase().includes(cliente);
     return matchEstado && matchCliente;
   });
-
-  console.info('[filter] estado=', estado || 'todos',
-               'cliente=', cliente || 'todos',
-               'resultado=', st.filtered.length);
 
   st.openCode = null;
   render();
 }
+
 
 // === Crear proyecto ===
 function openCreate(){ dlgCreate.showModal(); }
@@ -317,14 +310,14 @@ frmCreate?.addEventListener('submit', async (ev) => {
       description: (fd.get('description')||'').trim() || null,
       status: (fd.get('status')||'Activo').trim(),
       start_date: (fd.get('start_date')||'') || null,
-      end_date: (fd.get('end_date')||'') || null,
-      is_active: true
+      end_date: (fd.get('end_date')||'') || null
+      // is_active: true  // <- YA NO: la UI solo usa status
     };
     if (!base.project_code || !base.name){
       throw new Error('Complete los campos obligatorios (*).');
     }
     const stLower = base.status.toLowerCase();
-    if (stLower !== 'activo' && stLower !== 'cerrado'){
+    if (stLower !== 'activo' && stLower !== 'cerrado' && stLower !== 'abierto' && stLower !== 'abierta'){
       throw new Error('Estado inválido.');
     }
     if (base.start_date && base.end_date && base.end_date < base.start_date){
@@ -408,8 +401,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
     show(createErr,true);
   }
 });
-
-
 
 
 // === Navegación ===
