@@ -412,14 +412,14 @@ frmCreate?.addEventListener('submit', async (ev) => {
   clearInvalids(frmCreate);
   show(createMsg,false); show(createErr,false);
 
-  // botones
+  // botón submit
   const submitBtn = frmCreate.querySelector('button[type="submit"]');
 
   try{
     // Normalización + validación
     const fd = new FormData(frmCreate);
 
-    // Código normalizado a PROJECT-000123
+    // Código → PROJECT-000123
     const rawCode = (fd.get('project_code')||'');
     const normalizedCode = normalizeProjectCode(rawCode);
     frmCreate.querySelector('[name="project_code"]').value = normalizedCode;
@@ -433,7 +433,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
       end_date: (fd.get('end_date')||'') || null
     };
 
-    // Reglas de negocio
     let hasError = false;
     if (!validateProjectCode(base.project_code)){
       markInvalid(frmCreate.querySelector('[name="project_code"]'), 'Formato requerido: PROJECT-000123');
@@ -456,7 +455,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
     // Cliente (o nuevo cliente)
     let client_id = null;
     let client_name = '';
-
     if (chkNewClient.checked){
       const cname = (newClientName.value||'').trim();
       const ctax  = (newClientTaxId.value||'').trim() || null;
@@ -464,9 +462,12 @@ frmCreate?.addEventListener('submit', async (ev) => {
         markInvalid(newClientName, 'Ingrese el nombre del nuevo cliente');
         hasError = true;
       }
-      if (hasError) throw new Error('Revise los campos marcados.');
+      if (hasError){
+        const first = frmCreate.querySelector('.is-invalid');
+        first?.scrollIntoView({behavior:'smooth', block:'center'});
+        throw new Error('Revise los campos marcados.');
+      }
 
-      // upsert por nombre
       const { data: existing, error: eFind } = await supabase
         .from('clients').select('id,name').eq('name', cname).limit(1);
       if (eFind) throw eFind;
@@ -483,7 +484,7 @@ frmCreate?.addEventListener('submit', async (ev) => {
         populateClientSelects();
       }
     }else{
-      const sel = cliSelect.value;  // "id::name" o "::name"
+      const sel = cliSelect.value;
       if (!sel){
         markInvalid(cliSelect, 'Seleccione un cliente');
         hasError = true;
@@ -492,8 +493,11 @@ frmCreate?.addEventListener('submit', async (ev) => {
         client_id = cid || null; client_name = cname || '';
       }
     }
-
-    if (hasError) throw new Error('Corrija los campos resaltados.');
+    if (hasError){
+      const first = frmCreate.querySelector('.is-invalid');
+      first?.scrollIntoView({behavior:'smooth', block:'center'});
+      throw new Error('Corrija los campos resaltados.');
+    }
 
     const payload = { ...base, client_id, client_name };
 
@@ -508,21 +512,24 @@ frmCreate?.addEventListener('submit', async (ev) => {
     // Guardar
     setLoading(submitBtn, true);
     const { error } = await supabase.from('projects').insert(payload);
+
     if (error){
-      // Mensaje amigable por duplicado
-      if (String(error.message||'').toLowerCase().includes('duplicate')){
+      console.error('[projects.insert]', error);
+      // Mapeo de 403/RLS y duplicados a mensajes claros
+      const msg = (error.status === 403 || /rls|policy|permission/i.test(error.message))
+        ? 'No tiene permisos para crear proyectos (RLS).'
+        : (/duplicate|unique/i.test(error.message) ? 'El código ya existe.' : (error.message || 'Error al guardar'));
+      if (/duplicate|unique/i.test(error.message)){
         markInvalid(frmCreate.querySelector('[name="project_code"]'), 'Ese código ya existe');
-        throw new Error('El código de proyecto ya existe.');
       }
-      throw error;
+      throw new Error(msg);
     }
 
-    // Feedback iOS: toast + autocierre
+    // Éxito → toast + autocierre
     showToast('✅ Proyecto creado', 'success', 1200);
     createMsg.textContent = 'Proyecto creado correctamente.';
-    show(createMsg, true);
+    show(createMsg,true);
 
-    // Refresca y cierra
     const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
     st.all = freshProjects; st.clients = freshClients;
     populateClientSelects(); applyFilter();
@@ -536,14 +543,14 @@ frmCreate?.addEventListener('submit', async (ev) => {
     }, 900);
 
   }catch(e){
-    // Error visible (toast + banner)
     createErr.textContent = e.message || String(e);
     show(createErr,true);
-    showToast(e.message || 'Error al guardar', 'error', 1600);
+    showToast(e.message || 'Error al guardar', 'error', 1800);
   }finally{
     setLoading(submitBtn, false);
   }
 });
+
 
 
 
