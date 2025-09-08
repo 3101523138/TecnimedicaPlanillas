@@ -49,10 +49,15 @@ const st = {
 };
 window.st = st; // para debug rápido en consola
 
+// === Permisos especiales ===
+const REOPENER_EMAIL = 'jrojas@tecnomedicacr.com';
+
 // === Helpers ===
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
+function toastOk(t){ msgEl.textContent = t; show(msgEl,true); setTimeout(()=>show(msgEl,false),1500); }
+function toastErr(t){ errEl.textContent = t; show(errEl,true); setTimeout(()=>show(errEl,false),2500); }
 
 // ---- Normalización de filas (acepta columnas en ES o EN) ----
 function normalizeRow(r){
@@ -73,6 +78,9 @@ function normalizeRow(r){
     presupuesto: r.presupuesto ?? null,
     afectacion: r.afectacion ?? null,
     updated_at: r.updated_at ?? r.actualizado_en ?? r.updatedAt ?? null,
+    // Auditoría de cierre
+    closed_at: r.closed_at ?? r.cerrado_en ?? null,
+    closed_by_email: r.closed_by_email ?? r.cerrado_por ?? null,
   };
 }
 
@@ -88,6 +96,9 @@ function pillText(p){
   const s = (p.status || '').toString().trim();
   return s ? s : (estadoDe(p) === 'activo' ? 'Activo' : 'Cerrado');
 }
+
+function canClose(p){ return st.isAdmin && estadoDe(p) === 'activo'; }
+function canReopen(p){ return (st.user?.email === REOPENER_EMAIL) && estadoDe(p) === 'cerrado'; }
 
 async function getUser(){
   try{
@@ -183,6 +194,39 @@ function populateClientSelects(){
   }
 }
 
+// === Acciones de estado (cerrar/reabrir) ===
+function askConfirm(texto){ return window.confirm(texto); }
+
+async function updateStatus(projectCode, nextStatus){
+  try{
+    const { error } = await supabase
+      .from('projects')
+      .update({ status: nextStatus })
+      .eq('project_code', projectCode);
+
+    if (error) throw error;
+
+    // refrescar datos y re-render
+    st.all = await fetchProjects();
+    applyFilter();
+    toastOk(`Estado actualizado a ${nextStatus}.`);
+  }catch(e){
+    toastErr(e.message || String(e));
+  }
+}
+
+async function closeProject(p){
+  if (!canClose(p)) return;
+  if (!askConfirm(`¿Cerrar el proyecto ${p.project_code}?`)) return;
+  await updateStatus(p.project_code, 'Cerrado');
+}
+
+async function reopenProject(p){
+  if (!canReopen(p)) return;
+  if (!askConfirm(`¿Reabrir el proyecto ${p.project_code}?`)) return;
+  await updateStatus(p.project_code, 'Activo'); // o 'Abierto' si prefieres
+}
+
 // === Render ===
 function render(){
   listEl.innerHTML = '';
@@ -221,11 +265,32 @@ function render(){
 
     const actions = document.createElement('div');
     actions.className = 'actions';
+
     const btnToggle = document.createElement('button');
     btnToggle.className = 'btn-slim';
     btnToggle.textContent = (st.openCode === p.project_code) ? 'Ocultar' : 'Ver detalle';
     btnToggle.addEventListener('click', () => toggleDrawer(p.project_code));
     actions.appendChild(btnToggle);
+
+    // Botón Cerrar (solo admin cuando está activo)
+    if (canClose(p)){
+      const btnClose = document.createElement('button');
+      btnClose.className = 'btn-slim';
+      btnClose.style.borderColor = '#10b981';
+      btnClose.textContent = 'Cerrar';
+      btnClose.addEventListener('click', () => closeProject(p));
+      actions.appendChild(btnClose);
+    }
+
+    // Botón Reabrir (solo jrojas cuando está cerrado)
+    if (canReopen(p)){
+      const btnOpen = document.createElement('button');
+      btnOpen.className = 'btn-slim';
+      btnOpen.style.borderColor = '#1e88e5';
+      btnOpen.textContent = 'Reabrir';
+      btnOpen.addEventListener('click', () => reopenProject(p));
+      actions.appendChild(btnOpen);
+    }
 
     row.appendChild(left);
     row.appendChild(pill);
@@ -248,6 +313,10 @@ function render(){
             <div class="kv"><div class="k">Presupuesto</div><div class="v">${esc(p.presupuesto ?? '—')}</div></div>
             <div class="kv"><div class="k">Afectación</div><div class="v">${esc(p.afectacion ?? '—')}</div></div>
           `:''}
+          ${estadoDe(p) === 'cerrado' ? `
+            <div class="kv"><div class="k">Cerrado por</div><div class="v">${esc(p.closed_by_email || '—')}</div></div>
+            <div class="kv"><div class="k">Cerrado el</div><div class="v">${p.closed_at ? esc(new Date(p.closed_at).toLocaleString()) : '—'}</div></div>
+          `:``}
         </div>
         <div style="margin-top:8px" class="client">Actualizado: ${p.updated_at ? esc(new Date(p.updated_at).toLocaleString()) : '—'}</div>
       `;
