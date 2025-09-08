@@ -241,6 +241,7 @@ function render(){
     if (st.openCode === p.project_code) row.classList.add('open');
     row.dataset.code = p.project_code;
 
+    // Columna izquierda: id, nombre, cliente
     const left = document.createElement('div');
     left.innerHTML = `
       <div class="id">${esc(p.project_code ?? '—')}</div>
@@ -248,58 +249,48 @@ function render(){
       <div class="client">${esc(p.client_name || '—')}</div>
     `;
 
+    // Pill de estado
     const pill = document.createElement('div');
     pill.className = pillClass(p);
-    const pillTxt = pillText(p);
-    pill.textContent = pillTxt;
+    pill.textContent = pillText(p);
 
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    if (st.isAdmin){
-      const pres = (p.presupuesto==null || p.presupuesto==='') ? '—' : Number(p.presupuesto).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
-      const afe  = p.afectacion || '—';
-      meta.innerHTML = `<span><b>Pres:</b> ${esc(pres)}</span><span><b>Afect:</b> ${esc(afe)}</span>`;
-    }else{
-      meta.innerHTML = `<span class="muted">—</span>`;
-    }
-
+    // Acciones (horizontal)
     const actions = document.createElement('div');
     actions.className = 'actions';
-
     const btnToggle = document.createElement('button');
     btnToggle.className = 'btn-slim';
     btnToggle.textContent = (st.openCode === p.project_code) ? 'Ocultar' : 'Ver detalle';
     btnToggle.addEventListener('click', () => toggleDrawer(p.project_code));
     actions.appendChild(btnToggle);
 
-    // Botón Cerrar (solo admin cuando está activo)
+    // Cerrar (solo admin cuando está activo)
     if (canClose(p)){
       const btnClose = document.createElement('button');
-      btnClose.className = 'btn-slim';
-      btnClose.style.borderColor = '#10b981';
+      btnClose.className = 'btn-slim solid-green';
       btnClose.textContent = 'Cerrar';
       btnClose.addEventListener('click', () => closeProject(p));
       actions.appendChild(btnClose);
     }
 
-    // Botón Reabrir (solo jrojas cuando está cerrado)
+    // Reabrir (solo jrojas cuando está cerrado)
     if (canReopen(p)){
       const btnOpen = document.createElement('button');
-      btnOpen.className = 'btn-slim';
-      btnOpen.style.borderColor = '#1e88e5';
+      btnOpen.className = 'btn-slim solid-blue';
       btnOpen.textContent = 'Reabrir';
       btnOpen.addEventListener('click', () => reopenProject(p));
       actions.appendChild(btnOpen);
     }
 
+    // Montaje
     row.appendChild(left);
     row.appendChild(pill);
-    row.appendChild(meta);
-    row.appendChild(actions);
+    row.appendChild(actions); // se fuerza a ocupar 1/-1 por CSS
 
+    // Drawer (detalle)
     if (st.openCode === p.project_code){
       const drawer = document.createElement('div');
       drawer.className = 'drawer';
+      const pillTxt = pillText(p);
       drawer.innerHTML = `
         <div class="grid">
           <div class="kv"><div class="k">Código</div><div class="v">${esc(p.project_code ?? '—')}</div></div>
@@ -313,10 +304,10 @@ function render(){
             <div class="kv"><div class="k">Presupuesto</div><div class="v">${esc(p.presupuesto ?? '—')}</div></div>
             <div class="kv"><div class="k">Afectación</div><div class="v">${esc(p.afectacion ?? '—')}</div></div>
           `:''}
-          ${estadoDe(p) === 'cerrado' ? `
+          ${(estadoDe(p) === 'cerrado' && (p.closed_by_email || p.closed_at)) ? `
             <div class="kv"><div class="k">Cerrado por</div><div class="v">${esc(p.closed_by_email || '—')}</div></div>
             <div class="kv"><div class="k">Cerrado el</div><div class="v">${p.closed_at ? esc(new Date(p.closed_at).toLocaleString()) : '—'}</div></div>
-          `:``}
+          `: ``}
         </div>
         <div style="margin-top:8px" class="client">Actualizado: ${p.updated_at ? esc(new Date(p.updated_at).toLocaleString()) : '—'}</div>
       `;
@@ -326,6 +317,7 @@ function render(){
     listEl.appendChild(row);
   }
 }
+
 
 function toggleDrawer(code){ st.openCode = (st.openCode === code) ? null : code; render(); }
 
