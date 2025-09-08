@@ -8,7 +8,6 @@
               "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
 }
 
-/* Nada global: todo va con prefijo .proyectos */
 .proyectos *{ box-sizing:border-box }
 .proyectos{ background:var(--bg); color:var(--text); font-family:var(--ios-font); }
 .proyectos .wrap{ width:min(92vw,1100px); margin:24px auto; }
@@ -50,12 +49,12 @@
 .proyectos .floatBtn.grey{ background:#cfd6df; color:#111; }
 .proyectos .floatBtn.red { background:#ef4444; color:#fff; }
 
-/* Orden vertical (sin montarse) — parte inferior */
+/* Orden vertical (parte inferior) */
 .proyectos #btnCreate { bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
 .proyectos #btnHome   { bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); }
 .proyectos #btnSignOut{ bottom: calc(env(safe-area-inset-bottom, 0px) + 128px); }
 @media (min-width:1024px){
-  .proyectos .floatBtn{ position: fixed; right: 18px; }
+  .proyectos .floatBtn{ right: 18px; }
   .proyectos #btnCreate { bottom: 20px; }
   .proyectos #btnHome   { bottom: 74px; }
   .proyectos #btnSignOut{ bottom: 128px; }
@@ -91,9 +90,8 @@
   border-radius:18px;
   padding:16px;
   box-shadow:0 6px 20px rgba(0,0,0,.07);
-  overflow:hidden;                         /* evita desbordes visuales */
+  overflow:hidden;                         /* evita desbordes (badge siempre dentro) */
 }
-
 .proyectos .row.open{
   border-color:#86efac;
   box-shadow:0 0 0 3px #d1fae5 inset, 0 8px 24px rgba(0,0,0,.08);
@@ -119,7 +117,7 @@
   justify-self:end;
   white-space:nowrap;
   line-height:1;
-  margin-right:2px; /* no pegarse al borde curvo */
+  margin-right:2px;
 }
 .proyectos .pill.act{ background:#ecfdf5; color:#065f46; border:2px solid #16a34a }
 .proyectos .pill.cer{ background:#f5f3ff; color:#5b21b6; border:2px solid #7c3aed }
@@ -148,47 +146,34 @@
 .proyectos .err{ background:#fef2f2; border:1px solid #fee2e2; color:#7f1d1d; padding:10px; border-radius:12px; margin:8px 0; display:none }
 .proyectos .empty{ color:var(--muted); text-align:center; padding:20px; display:none }
 
-/* Modal Crear Proyecto */
-.proyectos dialog{ border:none; border-radius:24px; max-width:800px; width:96%; padding:0 }
-.proyectos dialog::backdrop{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px) }
+/* ===== Modal Crear Proyecto — iOS sheet 100% móvil ===== */
+.proyectos dialog{
+  border:none;
+  padding:0;
+  width: min(96vw, 720px);
+  max-width: 720px;
+  margin: 0 auto;
+  border-radius: 24px;
+  overflow: hidden;
+}
+.proyectos dialog::backdrop{
+  background:rgba(15,23,42,.45);
+  backdrop-filter:blur(2px);
+}
+
+/* Contenedor del formulario: scroll interno + padding inferior */
 .proyectos form.card{
-  margin:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius);
-  padding:18px; box-shadow:0 16px 48px rgba(0,0,0,.14);
-}
-.proyectos form.card h3{ font-size:22px; font-weight:800; margin:0 0 6px; color:#111827 }
-.proyectos form.card .muted{ color:var(--muted); font-size:13px }
-.proyectos .grid2{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px }
-.proyectos .full{ grid-column:1/-1 }
-
-.proyectos form.card label{ display:block; font-size:13px; color:var(--muted); font-weight:600; margin:2px 0 4px }
-.proyectos form.card .input,
-.proyectos form.card .select,
-.proyectos form.card textarea{
-  width:100%; padding:12px 14px; border-radius:14px; border:1px solid var(--border);
-  background:#fff; font-size:16px; outline:none; font-family:inherit;
-}
-.proyectos form.card textarea{ resize:vertical; min-height:96px }
-
-.proyectos #adminFields{
-  margin-top:6px; border:1px dashed #e5e7eb; border-radius:16px; padding:10px; background:#f9fafb;
-}
-.proyectos form.card .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:14px }
-.proyectos form.card .btn-slim{ background:#f8fafc }
-.proyectos form.card .btn-slim:hover{ background:#eef2f7 }
-
-/* Responsive local */
-@media (max-width:720px){
-  .proyectos .row{ grid-template-columns:minmax(0,1fr) auto }
-  .proyectos .drawer .grid{ grid-template-columns:1fr }
-}
-
-/* === iOS look para el modal/ formulario de Crear Proyecto === */
-.proyectos dialog{ border:none; border-radius:24px; max-width:720px; width:96%; padding:0 }
-.proyectos dialog::backdrop{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px) }
-
-.proyectos form.card{
-  margin:0; background:#fff; border:1px solid var(--border); border-radius:24px;
-  padding:18px 18px 0; box-shadow:0 16px 48px rgba(0,0,0,.14);
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+  margin:0;
+  background:#fff;
+  border:1px solid var(--border);
+  border-radius:24px;
+  max-height: min(88svh, 88vh);
+  overflow: hidden;
+  padding:18px 18px 80px; /* deja espacio para el footer sticky */
+  box-shadow:0 16px 48px rgba(0,0,0,.14);
 }
 .proyectos form.card h3{ font-size:20px; font-weight:800; margin:0 0 4px; color:#111827 }
 .proyectos form.card .muted{ color:var(--muted); font-size:13px; margin-bottom:8px }
@@ -216,17 +201,19 @@
 .proyectos .is-invalid{ border-color:#FF3B30 !important; box-shadow:0 0 0 2px rgba(255,59,48,.18) !important }
 .proyectos .err-inline{ margin-top:6px; color:#b91c1c; font-size:12px; font-weight:600 }
 
-/* Secciones suaves */
+/* Separadores suaves */
 .proyectos .section-divider{ grid-column:1/-1; height:1px; background:#eef2f7; margin:8px 0 2px }
 .proyectos .section-title{ grid-column:1/-1; color:#6b7280; font-size:12px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; margin-top:6px }
 
-/* Footer sticky con acciones (Guardar/Cancelar) */
+/* Footer sticky con acciones */
 .proyectos form.card .actions{
-  position:sticky; bottom:0; left:0; right:0;
+  position: sticky;
+  bottom: 0; left:0; right:0;
   display:flex; gap:10px; justify-content:flex-end;
-  padding:12px 0 16px; margin-top:10px;
-  background:linear-gradient(to top, rgba(255,255,255,1) 65%, rgba(255,255,255,.85) 100%);
+  padding:12px 18px 16px;
+  background:linear-gradient(to top, rgba(255,255,255,1) 65%, rgba(255,255,255,.88) 100%);
   border-top:1px solid #eef2f7;
+  margin-top:auto;
 }
 .proyectos form.card .actions .btn{
   background:#007AFF; color:#fff; border-radius:14px; font-weight:800; padding:12px 18px;
@@ -245,8 +232,6 @@
   animation:iosspin .8s linear infinite;
   position:absolute; right:14px; top:50%; transform:translateY(-50%);
 }
-@keyframes iossin { to { transform:translateY(-50%) rotate(360deg) } } /* (fallback) */
-@keyframes iossin {}
 @keyframes iosspin { to { transform:translateY(-50%) rotate(360deg) } }
 
 /* Toast (confirmaciones/errores) */
@@ -265,5 +250,9 @@
 
 /* Responsive */
 @media (max-width:720px){
+  .proyectos .row{ grid-template-columns:minmax(0,1fr) auto }
+  .proyectos .drawer .grid{ grid-template-columns:1fr }
+  .proyectos dialog{ width:96vw; max-width:96vw; }
+  .proyectos form.card{ padding:14px 14px 74px; max-height:min(90svh,90vh); }
   .proyectos .grid2{ grid-template-columns:1fr }
 }
