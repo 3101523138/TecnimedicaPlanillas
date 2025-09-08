@@ -336,6 +336,54 @@ function applyFilter(){
   render();
 }
 
+// === Helpers UI iOS (toast, errores, loading) ===
+function ensureToast(){
+  if (document.getElementById('appToast')) return;
+  const t = document.createElement('div');
+  t.id = 'appToast'; t.className = 'toast';
+  document.body.appendChild(t);
+}
+function showToast(msg, type='success', ms=1400){
+  ensureToast();
+  const t = document.getElementById('appToast');
+  t.className = `toast ${type}`; t.textContent = msg;
+  requestAnimationFrame(() => { t.classList.add('show'); });
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function setLoading(btn, on=true){
+  if (!btn) return;
+  btn.classList.toggle('loading', on);
+  btn.disabled = !!on;
+}
+
+// Valida/normaliza código: PROJECT-000123
+function normalizeProjectCode(raw){
+  let v = (raw || '').trim().toUpperCase();
+  if (/^PROJECT-\d{6}$/.test(v)) return v;
+  const digits = v.replace(/\D/g,'').slice(-6);
+  if (digits) return `PROJECT-${digits.padStart(6,'0')}`;
+  return v;
+}
+function validateProjectCode(v){ return /^PROJECT-\d{6}$/.test(v); }
+
+// Inline errors
+function clearInvalids(formEl){
+  formEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+  formEl.querySelectorAll('.err-inline').forEach(el => el.remove());
+}
+function markInvalid(inputEl, msg){
+  if (!inputEl) return;
+  inputEl.classList.add('is-invalid');
+  const holder = document.createElement('div');
+  holder.className = 'err-inline';
+  holder.textContent = msg;
+  const parent = inputEl.closest('label') || inputEl.parentElement;
+  parent && parent.appendChild(holder);
+}
+
+
+
 
 // === Crear proyecto ===
 function openCreate(){ dlgCreate.showModal(); }
@@ -361,71 +409,95 @@ chkNewClient?.addEventListener('change', () => {
 
 frmCreate?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
+  clearInvalids(frmCreate);
   show(createMsg,false); show(createErr,false);
 
+  // botones
+  const submitBtn = frmCreate.querySelector('button[type="submit"]');
+
   try{
+    // Normalización + validación
     const fd = new FormData(frmCreate);
+
+    // Código normalizado a PROJECT-000123
+    const rawCode = (fd.get('project_code')||'');
+    const normalizedCode = normalizeProjectCode(rawCode);
+    frmCreate.querySelector('[name="project_code"]').value = normalizedCode;
+
     const base = {
-      project_code: (fd.get('project_code')||'').trim(),
+      project_code: normalizedCode,
       name: (fd.get('name')||'').trim(),
       description: (fd.get('description')||'').trim() || null,
       status: (fd.get('status')||'Activo').trim(),
       start_date: (fd.get('start_date')||'') || null,
       end_date: (fd.get('end_date')||'') || null
-      // is_active: true  // <- YA NO: la UI solo usa status
     };
-    if (!base.project_code || !base.name){
-      throw new Error('Complete los campos obligatorios (*).');
+
+    // Reglas de negocio
+    let hasError = false;
+    if (!validateProjectCode(base.project_code)){
+      markInvalid(frmCreate.querySelector('[name="project_code"]'), 'Formato requerido: PROJECT-000123');
+      hasError = true;
+    }
+    if (!base.name){
+      markInvalid(frmCreate.querySelector('[name="name"]'), 'Este campo es obligatorio');
+      hasError = true;
     }
     const stLower = base.status.toLowerCase();
-    if (stLower !== 'activo' && stLower !== 'cerrado' && stLower !== 'abierto' && stLower !== 'abierta'){
-      throw new Error('Estado inválido.');
+    if (!['activo','cerrado','abierto','abierta'].includes(stLower)){
+      markInvalid(frmCreate.querySelector('[name="status"]'), 'Estado inválido');
+      hasError = true;
     }
     if (base.start_date && base.end_date && base.end_date < base.start_date){
-      throw new Error('La fecha de fin no puede ser anterior al inicio.');
+      markInvalid(frmCreate.querySelector('[name="end_date"]'), 'La fecha fin no puede ser anterior al inicio');
+      hasError = true;
     }
 
-    // Resolver cliente
+    // Cliente (o nuevo cliente)
     let client_id = null;
     let client_name = '';
 
     if (chkNewClient.checked){
       const cname = (newClientName.value||'').trim();
       const ctax  = (newClientTaxId.value||'').trim() || null;
-      if (!cname) throw new Error('Ingrese el nombre del nuevo cliente.');
+      if (!cname){
+        markInvalid(newClientName, 'Ingrese el nombre del nuevo cliente');
+        hasError = true;
+      }
+      if (hasError) throw new Error('Revise los campos marcados.');
 
+      // upsert por nombre
       const { data: existing, error: eFind } = await supabase
-        .from('clients')
-        .select('id,name')
-        .eq('name', cname)
-        .limit(1);
+        .from('clients').select('id,name').eq('name', cname).limit(1);
       if (eFind) throw eFind;
 
       if (existing && existing.length){
-        client_id = existing[0].id;
-        client_name = existing[0].name;
+        client_id = existing[0].id; client_name = existing[0].name;
       }else{
         const { data: ins, error: eIns } = await supabase
-          .from('clients')
-          .insert({ name: cname, tax_id: ctax, status: 'Activo' })
-          .select('id,name')
-          .single();
+          .from('clients').insert({ name: cname, tax_id: ctax, status: 'Activo' })
+          .select('id,name').single();
         if (eIns) throw eIns;
-        client_id = ins.id;
-        client_name = ins.name;
+        client_id = ins.id; client_name = ins.name;
         st.clients.push({ id: client_id, name: client_name });
         populateClientSelects();
       }
     }else{
-      const sel = cliSelect.value; // "id::name" o "::name"
-      if (!sel) throw new Error('Seleccione un cliente o marque "Nuevo cliente".');
-      const [cid, cname] = sel.split('::');
-      client_id = cid || null;
-      client_name = cname || '';
+      const sel = cliSelect.value;  // "id::name" o "::name"
+      if (!sel){
+        markInvalid(cliSelect, 'Seleccione un cliente');
+        hasError = true;
+      }else{
+        const [cid, cname] = sel.split('::');
+        client_id = cid || null; client_name = cname || '';
+      }
     }
+
+    if (hasError) throw new Error('Corrija los campos resaltados.');
 
     const payload = { ...base, client_id, client_name };
 
+    // Admin extra
     if (st.isAdmin){
       const pres = ($('#frmCreate [name="presupuesto"]')?.value || '').trim();
       const afe  = ($('#frmCreate [name="afectacion"]')?.value || '').trim() || null;
@@ -433,21 +505,27 @@ frmCreate?.addEventListener('submit', async (ev) => {
       payload.afectacion  = afe;
     }
 
+    // Guardar
+    setLoading(submitBtn, true);
     const { error } = await supabase.from('projects').insert(payload);
     if (error){
-      if (String(error.message||'').includes('duplicate key')){
+      // Mensaje amigable por duplicado
+      if (String(error.message||'').toLowerCase().includes('duplicate')){
+        markInvalid(frmCreate.querySelector('[name="project_code"]'), 'Ese código ya existe');
         throw new Error('El código de proyecto ya existe.');
       }
       throw error;
     }
 
-    createMsg.textContent = '✅ Proyecto creado correctamente.';
-    show(createMsg,true);
+    // Feedback iOS: toast + autocierre
+    showToast('✅ Proyecto creado', 'success', 1200);
+    createMsg.textContent = 'Proyecto creado correctamente.';
+    show(createMsg, true);
 
-    st.all = await fetchProjects();
-    st.clients = await fetchClients();
-    populateClientSelects();
-    applyFilter();
+    // Refresca y cierra
+    const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
+    st.all = freshProjects; st.clients = freshClients;
+    populateClientSelects(); applyFilter();
 
     setTimeout(() => {
       dlgCreate.close();
@@ -455,13 +533,18 @@ frmCreate?.addEventListener('submit', async (ev) => {
       frmCreate.reset();
       newClientFields.style.display = 'none';
       chkNewClient.checked = false;
-    }, 800);
+    }, 900);
 
   }catch(e){
+    // Error visible (toast + banner)
     createErr.textContent = e.message || String(e);
     show(createErr,true);
+    showToast(e.message || 'Error al guardar', 'error', 1600);
+  }finally{
+    setLoading(submitBtn, false);
   }
 });
+
 
 
 // === Navegación ===
