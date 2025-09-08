@@ -34,8 +34,10 @@
   padding:10px 14px; border-radius:12px; background:#fff; color:#111827;
   border:1px solid var(--border); font-weight:700; cursor:pointer; font-family:inherit;
 }
+.proyectos .btn-slim.solid-green{ border-color:#16a34a; background:#ecfdf5 }
+.proyectos .btn-slim.solid-blue { border-color:#1e88e5; background:#eff6ff }
 
-/* === Botones flotantes: ahora ABAJO a la derecha (evita solapes) === */
+/* === Botones flotantes: ABAJO a la derecha (evita solapes) === */
 .proyectos .floatBtn{
   position: fixed;
   right: max(12px, env(safe-area-inset-right, 0px));
@@ -48,7 +50,7 @@
 .proyectos .floatBtn.grey{ background:#cfd6df; color:#111; }
 .proyectos .floatBtn.red { background:#ef4444; color:#fff; }
 
-/* Orden vertical (sin montarse) — en la parte inferior */
+/* Orden vertical (sin montarse) — parte inferior */
 .proyectos #btnCreate { bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
 .proyectos #btnHome   { bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); }
 .proyectos #btnSignOut{ bottom: calc(env(safe-area-inset-bottom, 0px) + 128px); }
@@ -59,7 +61,7 @@
   .proyectos #btnSignOut{ bottom: 128px; }
 }
 
-/* Filtros (no sticky) */
+/* Filtros */
 .proyectos .filters{ position:static; margin-bottom:12px }
 .proyectos .filterbar{
   display:flex; gap:10px; flex-wrap:wrap; align-items:center;
@@ -75,39 +77,64 @@
   padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a; font-weight:800; font-size:12px;
 }
 
-/* Lista */
-.proyectos .list{ display:flex; flex-direction:column; gap:12px }
+/* ====== LISTA ====== */
+.proyectos .list{ display:flex; flex-direction:column; gap:14px }
+
 .proyectos .row{
-  display:grid; grid-template-columns:1fr auto auto auto; gap:12px; align-items:center;
-  background:#fff; border:1px solid #eef2f7; border-radius:18px; padding:14px 16px;
-  box-shadow:0 4px 16px rgba(0,0,0,.06);
-  /* 2) Mantiene el badge dentro del card */
-  overflow: hidden;
+  position:relative;
+  display:grid;
+  grid-template-columns: minmax(0,1fr) auto; /* texto flexible + pill fijo */
+  gap:12px;
+  align-items:start;
+  background:#fff;
+  border:2px solid #e5e7eb;               /* marco más marcado */
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 6px 20px rgba(0,0,0,.07);
+  overflow:hidden;                         /* evita desbordes visuales */
 }
-.proyectos .row.open{ outline:3px solid #A7F3D0; outline-offset:2px; background:#f8fffb }
+
+.proyectos .row.open{
+  border-color:#86efac;
+  box-shadow:0 0 0 3px #d1fae5 inset, 0 8px 24px rgba(0,0,0,.08);
+  background:#f8fffb;
+}
+
 .proyectos .id{ font-weight:900; font-size:14px; color:#111827 }
-.proyectos .name{ font-weight:800; margin-top:2px }
+.proyectos .name{
+  font-weight:800;
+  margin-top:2px;
+  line-height:1.25;
+  word-break:break-word;
+  overflow-wrap:break-word;
+}
 .proyectos .client{ color:var(--muted); font-size:13px }
 
-/* Badges con outline verde intenso */
+/* Pastilla de estado */
 .proyectos .pill{
-  padding:6px 10px; border-radius:999px; font-weight:800; font-size:12px; justify-self:end;
-  line-height:1; display:inline-flex; align-items:center; gap:6px;
-  /* margen para no pegarse al borde curvo */
-  margin-right: 2px;
+  padding:6px 12px;
+  border-radius:999px;
+  font-weight:800;
+  font-size:12px;
+  justify-self:end;
+  white-space:nowrap;
+  line-height:1;
+  margin-right:2px; /* no pegarse al borde curvo */
 }
-.proyectos .pill.act{
-  color: var(--green-600);
-  background: var(--green-50);
-  border: 2px solid var(--green-600);
-}
-.proyectos .pill.cer{
-  color: var(--slate-600);
-  background: var(--slate-100);
-  border: 2px solid var(--slate-400);
+.proyectos .pill.act{ background:#ecfdf5; color:#065f46; border:2px solid #16a34a }
+.proyectos .pill.cer{ background:#f5f3ff; color:#5b21b6; border:2px solid #7c3aed }
+
+/* Acciones horizontales al pie del card */
+.proyectos .actions{
+  grid-column:1/-1;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:8px;
 }
 
-.proyectos .meta{ display:flex; gap:10px; justify-self:end; color:var(--muted); font-size:12px }
+/* Oculta meta del resumen (Pres/Afect) en la lista */
+.proyectos .meta{ display:none !important }
 
 /* Detalle */
 .proyectos .drawer{ grid-column:1/-1; margin-top:6px; border-top:1px dashed #e2e8f0; padding-top:10px }
@@ -151,6 +178,6 @@
 
 /* Responsive local */
 @media (max-width:720px){
-  .proyectos .row{ grid-template-columns:1fr auto auto }
+  .proyectos .row{ grid-template-columns:minmax(0,1fr) auto }
   .proyectos .drawer .grid{ grid-template-columns:1fr }
 }
