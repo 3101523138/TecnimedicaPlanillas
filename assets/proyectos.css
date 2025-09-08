@@ -181,3 +181,89 @@
   .proyectos .row{ grid-template-columns:minmax(0,1fr) auto }
   .proyectos .drawer .grid{ grid-template-columns:1fr }
 }
+
+/* === iOS look para el modal/ formulario de Crear Proyecto === */
+.proyectos dialog{ border:none; border-radius:24px; max-width:720px; width:96%; padding:0 }
+.proyectos dialog::backdrop{ background:rgba(15,23,42,.45); backdrop-filter:blur(2px) }
+
+.proyectos form.card{
+  margin:0; background:#fff; border:1px solid var(--border); border-radius:24px;
+  padding:18px 18px 0; box-shadow:0 16px 48px rgba(0,0,0,.14);
+}
+.proyectos form.card h3{ font-size:20px; font-weight:800; margin:0 0 4px; color:#111827 }
+.proyectos form.card .muted{ color:var(--muted); font-size:13px; margin-bottom:8px }
+
+.proyectos .grid2{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px }
+.proyectos .full{ grid-column:1/-1 }
+
+/* Inputs/Select iOS */
+.proyectos form.card label{ display:block; font-size:13px; color:var(--muted); font-weight:600; margin:2px 0 6px }
+.proyectos form.card .input,
+.proyectos form.card .select,
+.proyectos form.card textarea{
+  width:100%; padding:12px 14px; border-radius:14px;
+  border:1px solid #d1d5db; background:#fff; font-size:16px; outline:none; font-family:inherit;
+  transition:border-color .15s, box-shadow .15s;
+}
+.proyectos form.card .input:focus,
+.proyectos form.card .select:focus,
+.proyectos form.card textarea:focus{
+  border-color:#0A84FF; box-shadow:0 0 0 2px rgba(10,132,255,.25);
+}
+.proyectos form.card textarea{ resize:vertical; min-height:96px }
+
+/* Inline errors */
+.proyectos .is-invalid{ border-color:#FF3B30 !important; box-shadow:0 0 0 2px rgba(255,59,48,.18) !important }
+.proyectos .err-inline{ margin-top:6px; color:#b91c1c; font-size:12px; font-weight:600 }
+
+/* Secciones suaves */
+.proyectos .section-divider{ grid-column:1/-1; height:1px; background:#eef2f7; margin:8px 0 2px }
+.proyectos .section-title{ grid-column:1/-1; color:#6b7280; font-size:12px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; margin-top:6px }
+
+/* Footer sticky con acciones (Guardar/Cancelar) */
+.proyectos form.card .actions{
+  position:sticky; bottom:0; left:0; right:0;
+  display:flex; gap:10px; justify-content:flex-end;
+  padding:12px 0 16px; margin-top:10px;
+  background:linear-gradient(to top, rgba(255,255,255,1) 65%, rgba(255,255,255,.85) 100%);
+  border-top:1px solid #eef2f7;
+}
+.proyectos form.card .actions .btn{
+  background:#007AFF; color:#fff; border-radius:14px; font-weight:800; padding:12px 18px;
+}
+.proyectos form.card .actions .btn[disabled]{ opacity:.6; cursor:default }
+.proyectos form.card .actions .btn-slim{
+  background:#F2F2F7; border:1px solid #E5E7EB; color:#111827; font-weight:700; border-radius:14px;
+}
+.proyectos form.card .actions .btn-slim:hover{ background:#e9edf3 }
+
+/* Spinner en botón (estado loading) */
+.proyectos .btn.loading{ position:relative; pointer-events:none; opacity:.9 }
+.proyectos .btn.loading::after{
+  content:""; width:16px; height:16px; border-radius:50%;
+  border:2px solid rgba(255,255,255,.6); border-top-color:#fff;
+  animation:iosspin .8s linear infinite;
+  position:absolute; right:14px; top:50%; transform:translateY(-50%);
+}
+@keyframes iossin { to { transform:translateY(-50%) rotate(360deg) } } /* (fallback) */
+@keyframes iossin {}
+@keyframes iosspin { to { transform:translateY(-50%) rotate(360deg) } }
+
+/* Toast (confirmaciones/errores) */
+.proyectos .toast{
+  position:fixed; left:50%;
+  bottom: calc(env(safe-area-inset-bottom,0px) + 20px);
+  transform:translateX(-50%) translateY(8px);
+  background:#111827; color:#fff; padding:10px 14px; border-radius:14px;
+  box-shadow:0 10px 24px rgba(0,0,0,.18);
+  opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:1200;
+  font-weight:700; font-size:14px;
+}
+.proyectos .toast.show{ opacity:1; transform:translateX(-50%) translateY(0) }
+.proyectos .toast.success{ background:#22c55e }
+.proyectos .toast.error{ background:#ef4444 }
+
+/* Responsive */
+@media (max-width:720px){
+  .proyectos .grid2{ grid-template-columns:1fr }
+}
