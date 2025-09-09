@@ -56,7 +56,8 @@ const REOPENER_EMAIL = 'jrojas@tecnomedicacr.com';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
-f// === Toasts reales + helpers centrales ===
+
+// === Toasts reales + helpers centrales ===
 function ensureToastHost(){
   let t = document.querySelector('#toastHost');
   if (!t){
@@ -405,55 +406,6 @@ function applyFilter(){
   st.openCode = null;
   render();
 }
-
-// === Helpers UI iOS (toast, errores, loading) ===
-function ensureToast(){
-  if (document.getElementById('appToast')) return;
-  const t = document.createElement('div');
-  t.id = 'appToast'; t.className = 'toast';
-  document.body.appendChild(t);
-}
-function showToast(msg, type='success', ms=1400){
-  ensureToast();
-  const t = document.getElementById('appToast');
-  t.className = `toast ${type}`; t.textContent = msg;
-  requestAnimationFrame(() => { t.classList.add('show'); });
-  setTimeout(() => t.classList.remove('show'), ms);
-}
-
-function setLoading(btn, on=true){
-  if (!btn) return;
-  btn.classList.toggle('loading', on);
-  btn.disabled = !!on;
-}
-
-// Valida/normaliza código: PROJECT-000123
-function normalizeProjectCode(raw){
-  let v = (raw || '').trim().toUpperCase();
-  if (/^PROJECT-\d{6}$/.test(v)) return v;
-  const digits = v.replace(/\D/g,'').slice(-6);
-  if (digits) return `PROJECT-${digits.padStart(6,'0')}`;
-  return v;
-}
-function validateProjectCode(v){ return /^PROJECT-\d{6}$/.test(v); }
-
-// Inline errors
-function clearInvalids(formEl){
-  formEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-  formEl.querySelectorAll('.err-inline').forEach(el => el.remove());
-}
-function markInvalid(inputEl, msg){
-  if (!inputEl) return;
-  inputEl.classList.add('is-invalid');
-  const holder = document.createElement('div');
-  holder.className = 'err-inline';
-  holder.textContent = msg;
-  const parent = inputEl.closest('label') || inputEl.parentElement;
-  parent && parent.appendChild(holder);
-}
-
-
-
 
 // === Crear proyecto ===
 function openCreate(){ dlgCreate.showModal(); }
