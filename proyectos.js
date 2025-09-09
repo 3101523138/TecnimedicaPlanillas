@@ -135,6 +135,13 @@ function handleSupabaseError(error, ctx=''){
   toast(human, 'error', 3400);
 }
 
+function fmtPct(v){
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  const s = n.toFixed(2).replace(/\.00$/,''); // 12.00 -> 12
+  return `${s} %`;
+}
 
 
 // ---- Normalización de filas (acepta columnas en ES o EN) ----
