@@ -58,16 +58,24 @@ function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
 
 // === Toasts reales + helpers centrales ===
+// === Toasts reales + helpers centrales ===
 function ensureToastHost(){
+  // Si hay un dialog abierto, montamos el toast dentro del dialog (top-layer)
+  // Si no, lo montamos en body.
+  const host = document.querySelector('dialog[open]') || document.body;
+
+  // Reutiliza el mismo nodo si ya existe (y lo mueve dentro del host si está en otro lado)
   let t = document.querySelector('#toastHost');
   if (!t){
     t = document.createElement('div');
     t.id = 'toastHost';
-    t.className = 'toast'; // usa tus clases CSS .toast, .toast.show, .toast.success, .toast.error
-    document.body.appendChild(t);
   }
+  t.className = 'toast'; // clases CSS existentes (.toast, .toast.show, .toast.success, .toast.error)
+  host.appendChild(t);   // moverá el nodo si ya estaba en body y ahora hay dialog
+
   return t;
 }
+
 function toast(msg, type='success', ms=2400){
   const el = ensureToastHost();
   el.textContent = msg;
@@ -75,6 +83,7 @@ function toast(msg, type='success', ms=2400){
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove('show'), ms);
 }
+
 
 // spinner/disabled en botón submit
 function setBtnLoading(btn, on){
