@@ -389,7 +389,7 @@ function render(){
           <div class="kv" style="grid-column:1/-1"><div class="k">Descripción</div><div class="v">${esc(p.description || '—')}</div></div>
           ${st.isAdmin ? `
             <div class="kv"><div class="k">Presupuesto</div><div class="v">${esc(p.presupuesto ?? '—')}</div></div>
-            <div class="kv"><div class="k">Afectación</div><div class="v">${esc(p.afectacion ?? '—')}</div></div>
+            <div class="kv"><div class="k">Afectación</div><div class="v">${esc(fmtPct(p.afectacion))}</div></div>
           `:''}
           ${(estadoDe(p) === 'cerrado' && (p.closed_by_email || p.closed_at)) ? `
             <div class="kv"><div class="k">Cerrado por</div><div class="v">${esc(p.closed_by_email || '—')}</div></div>
@@ -543,13 +543,21 @@ frmCreate?.addEventListener('submit', async (ev) => {
       client_id, client_name
     };
 
-    // Campos admin opcionales
-    if (typeof st.isAdmin === 'boolean' && st.isAdmin){
-      const pres = (frmCreate.querySelector('[name="presupuesto"]')?.value || '').trim();
-      const afe  = (frmCreate.querySelector('[name="afectacion"]')?.value || '').trim() || null;
-      payload.presupuesto = pres === '' ? null : Number(pres);
-      payload.afectacion  = afe || null;
-    }
+   // Campos admin opcionales (guardar % 0..100 como numérico)
+if (typeof st.isAdmin === 'boolean' && st.isAdmin){
+  const presStr = (frmCreate.querySelector('[name="presupuesto"]')?.value || '').trim();
+  const afeStr  = (frmCreate.querySelector('[name="afectacion"]')?.value || '').trim();
+
+  payload.presupuesto = presStr === '' ? null : Number(presStr);
+
+  if (afeStr === ''){
+    payload.afectacion = null;
+  } else {
+    const n = Number(afeStr.replace(',', '.'));
+    payload.afectacion = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
+  }
+}
+
 
     // INSERT + retorno + manejo de errores (RLS/duplicados)
     const { data, error } = await supabase
