@@ -49,6 +49,9 @@
 .proyectos .floatBtn.grey{ background:#cfd6df; color:#111; }
 .proyectos .floatBtn.red { background:#ef4444; color:#fff; }
 
+/* Oculta los flotantes cuando un <dialog> está abierto (Safari/Chrome ya soportan :has) */
+body:has(.proyectos dialog[open]) .proyectos .floatBtn{ display:none; }
+
 /* Orden vertical (parte inferior) */
 .proyectos #btnCreate { bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
 .proyectos #btnHome   { bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); }
@@ -146,7 +149,7 @@
 .proyectos .err{ background:#fef2f2; border:1px solid #fee2e2; color:#7f1d1d; padding:10px; border-radius:12px; margin:8px 0; display:none }
 .proyectos .empty{ color:var(--muted); text-align:center; padding:20px; display:none }
 
-/* ===== Modal Crear Proyecto — iOS sheet 100% móvil ===== */
+/* ===== Modal Crear Proyecto — iOS sheet ===== */
 .proyectos dialog{
   border:none;
   padding:0;
@@ -154,14 +157,14 @@
   max-width: 720px;
   margin: 0 auto;
   border-radius: 24px;
-  overflow: hidden;
+  overflow: hidden; /* el scroll lo lleva el .form.card */
 }
 .proyectos dialog::backdrop{
   background:rgba(15,23,42,.45);
   backdrop-filter:blur(2px);
 }
 
-/* Contenedor del formulario: scroll interno + padding inferior */
+/* Contenedor del formulario: scroll interno + padding inferior para footer */
 .proyectos form.card{
   display:flex;
   flex-direction:column;
@@ -170,9 +173,13 @@
   background:#fff;
   border:1px solid var(--border);
   border-radius:24px;
+
   max-height: min(88svh, 88vh);
-  overflow: hidden;
-  padding:18px 18px 80px; /* deja espacio para el footer sticky */
+  overflow-y: auto;                  /* ⬅️ scroll dentro del modal */
+  -webkit-overflow-scrolling: touch; /* iOS */
+  overscroll-behavior: contain;
+
+  padding:18px 18px 80px;            /* espacio para el footer sticky */
   box-shadow:0 16px 48px rgba(0,0,0,.14);
 }
 .proyectos form.card h3{ font-size:20px; font-weight:800; margin:0 0 4px; color:#111827 }
@@ -182,7 +189,7 @@
 .proyectos .full{ grid-column:1/-1 }
 
 /* Inputs/Select iOS */
-.proyectos form.card label{ display:block; font-size:13px; color:var(--muted); font-weight:600; margin:2px 0 6px }
+.proyectos form.card label{ display:block; font-size:13px; color:#muted; font-weight:600; margin:2px 0 6px }
 .proyectos form.card .input,
 .proyectos form.card .select,
 .proyectos form.card textarea{
@@ -234,6 +241,15 @@
 }
 @keyframes iosspin { to { transform:translateY(-50%) rotate(360deg) } }
 
+/* Toast dentro del <dialog> (top-layer por si Safari) */
+.proyectos dialog .toast{
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom,0px) + 20px);
+  transform: translateX(-50%) translateY(0);
+  z-index: 2147483647; /* super alto para asegurar visibilidad */
+}
+
 /* Toast (confirmaciones/errores) */
 .proyectos .toast{
   position:fixed; left:50%;
@@ -252,7 +268,13 @@
 @media (max-width:720px){
   .proyectos .row{ grid-template-columns:minmax(0,1fr) auto }
   .proyectos .drawer .grid{ grid-template-columns:1fr }
-  .proyectos dialog{ width:96vw; max-width:96vw; }
-  .proyectos form.card{ padding:14px 14px 74px; max-height:min(90svh,90vh); }
+
+  .proyectos dialog{
+    width:96vw; max-width:96vw; margin:0 auto; border-radius:24px;
+  }
+  .proyectos form.card{
+    padding:14px 14px 90px;              /* un poco más para que no tape nada */
+    max-height:min(90svh,90vh);
+  }
   .proyectos .grid2{ grid-template-columns:1fr }
 }
