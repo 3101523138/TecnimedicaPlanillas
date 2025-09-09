@@ -56,8 +56,76 @@ const REOPENER_EMAIL = 'jrojas@tecnomedicacr.com';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
-function toastOk(t){ msgEl.textContent = t; show(msgEl,true); setTimeout(()=>show(msgEl,false),1500); }
-function toastErr(t){ errEl.textContent = t; show(errEl,true); setTimeout(()=>show(errEl,false),2500); }
+f// === Toasts reales + helpers centrales ===
+function ensureToastHost(){
+  let t = document.querySelector('#toastHost');
+  if (!t){
+    t = document.createElement('div');
+    t.id = 'toastHost';
+    t.className = 'toast'; // usa tus clases CSS .toast, .toast.show, .toast.success, .toast.error
+    document.body.appendChild(t);
+  }
+  return t;
+}
+function toast(msg, type='success', ms=2400){
+  const el = ensureToastHost();
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+// spinner/disabled en botón submit
+function setBtnLoading(btn, on){
+  if (!btn) return;
+  btn.classList.toggle('loading', !!on);
+  btn.disabled = !!on;
+}
+
+// Errores inline en inputs
+function markInvalid(input, msg){
+  if (!input) return;
+  input.classList.add('is-invalid');
+  let hint = input.parentElement.querySelector('.err-inline');
+  if (!hint){
+    hint = document.createElement('div');
+    hint.className = 'err-inline';
+    input.parentElement.appendChild(hint);
+  }
+  hint.textContent = msg;
+}
+function clearInvalids(scope){
+  scope?.querySelectorAll('.is-invalid')?.forEach(n => n.classList.remove('is-invalid'));
+  scope?.querySelectorAll('.err-inline')?.forEach(n => n.remove());
+}
+
+// Normaliza/valida código PROJECT-000123
+function normalizeProjectCode(raw){
+  const s = String(raw || '').toUpperCase().trim();
+  const digits = (s.match(/\d+/g) || []).join('');
+  if (!digits) return '';
+  return `PROJECT-${digits.padStart(6,'0')}`;
+}
+function validateProjectCode(s){
+  return /^PROJECT-\d{6}$/.test(String(s||'').trim().toUpperCase());
+}
+
+// Mapear errores de Supabase a mensajes visibles
+function handleSupabaseError(error, ctx=''){
+  console.error(`[${ctx}]`, error);
+  let human = 'No se pudo completar la operación.';
+  if (error?.status === 403 || /row-level security|forbidden|policy/i.test(error?.message || '')){
+    human = 'No tienes permisos para esta acción (403).';
+  }else if (/duplicate key|already exists|unique/i.test(error?.message || '')){
+    human = 'El código de proyecto ya existe.';
+  }else if (error?.message){
+    human = 'No se pudo guardar: ' + error.message;
+  }
+  if (createErr){ createErr.textContent = human; createErr.style.display = ''; }
+  toast(human, 'error', 3400);
+}
+
+
 
 // ---- Normalización de filas (acepta columnas en ES o EN) ----
 function normalizeRow(r){
@@ -197,6 +265,7 @@ function populateClientSelects(){
 // === Acciones de estado (cerrar/reabrir) ===
 function askConfirm(texto){ return window.confirm(texto); }
 
+// === Acciones de estado (cerrar/reabrir) — updateStatus  ===
 async function updateStatus(projectCode, nextStatus){
   try{
     const { error } = await supabase
@@ -209,11 +278,12 @@ async function updateStatus(projectCode, nextStatus){
     // refrescar datos y re-render
     st.all = await fetchProjects();
     applyFilter();
-    toastOk(`Estado actualizado a ${nextStatus}.`);
+    toast(`Estado actualizado a ${nextStatus}.`, 'success');
   }catch(e){
-    toastErr(e.message || String(e));
+    handleSupabaseError(e, 'projects.updateStatus');
   }
 }
+
 
 async function closeProject(p){
   if (!canClose(p)) return;
@@ -407,67 +477,69 @@ chkNewClient?.addEventListener('change', () => {
   if (isNew) cliSelect.value = '';
 });
 
+// ========== LISTENER SUBMIT) ==========
 frmCreate?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  clearInvalids(frmCreate);
   show(createMsg,false); show(createErr,false);
+  clearInvalids(frmCreate);
 
-  // botón submit
   const submitBtn = frmCreate.querySelector('button[type="submit"]');
+  setBtnLoading(submitBtn, true);
 
   try{
-    // Normalización + validación
     const fd = new FormData(frmCreate);
 
-    // Código → PROJECT-000123
-    const rawCode = (fd.get('project_code')||'');
-    const normalizedCode = normalizeProjectCode(rawCode);
-    frmCreate.querySelector('[name="project_code"]').value = normalizedCode;
+    // Normalización + validación de código
+    const codeRaw = (fd.get('project_code')||'').trim();
+    const project_code = normalizeProjectCode(codeRaw);
+    const codeInput = frmCreate.querySelector('[name="project_code"]');
+    if (codeInput) codeInput.value = project_code;
 
-    const base = {
-      project_code: normalizedCode,
-      name: (fd.get('name')||'').trim(),
-      description: (fd.get('description')||'').trim() || null,
-      status: (fd.get('status')||'Activo').trim(),
-      start_date: (fd.get('start_date')||'') || null,
-      end_date: (fd.get('end_date')||'') || null
-    };
+    const name        = (fd.get('name')||'').trim();
+    const description = (fd.get('description')||'').trim() || null;
+    let   status      = (fd.get('status')||'Activo').trim();
+    const start_date  = (fd.get('start_date')||'') || null;
+    const end_date    = (fd.get('end_date')||'') || null;
 
-    let hasError = false;
-    if (!validateProjectCode(base.project_code)){
-      markInvalid(frmCreate.querySelector('[name="project_code"]'), 'Formato requerido: PROJECT-000123');
-      hasError = true;
+    // Validaciones de UI
+    let hasErr = false;
+    if (!validateProjectCode(project_code)){
+      markInvalid(codeInput, 'Formato requerido: PROJECT-000123');
+      hasErr = true;
     }
-    if (!base.name){
-      markInvalid(frmCreate.querySelector('[name="name"]'), 'Este campo es obligatorio');
-      hasError = true;
+    if (!name){
+      markInvalid(frmCreate.querySelector('[name="name"]'), 'Requerido');
+      hasErr = true;
     }
-    const stLower = base.status.toLowerCase();
-    if (!['activo','cerrado','abierto','abierta'].includes(stLower)){
-      markInvalid(frmCreate.querySelector('[name="status"]'), 'Estado inválido');
-      hasError = true;
+    const stLower = status.toLowerCase();
+    if (!['activo','abierto','abierta','cerrado','cerrada'].includes(stLower)){
+      markInvalid(frmCreate.querySelector('[name="status"]'), 'Activo o Cerrado');
+      hasErr = true;
     }
-    if (base.start_date && base.end_date && base.end_date < base.start_date){
+    if (['abierto','abierta'].includes(stLower)) status = 'Activo';
+    if (start_date && end_date && end_date < start_date){
       markInvalid(frmCreate.querySelector('[name="end_date"]'), 'La fecha fin no puede ser anterior al inicio');
-      hasError = true;
+      hasErr = true;
+    }
+    if (hasErr){
+      createErr.textContent = 'Revise los campos marcados.';
+      show(createErr,true);
+      toast('Faltan campos obligatorios', 'error');
+      return;
     }
 
-    // Cliente (o nuevo cliente)
-    let client_id = null;
-    let client_name = '';
+    // Resolver cliente (existente / nuevo)
+    let client_id = null, client_name = '';
     if (chkNewClient.checked){
       const cname = (newClientName.value||'').trim();
       const ctax  = (newClientTaxId.value||'').trim() || null;
       if (!cname){
         markInvalid(newClientName, 'Ingrese el nombre del nuevo cliente');
-        hasError = true;
+        createErr.textContent = 'Ingrese el nombre del nuevo cliente.';
+        show(createErr,true);
+        toast('Falta el cliente', 'error');
+        return;
       }
-      if (hasError){
-        const first = frmCreate.querySelector('.is-invalid');
-        first?.scrollIntoView({behavior:'smooth', block:'center'});
-        throw new Error('Revise los campos marcados.');
-      }
-
       const { data: existing, error: eFind } = await supabase
         .from('clients').select('id,name').eq('name', cname).limit(1);
       if (eFind) throw eFind;
@@ -476,82 +548,81 @@ frmCreate?.addEventListener('submit', async (ev) => {
         client_id = existing[0].id; client_name = existing[0].name;
       }else{
         const { data: ins, error: eIns } = await supabase
-          .from('clients').insert({ name: cname, tax_id: ctax, status: 'Activo' })
-          .select('id,name').single();
+          .from('clients')
+          .insert({ name: cname, tax_id: ctax, status: 'Activo' })
+          .select('id,name')
+          .single();
         if (eIns) throw eIns;
         client_id = ins.id; client_name = ins.name;
         st.clients.push({ id: client_id, name: client_name });
         populateClientSelects();
       }
     }else{
-      const sel = cliSelect.value;
+      const sel = cliSelect.value; // "id::name" o "::name"
       if (!sel){
         markInvalid(cliSelect, 'Seleccione un cliente');
-        hasError = true;
-      }else{
-        const [cid, cname] = sel.split('::');
-        client_id = cid || null; client_name = cname || '';
+        createErr.textContent = 'Seleccione un cliente o marque "Nuevo cliente".';
+        show(createErr,true);
+        toast('Seleccione un cliente', 'error');
+        return;
       }
-    }
-    if (hasError){
-      const first = frmCreate.querySelector('.is-invalid');
-      first?.scrollIntoView({behavior:'smooth', block:'center'});
-      throw new Error('Corrija los campos resaltados.');
+      const [cid, cname] = sel.split('::');
+      client_id = cid || null; client_name = cname || '';
     }
 
-    const payload = { ...base, client_id, client_name };
+    const payload = {
+      project_code, name, description, status, start_date, end_date,
+      client_id, client_name
+    };
 
-    // Admin extra
-    if (st.isAdmin){
-      const pres = ($('#frmCreate [name="presupuesto"]')?.value || '').trim();
-      const afe  = ($('#frmCreate [name="afectacion"]')?.value || '').trim() || null;
+    // Campos admin opcionales
+    if (typeof st.isAdmin === 'boolean' && st.isAdmin){
+      const pres = (frmCreate.querySelector('[name="presupuesto"]')?.value || '').trim();
+      const afe  = (frmCreate.querySelector('[name="afectacion"]')?.value || '').trim() || null;
       payload.presupuesto = pres === '' ? null : Number(pres);
-      payload.afectacion  = afe;
+      payload.afectacion  = afe || null;
     }
 
-    // Guardar
-    setLoading(submitBtn, true);
-    const { error } = await supabase.from('projects').insert(payload);
+    // INSERT + retorno + manejo de errores (RLS/duplicados)
+    const { data, error } = await supabase
+      .from('projects')
+      .insert(payload)
+      .select('project_code')
+      .single();
 
     if (error){
-      console.error('[projects.insert]', error);
-      // Mapeo de 403/RLS y duplicados a mensajes claros
-      const msg = (error.status === 403 || /rls|policy|permission/i.test(error.message))
-        ? 'No tiene permisos para crear proyectos (RLS).'
-        : (/duplicate|unique/i.test(error.message) ? 'El código ya existe.' : (error.message || 'Error al guardar'));
-      if (/duplicate|unique/i.test(error.message)){
-        markInvalid(frmCreate.querySelector('[name="project_code"]'), 'Ese código ya existe');
+      if (/duplicate|unique/i.test(error.message || '')){
+        markInvalid(codeInput, 'Ese código ya existe');
       }
-      throw new Error(msg);
+      handleSupabaseError(error, 'projects.insert');
+      return;
     }
 
-    // Éxito → toast + autocierre
-    showToast('✅ Proyecto creado', 'success', 1200);
-    createMsg.textContent = 'Proyecto creado correctamente.';
+    // ÉXITO
+    createMsg.textContent = '✅ Proyecto creado correctamente.';
     show(createMsg,true);
+    toast(`Guardado: ${data?.project_code || project_code}`, 'success');
 
+    // Refrescar lista + selects
     const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
     st.all = freshProjects; st.clients = freshClients;
     populateClientSelects(); applyFilter();
 
+    // Autocierre
     setTimeout(() => {
-      dlgCreate.close();
+      dlgCreate?.close();
       show(createMsg,false); show(createErr,false);
-      frmCreate.reset();
+      frmCreate?.reset();
       newClientFields.style.display = 'none';
       chkNewClient.checked = false;
-    }, 900);
+    }, 600);
 
   }catch(e){
-    createErr.textContent = e.message || String(e);
-    show(createErr,true);
-    showToast(e.message || 'Error al guardar', 'error', 1800);
+    handleSupabaseError(e, 'projects.insert.catch');
   }finally{
-    setLoading(submitBtn, false);
+    setBtnLoading(submitBtn, false);
   }
 });
-
-
 
 
 // === Navegación ===
