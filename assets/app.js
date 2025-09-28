@@ -762,38 +762,40 @@ function updateAllocTotals() {
   const upper = worked + GRACE_MINUTES;
 
   const info = $('#allocInfo');
-  const goal = `Objetivo: ${minToHM(worked)} ± ${GRACE_MINUTES} minutos. `; // ← NUEVO
 
-  // 🔒 BLOQUEO DE SALIDA POR GRACIA INICIAL (primeros 10 minutos)
+  // Mensaje base (objetivo exacto, sin restar gracia)
+  const baseMsg = `Debes asignar ${minToHM(worked)} ± ${GRACE_MINUTES} minutos.`;
+
+  // 🔒 Bloqueo inicial: primeros 10 minutos no se permite salir
   const graceLock = !!(st.sessionOpen && worked < GRACE_MINUTES);
+
+  let detailMsg = '';
   if (graceLock) {
     const wait = Math.max(0, GRACE_MINUTES - worked);
-    info && (info.textContent = goal + `Podrás marcar SALIDA en ${minToHM(wait)} (bloqueo inicial de ${GRACE_MINUTES} min).`);
-  }
-
-  // Validación “ventana” (solo si no estamos bajo el bloqueo inicial)
-  let ok = false;
-  if (!graceLock) {
+    detailMsg = ` Podrás marcar SALIDA en ${minToHM(wait)}.`;
+  } else {
     if (tot < lower) {
-      info && (info.textContent = goal + `Debes asignar ${minToHM(lower - tot)} más.`);
+      detailMsg = ` Faltan ${minToHM(lower - tot)}.`;
     } else if (tot > upper) {
-      info && (info.textContent = goal + `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos.`);
+      detailMsg = ` Te pasaste ${minToHM(tot - upper)}.`;
     } else {
-      info && (info.textContent = goal + 'Listo: la jornada está cubierta.');
-      ok = true;
+      detailMsg = ' Listo: la jornada está cubierta.';
     }
   }
 
-  // Estado final de “salida lista”
-  st.outReady = !!(st.sessionOpen && ok && !graceLock);
+  info && (info.textContent = baseMsg + detailMsg);
 
-  // Botón SALIDA: deshabilitar de verdad (no clickeable) si no está listo
+  // Validación para habilitar SALIDA
+  const withinWindow = (tot >= lower && tot <= upper);
+  st.outReady = !!(st.sessionOpen && withinWindow && !graceLock);
+
+  // Botón SALIDA
   const outBtn = $('#btnOut');
   if (outBtn) {
-    outBtn.disabled = !st.outReady;
+    outBtn.disabled = !st.outReady;                        // bloqueo real de clic
     outBtn.classList.remove('light');
     outBtn.classList.add('success');
-    outBtn.classList.toggle('is-disabled', !st.outReady);  // por si tu CSS lo usa
+    outBtn.classList.toggle('is-disabled', !st.outReady);
     outBtn.setAttribute('aria-disabled', String(!st.outReady));
   }
 }
