@@ -762,23 +762,24 @@ function updateAllocTotals() {
   const upper = worked + GRACE_MINUTES;
 
   const info = $('#allocInfo');
+  const goal = `Objetivo: ${minToHM(worked)} ± ${GRACE_MINUTES} minutos. `; // ← NUEVO
 
   // 🔒 BLOQUEO DE SALIDA POR GRACIA INICIAL (primeros 10 minutos)
   const graceLock = !!(st.sessionOpen && worked < GRACE_MINUTES);
   if (graceLock) {
     const wait = Math.max(0, GRACE_MINUTES - worked);
-    info && (info.textContent = `Podrás marcar SALIDA en ${minToHM(wait)} (bloqueo inicial de ${GRACE_MINUTES} min).`);
+    info && (info.textContent = goal + `Podrás marcar SALIDA en ${minToHM(wait)} (bloqueo inicial de ${GRACE_MINUTES} min).`);
   }
 
   // Validación “ventana” (solo si no estamos bajo el bloqueo inicial)
   let ok = false;
   if (!graceLock) {
     if (tot < lower) {
-      info && (info.textContent = `Debes asignar ${minToHM(lower - tot)} más.`);
+      info && (info.textContent = goal + `Debes asignar ${minToHM(lower - tot)} más.`);
     } else if (tot > upper) {
-      info && (info.textContent = `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos.`);
+      info && (info.textContent = goal + `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos.`);
     } else {
-      info && (info.textContent = 'Listo: la jornada está cubierta.');
+      info && (info.textContent = goal + 'Listo: la jornada está cubierta.');
       ok = true;
     }
   }
@@ -789,7 +790,7 @@ function updateAllocTotals() {
   // Botón SALIDA: deshabilitar de verdad (no clickeable) si no está listo
   const outBtn = $('#btnOut');
   if (outBtn) {
-    outBtn.disabled = !st.outReady;                        // ← clave
+    outBtn.disabled = !st.outReady;
     outBtn.classList.remove('light');
     outBtn.classList.add('success');
     outBtn.classList.toggle('is-disabled', !st.outReady);  // por si tu CSS lo usa
