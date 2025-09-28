@@ -751,50 +751,85 @@ function remainingMinutes() {
 }
 
 function updateAllocTotals() {
-  const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
-  const worked = st.workedMinutes; // 👈 siempre el trabajado real (sin restar gracia)
+  // 1) sincroniza con lo que está en pantalla (evita desajustes)
+  syncAllocFromInputs();
 
-  // UI: totales
-  const totalEl = $('#allocTotalHM'); if (totalEl) totalEl.textContent = minToHM(tot);
+  // 2) totales
+  const tot    = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+  const worked = st.workedMinutes;
+
+  // UI: totales (izq asignado / der trabajado REAL, sin restar gracia)
+  const totalEl = $('#allocTotalHM');    if (totalEl) totalEl.textContent = minToHM(tot);
   const rightEl = $('#allocRequiredHM'); if (rightEl) rightEl.textContent = minToHM(worked);
-
-  // Ventana de validación (se usa SOLO para habilitar salida, no para mostrar el objetivo)
-  const lower = Math.max(0, worked - GRACE_MINUTES);
-  const upper = worked + GRACE_MINUTES;
 
   const info = $('#allocInfo');
 
-  // 🔒 Bloqueo inicial de gracia: no se puede cerrar durante los primeros 10'
-  const graceLock = !!(st.sessionOpen && worked < GRACE_MINUTES);
+  // si no hay sesión abierta
+  if (!st.sessionOpen) {
+    st.outReady = false;
+    if (info) { info.textContent = ''; info.classList.remove('ok','warn','err'); }
+    const outBtn = $('#btnOut');
+    if (outBtn) { outBtn.disabled = true; outBtn.classList.add('is-disabled'); }
+    return;
+  }
+
+  // ventana de tolerancia (para validación; NO para los números mostrados)
+  const lower = Math.max(0, worked - GRACE_MINUTES);
+  const upper = worked + GRACE_MINUTES;
+
+  // helper para setear texto + clase
+  const setInfo = (text, cls) => {
+    if (!info) return;
+    info.textContent = text;
+    info.classList.remove('ok','warn','err');
+    if (cls) info.classList.add(cls);
+  };
+
+  // 🔒 bloqueo inicial (primeros 10 min) → WARN (anaranjado)
+  const graceLock = worked < GRACE_MINUTES;
   if (graceLock) {
     const wait = Math.max(0, GRACE_MINUTES - worked);
-    info && (info.textContent = `Podrás marcar SALIDA en ${minToHM(wait)} (bloqueo inicial de ${GRACE_MINUTES} min).`);
-  }
-
-  // Mensajes visuales (si no hay bloqueo). Aquí NO restamos la gracia.
-  let ok = false;
-  if (!graceLock) {
-    const objetivoHM = minToHM(worked);
-    const faltanHM   = minToHM(Math.max(0, worked - tot));
-    const excesoHM   = minToHM(Math.max(0, tot - worked));
+    setInfo(
+      `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` +
+      `Podrás marcar SALIDA en ${minToHM(wait)}.`,
+      'warn'
+    );
+    st.outReady = false;
+  } else {
+    // 3) Mensajes EXACTOS (sin restar la gracia en lo visual)
+    //    - ok (verde) si tot∈[lower,upper] y hay al menos 1 fila válida
+    //    - faltan → rojo si no hay nada asignado; anaranjado si hay algo pero aún no alcanza
+    //    - te pasaste → rojo
+    let ok = false;
 
     if (tot < lower) {
-      // Falta asignar: se muestra objetivo exacto y cuánto falta vs trabajado real
-      info && (info.textContent = `Objetivo: ${objetivoHM} ± ${GRACE_MINUTES} minutos. Faltan ${faltanHM}.`);
+      const faltan = Math.max(0, worked - tot); // sin “- gracia”
+      const tieneAlgo = tot > 0;
+      setInfo(
+        `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` +
+        `Faltan ${minToHM(faltan)}.`,
+        tieneAlgo ? 'warn' : 'err'  // parcial → anaranjado, nada → rojo
+      );
     } else if (tot > upper) {
-      // Te pasaste: objetivo exacto y cuánto sobra vs trabajado real
-      info && (info.textContent = `Objetivo: ${objetivoHM} ± ${GRACE_MINUTES} minutos. Te pasaste ${excesoHM}.`);
+      const exceso = Math.max(0, tot - worked); // sin “- gracia”
+      setInfo(
+        `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` +
+        `Te pasaste ${minToHM(exceso)}.`,
+        'err' // rojo
+      );
     } else {
-      // Dentro de la ventana
-      info && (info.textContent = 'Listo: la jornada está cubierta.');
+      setInfo('Listo: la jornada está cubierta.', 'ok'); // verde
       ok = true;
     }
+
+    // listo para salida solo si:
+    // - está dentro de la ventana
+    // - no hay bloqueo inicial
+    // - hay al menos un proyecto con minutos > 0
+    st.outReady = !!(ok && !graceLock && validAllocRows().length > 0);
   }
 
-  // Estado final para habilitar SALIDA
-  st.outReady = !!(st.sessionOpen && ok && !graceLock);
-
-  // Botón SALIDA: deshabilitar si no está listo
+  // 4) botón “Marcar SALIDA”: realmente deshabilitado si no está listo
   const outBtn = $('#btnOut');
   if (outBtn) {
     outBtn.disabled = !st.outReady;
