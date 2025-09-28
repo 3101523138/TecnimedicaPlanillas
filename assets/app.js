@@ -752,47 +752,52 @@ function remainingMinutes() {
 
 function updateAllocTotals() {
   const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
-  const worked = st.workedMinutes;
+  const worked = st.workedMinutes; // 👈 siempre el trabajado real (sin restar gracia)
 
   // UI: totales
   const totalEl = $('#allocTotalHM'); if (totalEl) totalEl.textContent = minToHM(tot);
   const rightEl = $('#allocRequiredHM'); if (rightEl) rightEl.textContent = minToHM(worked);
 
+  // Ventana de validación (se usa SOLO para habilitar salida, no para mostrar el objetivo)
   const lower = Math.max(0, worked - GRACE_MINUTES);
   const upper = worked + GRACE_MINUTES;
 
   const info = $('#allocInfo');
 
-  // Mensaje base (objetivo exacto, sin restar gracia)
-  const baseMsg = `Debes asignar ${minToHM(worked)} ± ${GRACE_MINUTES} minutos.`;
-
-  // 🔒 Bloqueo inicial: primeros 10 minutos no se permite salir
+  // 🔒 Bloqueo inicial de gracia: no se puede cerrar durante los primeros 10'
   const graceLock = !!(st.sessionOpen && worked < GRACE_MINUTES);
-
-  let detailMsg = '';
   if (graceLock) {
     const wait = Math.max(0, GRACE_MINUTES - worked);
-    detailMsg = ` Podrás marcar SALIDA en ${minToHM(wait)}.`;
-  } else {
+    info && (info.textContent = `Podrás marcar SALIDA en ${minToHM(wait)} (bloqueo inicial de ${GRACE_MINUTES} min).`);
+  }
+
+  // Mensajes visuales (si no hay bloqueo). Aquí NO restamos la gracia.
+  let ok = false;
+  if (!graceLock) {
+    const objetivoHM = minToHM(worked);
+    const faltanHM   = minToHM(Math.max(0, worked - tot));
+    const excesoHM   = minToHM(Math.max(0, tot - worked));
+
     if (tot < lower) {
-      detailMsg = ` Faltan ${minToHM(lower - tot)}.`;
+      // Falta asignar: se muestra objetivo exacto y cuánto falta vs trabajado real
+      info && (info.textContent = `Objetivo: ${objetivoHM} ± ${GRACE_MINUTES} minutos. Faltan ${faltanHM}.`);
     } else if (tot > upper) {
-      detailMsg = ` Te pasaste ${minToHM(tot - upper)}.`;
+      // Te pasaste: objetivo exacto y cuánto sobra vs trabajado real
+      info && (info.textContent = `Objetivo: ${objetivoHM} ± ${GRACE_MINUTES} minutos. Te pasaste ${excesoHM}.`);
     } else {
-      detailMsg = ' Listo: la jornada está cubierta.';
+      // Dentro de la ventana
+      info && (info.textContent = 'Listo: la jornada está cubierta.');
+      ok = true;
     }
   }
 
-  info && (info.textContent = baseMsg + detailMsg);
+  // Estado final para habilitar SALIDA
+  st.outReady = !!(st.sessionOpen && ok && !graceLock);
 
-  // Validación para habilitar SALIDA
-  const withinWindow = (tot >= lower && tot <= upper);
-  st.outReady = !!(st.sessionOpen && withinWindow && !graceLock);
-
-  // Botón SALIDA
+  // Botón SALIDA: deshabilitar si no está listo
   const outBtn = $('#btnOut');
   if (outBtn) {
-    outBtn.disabled = !st.outReady;                        // bloqueo real de clic
+    outBtn.disabled = !st.outReady;
     outBtn.classList.remove('light');
     outBtn.classList.add('success');
     outBtn.classList.toggle('is-disabled', !st.outReady);
