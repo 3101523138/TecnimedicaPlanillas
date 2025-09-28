@@ -1,5 +1,5 @@
-// ===============================
-//  Portal TMI · app.js (v14 LOG) — corregido
+
+//  Portal TMI · app.js (v14 LOG)
 // ===============================
 
 // Log global
@@ -18,6 +18,7 @@ console.log('[APP] creando cliente Supabase…');
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // === STATE ===
+// === STATE ===
 const st = {
   user: null,
   employee: null,        // { uid, code, full_name }
@@ -34,7 +35,7 @@ const st = {
   sessionTickId: null,
   _midnightTs: null,
   selectorDirty: false,
-  outReady: false,       // ← indica si ya se puede marcar SALIDA
+  outReady: false,       // ← NUEVO: indica si ya se puede marcar SALIDA
 };
 
 // === REGLAS / UTILIDADES TIEMPO ===
@@ -44,9 +45,12 @@ const minToHM = (mins) => `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs
 const hmToMin = (hhmm) => { if (!hhmm) return 0; const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10)); return (h * 60 + (m || 0)) | 0; };
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+// Verificar si ya existe una jornada cerrada hoy (solo para ADVERTIR al IN)
 // ¿Ya hubo alguna jornada hoy? (OPEN o CLOSED)
+// Verificar si ya existe una jornada hoy (OPEN o CLOSED)
 async function hasSessionToday() {
   try {
+    // Evita consultar si aún no hay empleado cargado
     if (!st.employee?.uid) return false;
 
     const midnightLocal = new Date();
@@ -70,6 +74,8 @@ async function hasSessionToday() {
     return false;
   }
 }
+
+
 
 // === HELPERS UI ===
 const $ = (s) => document.querySelector(s);
@@ -108,6 +114,7 @@ function buildMinuteSelect(val = 0, step = 5){
   }
   return m;
 }
+
 
 // ───────────────── Modales reutilizables ─────────────────
 function ensureModalCSS() {
@@ -180,6 +187,7 @@ function fmtTime(ts = Date.now()) {
   });
 }
 
+
 // === ROUTER ===
 function routeTo(path) {
   console.log('[APP] routeTo', path);
@@ -202,7 +210,7 @@ function routeTo(path) {
 function startSessionTicker() {
   stopSessionTicker();
   if (!st.sessionOpen) return;
-  // primer tick inmediato + cada 60 s
+  // primer tick inmediato + cada 60 s (puedes bajar a 10 s)
   tickSessionClock(true);
   st.sessionTickId = setInterval(() => tickSessionClock(false), 60 * 1000);
 }
@@ -229,7 +237,7 @@ function tickSessionClock(firstRun = false) {
   const rightEl = $('#allocRequiredHM');
   if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
 
-  // --- Actualiza “Horas de hoy”
+  // --- Actualiza “Horas de hoy” = sesiones de hoy (cerradas) + abierta hasta ahora
   if (Array.isArray(st.todaySessions)) {
     const minsHoyLive = st.todaySessions.reduce((acc, r) => {
       const s = new Date(r.start_at).getTime();
@@ -242,7 +250,7 @@ function tickSessionClock(firstRun = false) {
     if (hoursTodayEl) hoursTodayEl.textContent = minToHM(minsHoyLive);
   }
 
-  // --- Precarga si no tocó HH/MM
+  // --- Si el usuario no tocó HH/MM, mantenemos precarga con el restante
   if (!st.selectorDirty && st.allocRows && st.allocRows.length > 0) {
     const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
     const restante = Math.max(0, st.workedMinutes - tot);
@@ -274,7 +282,7 @@ function scrollToAlloc() {
   const el = document.querySelector('#allocContainer') || document.querySelector('#punchCard');
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  // Pulso visual
+  // Pulso visual para llamar atención
   const card = el.closest('.card') || el;
   card.classList.add('pulse-ring');
   setTimeout(() => card.classList.remove('pulse-ring'), 1200);
@@ -287,7 +295,7 @@ function handleOutClick() {
     return;
   }
 
-  // totales asignados (en ese instante)
+  // calculamos totales asignados
   const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
   const worked = st.workedMinutes;
 
@@ -310,6 +318,7 @@ function handleOutClick() {
   // Está listo → proceso normal
   onMarkOut();
 }
+
 
 // === GEO ===
 async function getGPS() {
@@ -338,20 +347,28 @@ async function signIn(email, password) {
   if (error) throw error;
 }
 
+// Envío del correo de reseteo con redirect correcto (hash)
+// Envío del correo de reseteo con redirect correcto (hash)
 // === AUTH RESET ===
+// Envío del correo de reseteo con redirect correcto (SIN hash)
 async function sendReset(email) {
   console.log('[APP] sendReset', email);
+  // Redirige a la raíz de la app o a /reset, pero nunca con #
   const redirectTo = 'https://nominatmi.netlify.app';
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
 
-// Limpia cualquier rastro de sesión en el storage
+
+
+// Limpia cualquier rastro de sesión en el storage (por si el logout global falla)
 function clearLocalSupabaseSession() {
   try {
+    // Claves que usa supabase-js v2: "sb-<ref>-auth-token"
     Object.keys(localStorage).forEach((k) => {
       if (/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
     });
+    // También en sessionStorage por si acaso
     Object.keys(sessionStorage).forEach((k) => {
       if (/^sb-.*-auth-token$/.test(k)) sessionStorage.removeItem(k);
     });
@@ -363,6 +380,7 @@ function clearLocalSupabaseSession() {
 // Limpia tokens locales de Supabase (localStorage + cookies sb-*)
 function clearAuthStorage() {
   try {
+    // 1) localStorage: elimina todas las claves que usa Supabase
     const keys = Object.keys(localStorage);
     keys.forEach(k => {
       if (k.startsWith('sb-') || k.startsWith('supabase.')) {
@@ -370,6 +388,7 @@ function clearAuthStorage() {
       }
     });
 
+    // 2) sessionStorage por si acaso
     const skeys = Object.keys(sessionStorage);
     skeys.forEach(k => {
       if (k.startsWith('sb-') || k.startsWith('supabase.')) {
@@ -377,12 +396,15 @@ function clearAuthStorage() {
       }
     });
 
+    // 3) Cookies sb-* (algunas libs guardan refrescos aquí)
     const cookieStr = document.cookie || '';
     cookieStr.split(';').forEach(c => {
       const name = c.split('=')[0]?.trim();
       if (!name) return;
       if (name.startsWith('sb-') || name.startsWith('supabase.')) {
+        // Expira la cookie en el pasado (ruta raíz)
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        // Intenta también borrar con el dominio actual (cuando aplica)
         const host = location.hostname.replace(/^www\./, '');
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${host}`;
       }
@@ -392,18 +414,22 @@ function clearAuthStorage() {
   }
 }
 
-// Cierre de sesión robusto
+// Cierre de sesión robusto: intenta signOut, limpia credenciales y resetea UI
 async function signOut() {
   console.log('[APP] signOut (robusto)');
 
   try {
+    // Intenta cerrar sesión con Supabase (invalidar sesión actual)
     await supabase.auth.signOut();
   } catch (e) {
     console.warn('[APP] supabase.auth.signOut error/skip:', e?.message || e);
+    // Si falla, continuamos limpiando de todas formas
   }
 
+  // Limpia tokens locales que puedan quedar colgados
   clearAuthStorage();
 
+  // Resetea estado en memoria
   st.user = null;
   st.employee = null;
   st.sessionOpen = null;
@@ -412,16 +438,23 @@ async function signOut() {
   st.requiredMinutes = 0;
   st.allocRows = [];
 
+  // Limpia hash y query (por si veníamos de un flujo de recovery)
   try { history.replaceState({}, '', '/'); } catch (_) {}
   location.hash = '';
+  // Si tienes SPA bajo subruta, ajusta la línea anterior a la base correcta
 
+  // Vuelve a login y asegura que el ticker se detenga
   try { routeTo('/'); } catch (_) {}
 
-  const msgEl = document.getElementById('msg');
+  // Mensaje amable
+  const msgEl = document.getElementById('msg'); // label del login
   if (msgEl) msgEl.textContent = 'Sesión cerrada.';
 }
 
+
+
 // === EMPLEADO ===
+
 async function loadEmployeeContext() {
   console.log('[APP] loadEmployeeContext');
   let { data, error } = await supabase.from('employees')
@@ -444,15 +477,18 @@ async function loadEmployeeContext() {
     full_name: data.full_name || '(sin nombre)',
   };
 
+  // Solo mostramos el nombre (ocultamos el UID)
   const n1 = $('#empName');  if (n1) n1.textContent = st.employee.full_name;
   const n2 = $('#empName2'); if (n2) n2.textContent = st.employee.full_name;
 
+  // Si existen los elementos del UID, los limpiamos por si el CSS no cargó aún
   const u1 = $('#empUid');  if (u1) u1.textContent = '';
   const u2 = $('#empUid2'); if (u2) u2.textContent = '';
 
   console.log('[APP] employee OK:', st.employee);
 }
 
+// === STATUS + RECIENTES ===
 // === STATUS + RECIENTES ===
 async function loadStatusAndRecent() {
   console.log('[APP] loadStatusAndRecent');
@@ -468,7 +504,7 @@ async function loadStatusAndRecent() {
   const midnightISO = midnightLocal.toISOString();
   const nowTs = Date.now();
 
-  // 1) Última sesión
+  // 1) Última sesión (para saber si está OPEN)
   {
     const { data, error } = await supabase
       .from('work_sessions')
@@ -483,7 +519,7 @@ async function loadStatusAndRecent() {
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
 
-  // 2) Sesiones de HOY
+  // 2) Sesiones de HOY → guardamos para el ticker y calculamos “Horas de hoy”
   {
     const { data, error } = await supabase
       .from('work_sessions')
@@ -500,10 +536,11 @@ async function loadStatusAndRecent() {
     }, 0);
   }
 
-  // 3) Header “Estado actual / Horas de hoy”
+  // 3) Header “Estado actual / Horas de hoy” —> debajo del LOGO
   {
     const punch = $('#punchCard');
     const anchor = $('#logoHero') || punch;
+    // elimina header anterior si existiera
     const old = punch.querySelector('.card.inner.statusHdr');
     if (old) old.remove();
 
@@ -520,20 +557,20 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 4) Botones IN/OUT
+  // 4) Botones IN/OUT (SALIDA siempre clicable para explicar; ENTRADA sí se bloquea)
   {
     const btnIn  = $('#btnIn');
     const btnOut = $('#btnOut');
-    if (btnIn)  btnIn.disabled  = (estado === 'Dentro');
+    if (btnIn)  btnIn.disabled  = (estado === 'Dentro');  // ENTRADA bloquea si ya está dentro
     if (btnOut) {
-      btnOut.disabled = false;
+      btnOut.disabled = false;            // SALIDA no se deshabilita (solo estilo visual luego)
       btnOut.classList.remove('light');
-      btnOut.classList.add('success');
+      btnOut.classList.add('success');    // verde
     }
     toast($('#punchMsg'), '');
   }
 
-  // 5) Últimas marcas
+  // 5) Últimas marcas (centradas: línea 1 dir, línea 2 fecha/hora, línea 3 coords)
   {
     const { data: tps, error: eTP } = await supabase
       .from('time_punches')
@@ -590,6 +627,7 @@ async function loadStatusAndRecent() {
   }
 }
 
+
 // === PROYECTOS ===
 async function loadProjects(client = null) {
   let q = supabase.from('projects')
@@ -615,9 +653,10 @@ async function loadExistingAllocations() {
 }
 
 // === UI ASIGNACIONES ===
+// === UI ASIGNACIONES ===
 function renderAllocContainer() {
   const cont = $('#allocContainer');
-  if (!cont) return; // guard
+  if (!cont) return; // ← guard: evita errores si no existe el contenedor
   cont.innerHTML = '';
   const filter = st.clientFilter || '';
   const totalRows = st.allocRows.length;
@@ -669,7 +708,7 @@ function renderAllocContainer() {
       const hv = parseInt(h.value || '0', 10) || 0;
       const mv = parseInt(m.value || '0', 10) || 0;
       row.minutes = hv * 60 + mv;
-      rebalanceFrom(idx);
+      rebalanceFrom(idx); // no borra otras filas
     };
     h.addEventListener('change', onDurChange);
     m.addEventListener('change', onDurChange);
@@ -693,10 +732,8 @@ function renderAllocContainer() {
     line.appendChild(del);
     cont.appendChild(line);
   });
-
-  // ← header de estado (mensaje grande + colores)
-  ensureAllocHeader();
 }
+
 
 // --- Sincroniza minutos desde los inputs al estado antes de guardar ---
 function syncAllocFromInputs() {
@@ -718,27 +755,12 @@ function validAllocRows() {
 
 function remainingMinutes() {
   const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
+  // Disponible para asignar = trabajado real - ya asignado
   return Math.max(0, st.workedMinutes - tot);
 }
 
-// —— HEADER de asignación ——
-function ensureAllocHeader() {
-  const cont = document.getElementById('allocContainer');
-  if (!cont) return;
-  const host = cont.parentNode || document.body;
-  if (!document.getElementById('allocInfo')) {
-    const header = document.createElement('div');
-    header.className = 'allocHeadWarn';
-    header.innerHTML = `<div id="allocInfo" aria-live="polite"></div>`;
-    host.insertBefore(header, cont);
-  }
-}
-
-// Paleta de colores intensos para mensaje principal
-const STATE_COLORS = { ok:'#0B7A34', warn:'#D97706', err:'#C81E1E' };
-
 function updateAllocTotals() {
-  // 1) sincroniza con lo que está en pantalla
+  // 1) sincroniza con lo que está en pantalla (evita desajustes)
   syncAllocFromInputs();
 
   // 2) totales
@@ -754,7 +776,7 @@ function updateAllocTotals() {
   // si no hay sesión abierta
   if (!st.sessionOpen) {
     st.outReady = false;
-    if (info) { info.textContent = ''; info.classList.remove('ok','warn','err'); info.style.color=''; }
+    if (info) { info.textContent = ''; info.classList.remove('ok','warn','err'); }
     const outBtn = $('#btnOut');
     if (outBtn) { outBtn.disabled = true; outBtn.classList.add('is-disabled'); }
     return;
@@ -764,21 +786,12 @@ function updateAllocTotals() {
   const lower = Math.max(0, worked - GRACE_MINUTES);
   const upper = worked + GRACE_MINUTES;
 
-  // helper para setear texto + clase + color intenso inline
+  // helper para setear texto + clase
   const setInfo = (text, cls) => {
     if (!info) return;
     info.textContent = text;
     info.classList.remove('ok','warn','err');
-    if (cls) {
-      info.classList.add(cls);
-      info.style.color = STATE_COLORS[cls] || '';
-    } else {
-      info.style.color = '';
-    }
-    // realce de tipografía
-    info.style.fontSize = '1.2rem';
-    info.style.fontWeight = '700';
-    info.style.marginTop = '8px';
+    if (cls) info.classList.add(cls);
   };
 
   // 🔒 bloqueo inicial (primeros 10 min) → WARN (anaranjado)
@@ -836,6 +849,7 @@ function updateAllocTotals() {
   }
 }
 
+
 async function prepareAllocUI() {
   // Al entrar a la vista, el selector aún no ha sido tocado
   st.selectorDirty = false;
@@ -888,6 +902,7 @@ async function prepareAllocUI() {
   updateAllocTotals();
 }
 
+
 // === MARCAR IN/OUT ===
 async function mark(direction) {
   console.log('[APP] mark', direction);
@@ -903,7 +918,9 @@ async function mark(direction) {
   if (error) throw error;
 }
 
-// ───────── ENTRADA ─────────
+// ───────── Marcar ENTRADA con emergente si ya hubo jornada ─────────
+// ───────── ENTRADA con confirm previo (si ya hubo jornada) y emergente de bienvenida ─────────
+// ───────── ENTRADA con advertencia si ya hubo jornada hoy + bienvenida ─────────
 async function onMarkIn() {
   try {
     console.log('[APP] CLICK ENTRADA]');
@@ -917,7 +934,7 @@ async function onMarkIn() {
         confirmText: 'Sí, iniciar',
         cancelText: 'No, cancelar'
       });
-      if (!ok) return;
+      if (!ok) return; // usuario canceló
     }
 
     const bi = $('#btnIn'); if (bi) bi.disabled = true;
@@ -925,7 +942,7 @@ async function onMarkIn() {
     // Marca entrada
     await mark('IN');
 
-    // Modal de bienvenida
+    // Modal de bienvenida SIEMPRE después de marcar con éxito
     const nombre = st.employee?.full_name || 'Usuario';
     await showInfoModal({
       title: '¡Bienvenido!',
@@ -942,7 +959,7 @@ async function onMarkIn() {
   }
 }
 
-// ───────── SALIDA ─────────
+// ───────── SALIDA con emergente de agradecimiento ─────────
 async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
@@ -970,6 +987,7 @@ async function onMarkOut() {
   }
 }
 
+// + Proyecto (precarga con tiempo restante)
 // + Proyecto (con reparto automático del restante)
 function onAddAlloc() {
   if (!st.sessionOpen) return;
@@ -989,7 +1007,11 @@ function onAddAlloc() {
   updateAllocTotals();
 }
 
-// Reparto automático desde la fila modificada
+// Reparte automáticamente el tiempo restante a partir de la fila modificada.
+// - Mantiene tal cual las filas anteriores.
+// - La fila modificada se "clampa" al máximo disponible.
+// - La fila siguiente recibe TODO el restante.
+// - Las filas posteriores quedan en 00:00 (y se limpian si no tienen proyecto).
 function rebalanceFrom(changedIdx) {
   if (!st.sessionOpen) return;
   syncAllocFromInputs();
@@ -1006,6 +1028,9 @@ function rebalanceFrom(changedIdx) {
   updateAllocTotals();
 }
 
+
+
+// Guardar asignación (parcial o para cerrar)
 // Guardar asignación (parcial o para cerrar)
 async function onSaveAlloc(forClosing = false) {
   try {
@@ -1095,7 +1120,8 @@ async function onSaveAlloc(forClosing = false) {
 }
 
 // === NAV ===
-let listenersBound = false; // evita duplicar listeners
+// === NAV ===
+let listenersBound = false; // ← evita duplicar listeners
 
 function setNavListeners() {
   if (listenersBound) return;
@@ -1129,6 +1155,8 @@ function setNavListeners() {
   $('#btnSaveAlloc')?.addEventListener('click', () => onSaveAlloc(false));
 }
 
+
+
 // === POLISH VISUAL MOVIL ===
 function applyMobilePolish() {
   // 1) Cambiar subtítulo de la tarjeta "Marcar IN/OUT"
@@ -1147,6 +1175,7 @@ function applyMobilePolish() {
   uidEls.forEach(el => { if (el) el.textContent = ''; });
 }
 
+// ───────────────── Auth error → modal amigable ─────────────────
 // ───────────────── Auth error → modal amigable ─────────────────
 function parseAuthError(err, ctx = '') {
   const raw = (err && (err.message || err.error_description || err.error || String(err))) || 'Error desconocido';
@@ -1181,6 +1210,7 @@ async function showAuthError(err, ctx = '') {
   await showInfoModal({ title: msg.title, html: msg.html, okText: 'Entendido' });
 }
 
+// === BOOT ===
 // === BOOT ===
 async function boot() {
   console.log('[APP] BOOT start…');
@@ -1306,13 +1336,13 @@ async function boot() {
         applyMobilePolish();
       } catch (e) {
         console.error('[APP] signIn error:', e);
-        await showAuthError(e, 'login');
+        await showAuthError(e, 'login');    // emergente amigable
       } finally {
         btn && (btn.disabled = false);
       }
     });
 
-    // ¿Olvidaste tu contraseña?
+    // ¿Olvidaste tu contraseña? (EMERGENTES)
     $('#btnForgot')?.addEventListener('click', async () => {
       const btn = $('#btnForgot');
       try {
@@ -1341,7 +1371,7 @@ async function boot() {
         $('#password')?.focus();
       } catch (e) {
         console.error('[APP] reset error:', e);
-        await showAuthError(e, 'recovery');
+        await showAuthError(e, 'recovery'); // emergente amigable
       } finally {
         btn && (btn.disabled = false);
       }
@@ -1364,7 +1394,7 @@ async function boot() {
     } catch (_) {}
     st.user = null; st.employee = null;
     routeTo('/');
-    await showAuthError(e, 'login');
+    await showAuthError(e, 'login');       // emergente adicional
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
   }
 }
