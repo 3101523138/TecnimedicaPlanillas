@@ -294,18 +294,27 @@ function handleOutClick() {
     toast($('#punchMsg'), 'No hay jornada abierta.');
     return;
   }
+
+  // calculamos totales asignados
+  const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
+  const worked = st.workedMinutes;
+
+  // límites de tolerancia (solo para validar, no para mostrar)
+  const lower = Math.max(0, worked - GRACE_MINUTES);
+  const upper = worked + GRACE_MINUTES;
+
   if (!st.outReady) {
-    const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
-    const falta = Math.max(0, st.workedMinutes - tot);
-    if (falta > 0) {
-      toast($('#punchMsg'), `Para marcar SALIDA debes asignar ${minToHM(falta)} más en proyectos.`);
+    if (tot < lower) {
+      toast($('#punchMsg'), `Para marcar SALIDA debes asignar ${minToHM(lower - tot)} más en proyectos.`);
+    } else if (tot > upper) {
+      toast($('#punchMsg'), `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos para cerrar.`);
     } else {
-      const exceso = Math.max(0, tot - (st.workedMinutes + GRACE_MINUTES));
-      toast($('#punchMsg'), `Asignaste ${minToHM(exceso)} de más. Ajusta los proyectos para cerrar.`);
+      toast($('#punchMsg'), 'Revisa la asignación antes de marcar SALIDA.');
     }
     scrollToAlloc();
     return;
   }
+
   // Está listo → proceso normal
   onMarkOut();
 }
