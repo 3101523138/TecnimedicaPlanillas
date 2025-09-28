@@ -245,6 +245,17 @@ input, select{
   color:#1e3a8a !important;
 }
 
+/* —— Asignación: mensaje principal (grande + colores de estado) —— */
+#allocInfo{
+  font-size: 1.15rem;     /* un poco más grande */
+  font-weight: 600;       /* semi-bold */
+  margin-top: 4px;
+}
+
+#allocInfo.ok   { color:#0B7A34; }  /* verde intenso */
+#allocInfo.warn { color:#D97706; }  /* anaranjado intenso */
+#allocInfo.err  { color:#C81E1E; }  /* rojo intenso */
+
 /* Selects de tiempo (sustituyen a inputs number) — versión final */
 .allocH, .allocM{
   width:auto;
