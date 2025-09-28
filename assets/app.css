@@ -1,270 +1,193 @@
-:root{
-  --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
-  --logo-max-h:72px; --logo-max-h-sm:56px;
-}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  background:var(--bg);
-  margin:0;
-  padding:16px;
-}
-.app{width:min(92vw,980px);margin:24px auto}
-.card{
-  background:var(--card);
-  border-radius:24px;
-  padding:24px 28px;
-  box-shadow:0 16px 48px rgba(0,0,0,.10);
-  margin-bottom:18px;
-}
-.card.inner{padding:14px}
+/* ===============================
+   Portal TMI · styles (patch UI)
+   Seguro de añadir al final del CSS existente
+   =============================== */
 
-/* ───── Brand (logo + título) ───── */
-.brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
-.brand-row.no-gap{margin:0}
-.brand-row img{
-  max-height:var(--logo-max-h);
-  height:auto;width:auto;
-  object-fit:contain;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.12);
+/* --- Tarjeta/encabezado de estado (debajo del logo) --- */
+.card.inner.statusHdr {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-top: 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  font-size: 0.95rem;
 }
-.brand-row .title{
-  /* Escala fluida y cortes de palabra controlados */
-  font-size:clamp(18px, 6vw, 26px);
-  font-weight:800;
-  color:var(--text);
-  letter-spacing:.2px;
-  line-height:1.15;
-  word-break:normal;
-  overflow-wrap:break-word;
-  hyphens:none;
-}
-
-/* En móviles, apilar logo arriba y título abajo para evitar columnas estrechas */
-@media (max-width:480px){
-  .brand-row{flex-direction:column; align-items:center; text-align:center; gap:12px}
-  .brand-row img{max-height:var(--logo-max-h-sm); max-width:min(70vw, 320px)}
-}
-
-/* Titulares y formularios */
-h1,h2{margin:8px 0 14px;color:var(--text)}
-h1{font-size:32px}
-h2{font-size:26px}
-label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
-input, select{
-  width:100%;
-  padding:14px 16px;
-  border-radius:14px;
-  border:1px solid #d8dee8;
-  background:#fff;
-  font-size:16px;
-}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.row.between{justify-content:space-between}
-.center{text-align:center}
-
-/* Botones base */
-.btn{
-  padding:13px 18px;
-  border:0;
-  border-radius:14px;
-  background:var(--primary);
-  color:#fff;
-  font-weight:700;
-  cursor:pointer;
-}
-.btn:disabled{cursor:not-allowed;opacity:.6}
-.btn.light{background:#e9eef5;color:#333}
-.btn.block{width:100%}
-.btnFull{width:100%;display:block;font-size:18px}
-.btnPrimary{background:var(--primary)}
-.link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
-
-.muted{color:var(--muted);font-size:13px}
-.big{font-size:22px;font-weight:800}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
-.tile{
-  border:1px solid #e5e7eb;
-  border-radius:18px;
-  padding:16px 18px;
-  background:#fff;
-  box-shadow:0 4px 16px rgba(0,0,0,.06);
-  cursor:pointer;
-}
-.tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
-.tile .s{color:#6b7280}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.gap{gap:12px}
-.m-t{margin-top:12px}
-.m-b{margin-bottom:10px}
-.m-b-sm{margin-bottom:6px}
-
-/* Logo arriba en /marcas */
-.logoHero{display:flex;justify-content:center;margin:6px 0 10px}
-.punchLogo{
-  width:100%;
-  max-width:260px; /* solicitado */
-  height:auto;
-  border-radius:14px;
-  background:#fff;
-  box-shadow:0 6px 20px rgba(0,0,0,.12);
-}
-
-/* Ocultar employee_uid */
-#empUid, #empUid2 { display: none !important; }
-
-/* Botones flotantes iguales (Salir / Menú) */
-.floatBtn{
-  position: fixed;
-  right: 14px;
-  z-index: 1000;
-  padding: 12px 16px;
-  border-radius: 14px;
+.card.inner.statusHdr strong {
   font-weight: 700;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12);
-}
-.floatBtn.red  { top: 14px; background:#ef4444; color:#fff; }
-.floatBtn.grey { top: 68px; background:#cfd6df; color:#111; }
-
-/* Desktop: opcional absoluto dentro del card */
-@media (min-width:1024px){
-  .floatBtn{ position:absolute; }
-  #btnLogout2{ top:14px; right:14px; }
-  #btnMenu{    top:68px; right:14px; }
 }
 
-/* ENTRADA deshabilitado = opaco (además de :disabled) */
-#btnIn:disabled{ opacity:.5 }
-
-/* Botón SALIDA verde */
-.btn.success{ background:#10b981; color:#fff; }
-.btn.success.is-disabled{ filter:saturate(.6) brightness(.95); opacity:.7; }
-
-/* Título “Últimas marcas” centrado y lista centrada */
-.listTitle{ font-weight:800; color:#111827; text-align:center; }
-.punchItem{ padding:10px 4px; border-bottom:1px solid #eef2f7; }
-.punchItem:last-child{ border-bottom:0 }
-.punchItem .dir{ text-align:center; font-weight:800; letter-spacing:.4px; }
-.punchItem .dt{ text-align:center; color:#6b7280; font-size:13px; margin-top:2px; }
-.punchItem .coords{ text-align:center; color:#6b7280; font-size:12px; margin-top:2px; }
-
-/* Asignación de proyectos */
-.allocRow{
-  display:grid;
-  grid-template-columns: 1fr auto auto; /* Select | Duración | Quitar */
-  gap:10px;
-  align-items:center;
-  margin-bottom:8px;
+/* --- Contenedor de advertencia/mensaje grande de asignaciones --- */
+.allocHeadWarn {
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px dashed #e5e7eb;
 }
-.allocSelect{ width:100%; min-width:0; }
-
-/* Duración HH:MM */
-.allocDuration{display:flex;align-items:center;gap:6px}
-.allocH,.allocM{
-  width:64px;
-  padding:10px 12px;
-  border:1px solid #d8dee9;
-  border-radius:12px;
-  background:#fff;
-  font-size:14px;
-}
-.allocSep{font-weight:700}
-
-/* Botón Quitar rojo */
-.btn.small{
-  padding:10px 14px;
-  font-size:14px;
-  border-radius:12px;
-  white-space:nowrap;
-  justify-self:end;
-  background:#fff;
-  color:#d32f2f;
-  border:2px solid #d32f2f;
-  font-weight:600;
-}
-.btn.small:hover{background:#fdecea}
-
-/* Encabezados y mensajes centrados en la sección */
-.allocHeadTitle{ text-align:center; font-size:18px; font-weight:800; color:#6b7280; }
-.allocHeadSub{   text-align:center; font-size:14px; color:#6b7280; margin-top:2px; }
-.allocHeadWarn{  text-align:center; font-size:14px; color:#6b7280; margin-top:6px; }
-
-/* Línea divisoria elegante */
-.dashDivider{
-  border:0;
-  border-top:2px dashed #d1d5db;
-  margin:16px 0 6px;
+#allocInfo {
+  /* El JS ya aplica tamaño y peso inline; esto es “fallback” si cambia en el futuro */
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
-/* +Proyecto (mismo ancho que Guardar) */
-.btn.darker{ background:#2f6fe3; color:#fff; }
-
-/* Responsive asignación */
-@media (max-width:640px){
-  .allocRow{
-    grid-template-columns:1fr auto;
-    grid-auto-rows:auto;
-  }
-  .allocRow .allocSelect{grid-column:1 / -1}
-  .btn.small{justify-self:start}
+/* --- Línea de cada fila de asignación --- */
+.allocRowHeader {
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin: 6px 2px 6px;
+  color: #111827;
+}
+.allocRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+.allocDivider {
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+  margin: 12px 0;
 }
 
-/* Pulso visual cuando se requiere atención (lo usa JS) */
-.pulse-ring{
-  outline: 3px solid rgba(16,185,129,.65);
+/* --- Select de proyectos y duración --- */
+.allocSelect,
+.allocH,
+.allocM {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  font-size: 0.95rem;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.allocSelect:focus,
+.allocH:focus,
+.allocM:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,.25);
+}
+
+/* Estado visual del select de proyecto */
+.allocSelect.pending {
+  border-color: #f59e0b;
+  background: linear-gradient(0deg, #fff7ed, #fff7ed);
+}
+.allocSelect.ready {
+  border-color: #34d399;
+  background: linear-gradient(0deg, #f0fdf4, #f0fdf4);
+}
+
+/* Duración (HH:MM) */
+.allocDuration {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.allocSep {
+  font-weight: 700;
+  padding: 0 2px;
+}
+
+/* --- Totales / Métricas (si existen en tu HTML) --- */
+#allocTotalHM,
+#allocRequiredHM,
+#hoursTodayText {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* --- Botones --- */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 800;
+  transition: transform .05s ease, opacity .15s ease, background-color .15s ease;
+}
+.btn.small { padding: 8px 12px; border-radius: 10px; font-weight: 700; }
+.btn.light { background: #eef2f7; color: #111827; }
+.btn.success { background: #22c55e; color: #fff; }
+.btn.success:is(:hover, :focus-visible) { filter: brightness(0.95); }
+.btn.is-disabled,
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* --- Toast (si lo usas dentro de #punchMsg) --- */
+#punchMsg {
+  min-height: 1.2em;
+  margin-top: 8px;
+  color: #374151;
+}
+
+/* --- Efecto “pulso” para atraer la atención al bloque de asignaciones --- */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(59,130,246,.35); }
+  70%  { box-shadow: 0 0 0 12px rgba(59,130,246,0); }
+  100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
+}
+.pulse-ring {
+  animation: pulse-ring 1s ease-out 1;
   border-radius: 16px;
-  animation: pulseRing .9s ease-in-out 2;
-}
-@keyframes pulseRing{
-  0%{ outline-offset: 0; opacity:1 }
-  100%{ outline-offset: 6px; opacity:1 }
 }
 
-/* ── Mejoras asignación ───────────────────────────── */
-.allocRowHeader{
-  font-weight:800;
-  color:#374151;
-  margin:6px 0 8px;
+/* --- Recientes (marcas) --- */
+.punchItem {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed #e5e7eb;
 }
-.allocDivider{
-  border:0;
-  border-top:1px solid #e5e7eb;
-  margin:12px 0;
+.punchItem .dir {
+  font-weight: 800;
+  color: #111827;
 }
-
-/* Estado del selector de proyecto */
-.allocSelect.pending{
-  border-color:#ef4444 !important;
-  color:#b91c1c !important;
+.punchItem .dt {
+  color: #374151;
+  font-size: 0.95rem;
 }
-.allocSelect.ready{
-  border-color:#1e88e5 !important;
-  color:#1e3a8a !important;
-}
-
-/* —— Asignación: mensaje principal (grande + colores de estado) —— */
-#allocInfo{
-  font-size: 1.15rem;     /* un poco más grande */
-  font-weight: 600;       /* semi-bold */
-  margin-top: 4px;
+.punchItem .coords {
+  grid-column: 1 / -1;
+  color: #6b7280;
+  font-size: 0.85rem;
 }
 
-#allocInfo.ok   { color:#0B7A34; }  /* verde intenso */
-#allocInfo.warn { color:#D97706; }  /* anaranjado intenso */
-#allocInfo.err  { color:#C81E1E; }  /* rojo intenso */
+/* --- Modales básicos (en caso de que el theme base no los tenga) --- */
+.tmiModalBack { backdrop-filter: blur(1.5px); }
+.tmiModal { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+.tmiBtn { font-family: inherit; }
+.tmiOk { background: #1e88e5; color: #fff; }
+.tmiCancel { background: #e5e7eb; color: #111; }
 
-/* Selects de tiempo (sustituyen a inputs number) — versión final */
-.allocH, .allocM{
-  width:auto;
-  min-width:80px;
-  padding:10px 12px;
-  border:1px solid #d8dee9;
-  border-radius:12px;
-  background:#fff;
-  font-size:14px;
+/* --- Layout móvil --- */
+@media (max-width: 640px) {
+  .card.inner.statusHdr { grid-template-columns: 1fr; }
+  .allocRow { grid-template-columns: 1fr 120px auto; }
+  .punchItem { grid-template-columns: 70px 1fr; }
 }
-.allocDuration{ display:flex; align-items:center; gap:6px; }
-.allocSep{ font-weight:700; }
+
+/* --- Accesibilidad: foco visible para todo lo clicable --- */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(59,130,246,.6);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
