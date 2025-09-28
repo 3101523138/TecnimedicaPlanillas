@@ -754,6 +754,7 @@ function updateAllocTotals() {
   const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
   const worked = st.workedMinutes;
 
+  // UI: totales
   const totalEl = $('#allocTotalHM'); if (totalEl) totalEl.textContent = minToHM(tot);
   const rightEl = $('#allocRequiredHM'); if (rightEl) rightEl.textContent = minToHM(worked);
 
@@ -761,23 +762,37 @@ function updateAllocTotals() {
   const upper = worked + GRACE_MINUTES;
 
   const info = $('#allocInfo');
-  let ok = false;
-  if (tot < lower) {
-    info && (info.textContent = `Debes asignar ${minToHM(lower - tot)} más.`);
-  } else if (tot > upper) {
-    info && (info.textContent = `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos.`);
-  } else {
-    info && (info.textContent = 'Listo: la jornada está cubierta.');
-    ok = true;
+
+  // 🔒 BLOQUEO DE SALIDA POR GRACIA INICIAL (primeros 10 minutos)
+  const graceLock = !!(st.sessionOpen && worked < GRACE_MINUTES);
+  if (graceLock) {
+    const wait = Math.max(0, GRACE_MINUTES - worked);
+    info && (info.textContent = `Podrás marcar SALIDA en ${minToHM(wait)} (bloqueo inicial de ${GRACE_MINUTES} min).`);
   }
 
-  st.outReady = !!(st.sessionOpen && ok);
+  // Validación “ventana” (solo si no estamos bajo el bloqueo inicial)
+  let ok = false;
+  if (!graceLock) {
+    if (tot < lower) {
+      info && (info.textContent = `Debes asignar ${minToHM(lower - tot)} más.`);
+    } else if (tot > upper) {
+      info && (info.textContent = `Asignaste ${minToHM(tot - upper)} de más. Ajusta los proyectos.`);
+    } else {
+      info && (info.textContent = 'Listo: la jornada está cubierta.');
+      ok = true;
+    }
+  }
 
+  // Estado final de “salida lista”
+  st.outReady = !!(st.sessionOpen && ok && !graceLock);
+
+  // Botón SALIDA: deshabilitar de verdad (no clickeable) si no está listo
   const outBtn = $('#btnOut');
   if (outBtn) {
+    outBtn.disabled = !st.outReady;                        // ← clave
     outBtn.classList.remove('light');
     outBtn.classList.add('success');
-    outBtn.classList.toggle('is-disabled', !st.outReady);
+    outBtn.classList.toggle('is-disabled', !st.outReady);  // por si tu CSS lo usa
     outBtn.setAttribute('aria-disabled', String(!st.outReady));
   }
 }
