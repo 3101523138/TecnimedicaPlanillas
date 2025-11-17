@@ -1,4 +1,3 @@
-
 //  Portal TMI · app.js (v14 LOG)
 // ===============================
 
@@ -1131,9 +1130,15 @@ function setNavListeners() {
     el.addEventListener('click', () => {
       const to = el.getAttribute('data-nav');
 
-      // 👉 Si piden Proyectos, redirige a la página aparte
+      // 👉 Proyectos: redirige a la página aparte
       if (to === '/proyectos') {
         window.location.href = 'proyectos.html';
+        return;
+      }
+
+      // 👉 Licencias: NUEVO → redirige a licencias.html
+      if (to === '/licencias') {
+        window.location.href = 'licencias.html';
         return;
       }
 
@@ -1323,7 +1328,7 @@ async function boot() {
           $('#email')?.focus(); return;
         }
         if (!password) {
-          await showInfoModal({ title: 'Contraseña requerida', html: 'Escribe tu <strong>contraseña</strong> para iniciar sesión.', okText: 'Entendido' });
+          await showInfoModal({ title: 'Contraseña requerido', html: 'Escribe tu <strong>contraseña</strong> para iniciar sesión.', okText: 'Entendido' });
           $('#password')?.focus(); return;
         }
 
