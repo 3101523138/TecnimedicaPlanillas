@@ -1,339 +1,357 @@
-// licencias.js · Portal TMI · Licencias v1
-// ========================================
+// licencias.js  ·  Portal TMI
+// =====================================================
+// Usa el mismo Supabase que el portal de marcas (app.js)
 
-// Logs globales para detectar errores en consola
+// Logs globales
 window.addEventListener('error', (e) => {
-  console.error('[LIC] window.error:', e.message, e.filename, e.lineno);
+  console.error('[LICENCIAS] window.error:', e.message, e.filename, e.lineno);
 });
 window.addEventListener('unhandledrejection', (e) => {
-  console.error('[LIC] unhandledrejection:', e.reason);
+  console.error('[LICENCIAS] unhandledrejection:', e.reason);
 });
 
-// ==== CONFIG SUPABASE (MISMA QUE app.js) ==========================
+// === CONFIG SUPABASE (MISMA DEL PORTAL) ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
-if (!window.supabase) {
-  alert('No se cargó la librería de Supabase (CDN). Revisa licencias.html');
-  throw new Error('Supabase JS missing');
-}
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  alert('Falta configurar SUPABASE_URL o SUPABASE_ANON_KEY en licencias.js');
-  throw new Error('Missing Supabase config');
+  alert('Falta configurar Supabase en licencias.js');
+  throw new Error('Supabase config missing');
 }
 
-console.log('[LIC] creando cliente Supabase…');
+console.log('[LICENCIAS] creando cliente Supabase…');
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ==== STATE =======================================================
-const stLic = {
-  user: null,        // usuario supabase.auth
-  employee: null,    // fila de employees
-  leaves: [],        // historial de employee_leaves
+// === STATE ===
+const st = {
+  user: null,
+  employee: null, // { uid, code, full_name }
 };
 
-// ==== HELPERS UI ==================================================
+// === HELPERS ===
 const $ = (s) => document.querySelector(s);
 
-function toast(el, msg) {
-  if (!el) return;
-  el.textContent = msg || '';
-  if (!msg) return;
-  setTimeout(() => {
-    if (el.textContent === msg) el.textContent = '';
-  }, 6000);
-}
-
-// Modal simple reutilizable (mismo estilo que usas en app.js)
-function ensureModalCSS() {
-  if (document.getElementById('lic-modal-css')) return;
-  const css = document.createElement('style');
-  css.id = 'lic-modal-css';
-  css.textContent = `
-    .licModalBack{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:2000}
-    .licModal{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.28);max-width:460px;width:92vw;padding:18px}
-    .licModal h3{margin:0 0 10px;font-size:18px;font-weight:800;color:#111827}
-    .licModal .body{margin:0 0 14px;color:#374151;line-height:1.45}
-    .licRow{display:flex;gap:10px;justify-content:flex-end}
-    .licBtn{padding:10px 14px;border-radius:12px;border:0;font-weight:700;cursor:pointer}
-    .licOk{background:#1e88e5;color:#fff}
-  `;
-  document.head.appendChild(css);
-}
-function showInfoModal({ title = 'Información', html = '', okText = 'Entendido' } = {}) {
-  ensureModalCSS();
-  return new Promise((resolve) => {
-    const back = document.createElement('div');
-    back.className = 'licModalBack';
-    back.innerHTML = `
-      <div class="licModal" role="dialog" aria-modal="true">
-        <h3>${title}</h3>
-        <div class="body">${html}</div>
-        <div class="licRow">
-          <button class="licBtn licOk">${okText}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(back);
-    const finish = () => { back.remove(); resolve(true); };
-    back.querySelector('.licOk').onclick = finish;
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') finish();
-    }, { once: true });
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return d;
+  return dt.toLocaleDateString('es-CR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   });
 }
 
-// ==== AUTH / CONTEXTO EMPLEADO ====================================
+const TYPE_LABELS = {
+  incapacidad_ccss: 'Incapacidad CCSS',
+  incapacidad_ins: 'Incapacidad INS',
+  vacaciones: 'Vacaciones',
+  permiso_con_goce: 'Permiso con goce',
+  permiso_sin_goce: 'Permiso sin goce',
+  otro: 'Otro',
+};
+
+const STATUS_LABELS = {
+  pending: 'Pendiente',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+};
+
+const STATUS_CLASS = {
+  pending: 'badge pending',
+  approved: 'badge approved',
+  rejected: 'badge rejected',
+};
+
+function setFormMsg(msg, isError = false) {
+  const el = $('#formMsg');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = isError ? '#b91c1c' : '#6b7280';
+}
+
+// === AUTH / EMPLEADO ===
 async function loadSession() {
-  console.log('[LIC] loadSession…');
+  console.log('[LICENCIAS] loadSession…');
   const { data, error } = await supabase.auth.getSession();
   if (error) {
-    console.error('[LIC] getSession error:', error);
-    return null;
+    console.error('[LICENCIAS] getSession error:', error);
   }
-  stLic.user = data?.session?.user || null;
-  console.log('[LIC] user:', stLic.user?.email || null);
-  return stLic.user;
+  st.user = data?.session?.user || null;
+  console.log('[LICENCIAS] session user:', st.user?.email || null);
+  return st.user;
 }
 
 async function loadEmployeeContext() {
-  console.log('[LIC] loadEmployeeContext');
-  if (!stLic.user) throw new Error('No hay sesión activa.');
+  console.log('[LICENCIAS] loadEmployeeContext…');
+  if (!st.user) throw new Error('Sin usuario autenticado');
 
-  let { data, error } = await supabase.from('employees')
+  let { data, error } = await supabase
+    .from('employees')
     .select('employee_uid, employee_code, full_name, login_enabled')
-    .eq('user_id', stLic.user.id)
+    .eq('user_id', st.user.id)
     .single();
 
   if (error || !data) {
-    console.warn('[LIC] employee por user_id no encontrado; probando por email…', error);
-    const r = await supabase.from('employees')
+    console.warn(
+      '[LICENCIAS] employee por user_id no encontrado; probando por email…',
+      error
+    );
+    const r = await supabase
+      .from('employees')
       .select('employee_uid, employee_code, full_name, login_enabled')
-      .eq('email', stLic.user.email)
+      .eq('email', st.user.email)
       .single();
     data = r.data || null;
+    error = r.error;
   }
-  if (!data) throw new Error('No se encontró el empleado para este usuario.');
-  if (data.login_enabled === false) throw new Error('Usuario deshabilitado.');
 
-  stLic.employee = {
+  if (error || !data) {
+    console.error('[LICENCIAS] no se encontró empleado', error);
+    throw new Error('No se encontró el empleado vinculado a este usuario.');
+  }
+  if (data.login_enabled === false) {
+    throw new Error('Usuario deshabilitado para iniciar sesión.');
+  }
+
+  st.employee = {
     uid: data.employee_uid,
     code: data.employee_code || null,
     full_name: data.full_name || '(sin nombre)',
   };
 
-  console.log('[LIC] employee OK:', stLic.employee);
+  const nameEl = $('#empName');
+  if (nameEl) nameEl.textContent = st.employee.full_name;
 
-  const nameSpan = $('#licUserName');
-  if (nameSpan) nameSpan.textContent = stLic.employee.full_name;
-
-  return stLic.employee;
+  console.log('[LICENCIAS] empleado:', st.employee);
 }
 
-// ==== CRUD LICENCIAS ==============================================
+// === SIGN OUT / MENÚ ===
+async function signOut() {
+  console.log('[LICENCIAS] signOut…');
+  try {
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.warn('[LICENCIAS] signOut error:', e);
+  }
 
-// Carga historial de licencias del empleado en employee_leaves
+  try {
+    // Limpia tokens locales por si quedan
+    const lsKeys = Object.keys(localStorage);
+    lsKeys.forEach((k) => {
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) {
+        localStorage.removeItem(k);
+      }
+    });
+    const ssKeys = Object.keys(sessionStorage);
+    ssKeys.forEach((k) => {
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) {
+        sessionStorage.removeItem(k);
+      }
+    });
+  } catch (e) {
+    console.warn('[LICENCIAS] clear storage error:', e);
+  }
+
+  // Vuelve al login del portal
+  window.location.href = 'index.html';
+}
+
+function goMenu() {
+  console.log('[LICENCIAS] Ir a menú…');
+  window.location.href = 'index.html';
+}
+
+// === CRUD LICENCIAS ===
 async function loadLeaves() {
-  if (!stLic.employee?.uid) return;
-  console.log('[LIC] loadLeaves para', stLic.employee.uid);
+  console.log('[LICENCIAS] loadLeaves…');
+  const container = $('#historyContainer');
+  const summary = $('#historySummary');
+  if (container) container.textContent = 'Cargando licencias…';
+  if (summary) summary.textContent = '';
 
-  const histEl = $('#leaveHistory');
-  if (histEl) histEl.textContent = 'Cargando licencias…';
+  if (!st.employee?.uid) {
+    if (container) container.textContent = 'No se pudo cargar el empleado.';
+    return;
+  }
 
   const { data, error } = await supabase
     .from('employee_leaves')
-    .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, created_at')
-    .eq('employee_uid', stLic.employee.uid)
-    .order('date_start', { ascending: false });
+    .select(
+      'id, leave_type, date_from, date_to, issuer, cert_number, notes, status, created_at'
+    )
+    .eq('employee_uid', st.employee.uid)
+    .order('date_from', { ascending: false });
 
   if (error) {
-    console.error('[LIC] loadLeaves error:', error);
-    if (histEl) histEl.textContent = 'Error al cargar licencias.';
+    console.error('[LICENCIAS] loadLeaves error:', error);
+    if (container)
+      container.textContent = 'Error al cargar el historial de licencias.';
     return;
   }
 
-  stLic.leaves = data || [];
-  renderLeaves();
-}
+  const rows = data || [];
+  console.log('[LICENCIAS] leaves rows:', rows.length);
 
-// Pinta el historial en el contenedor #leaveHistory
-function renderLeaves() {
-  const histEl = $('#leaveHistory');
-  if (!histEl) return;
-
-  if (!stLic.leaves.length) {
-    histEl.textContent = 'Sin licencias registradas todavía.';
+  if (!rows.length) {
+    if (container) container.textContent = 'Sin registros de licencias.';
+    if (summary) summary.textContent = '';
     return;
   }
 
-  const rows = stLic.leaves.map((r) => {
-    const ds = r.date_start || '';
-    const de = r.date_end || '';
-    const tipo = r.leave_type || '';
-    const issuer = r.issuer || '';
-    const cert = r.certificate_no || '';
-    const notes = r.notes || '';
-    const created = r.created_at
-      ? new Date(r.created_at).toLocaleString()
-      : '';
+  if (summary) {
+    summary.textContent = `${rows.length} licencia${
+      rows.length === 1 ? '' : 's'
+    } registradas`;
+  }
 
-    return `
-      <div class="leaveItem">
-        <div class="row between">
-          <div><strong>${tipo}</strong></div>
-          <div class="muted">${ds} → ${de}</div>
-        </div>
-        ${issuer || cert ? `
-          <div class="muted">
-            ${issuer ? `Emisor: ${issuer}` : ''}${issuer && cert ? ' · ' : ''}${cert ? `Boleta: ${cert}` : ''}
-          </div>` : ''}
-        ${notes ? `<div>${notes}</div>` : ''}
-        ${created ? `<div class="muted" style="font-size:11px;margin-top:2px">Creado: ${created}</div>` : ''}
-      </div>
-    `;
-  }).join('');
+  // Render como tabla
+  const html = [
+    '<table class="history-table">',
+    '<thead><tr>',
+    '<th>Fecha</th>',
+    '<th>Tipo</th>',
+    '<th>Rango</th>',
+    '<th>Emisor</th>',
+    '<th>N.º boleta</th>',
+    '<th>Estado</th>',
+    '<th>Notas</th>',
+    '</tr></thead>',
+    '<tbody>',
+    ...rows.map((r) => {
+      const tipo = TYPE_LABELS[r.leave_type] || r.leave_type || '—';
+      const rango = `${fmtDate(r.date_from)} → ${fmtDate(r.date_to)}`;
+      const issuer = r.issuer || '—';
+      const cert = r.cert_number || '—';
+      const stKey = r.status || 'pending';
+      const stLbl = STATUS_LABELS[stKey] || stKey;
+      const stCls = STATUS_CLASS[stKey] || 'badge pending';
+      const notas = r.notes || '';
 
-  histEl.innerHTML = rows;
+      return `<tr>
+        <td>${fmtDate(r.created_at || r.date_from)}</td>
+        <td>${tipo}</td>
+        <td>${rango}</td>
+        <td>${issuer}</td>
+        <td>${cert}</td>
+        <td><span class="${stCls}">${stLbl}</span></td>
+        <td>${notas.replace(/\n/g, '<br>')}</td>
+      </tr>`;
+    }),
+    '</tbody></table>',
+  ].join('');
+
+  if (container) {
+    container.innerHTML = html;
+  }
 }
 
-// Envía una nueva licencia a employee_leaves
 async function submitLeave() {
+  console.log('[LICENCIAS] submitLeave()');
+  setFormMsg('');
+
+  if (!st.employee?.uid) {
+    setFormMsg('No se encontró el empleado.', true);
+    return;
+  }
+
+  const typeEl = $('#leaveType');
+  const fromEl = $('#leaveFrom');
+  const toEl = $('#leaveTo');
+  const issuerEl = $('#leaveIssuer');
+  const certEl = $('#leaveCert');
+  const notesEl = $('#leaveNotes');
+
+  const leave_type = (typeEl?.value || '').trim();
+  const date_from = (fromEl?.value || '').trim();
+  const date_to = (toEl?.value || '').trim();
+  const issuer = (issuerEl?.value || '').trim() || null;
+  const cert_number = (certEl?.value || '').trim() || null;
+  const notes = (notesEl?.value || '').trim() || null;
+
+  if (!leave_type) {
+    setFormMsg('Selecciona el tipo de licencia.', true);
+    typeEl?.focus();
+    return;
+  }
+  if (!date_from) {
+    setFormMsg('Indica la fecha de inicio.', true);
+    fromEl?.focus();
+    return;
+  }
+  if (!date_to) {
+    setFormMsg('Indica la fecha de fin.', true);
+    toEl?.focus();
+    return;
+  }
+  if (date_to < date_from) {
+    setFormMsg('La fecha "Hasta" no puede ser anterior a "Desde".', true);
+    toEl?.focus();
+    return;
+  }
+
+  const btn = $('#btnSubmit');
+  if (btn) btn.disabled = true;
+
   try {
-    console.log('[LIC] submitLeave click');
-    const msgEl = $('#leaveMsg');
-    toast(msgEl, '');
-
-    if (!stLic.employee?.uid) throw new Error('No se encontró el empleado.');
-
-    const leaveTypeSel = $('#leaveType');
-    const startInput   = $('#leaveStart');
-    const endInput     = $('#leaveEnd');
-    const issuerSel    = $('#leaveIssuer');
-    const certInput    = $('#leaveCert');
-    const notesInput   = $('#leaveNotes');
-
-    const leave_type = (leaveTypeSel?.value || '').trim();
-    const date_start = (startInput?.value || '').trim();
-    const date_end   = (endInput?.value || '').trim();
-    const issuer     = (issuerSel?.value || '').trim();
-    const certificate_no = (certInput?.value || '').trim();
-    const notes      = (notesInput?.value || '').trim();
-
-    console.log('[LIC] payload preliminar:', {
-      leave_type, date_start, date_end, issuer, certificate_no, notes
-    });
-
-    // Validaciones básicas
-    if (!leave_type) throw new Error('Selecciona un tipo de licencia.');
-    if (!date_start) throw new Error('Selecciona la fecha "Desde".');
-    if (!date_end) throw new Error('Selecciona la fecha "Hasta".');
-
-    const d1 = new Date(date_start);
-    const d2 = new Date(date_end);
-    if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
-      throw new Error('Las fechas no son válidas.');
-    }
-    if (d2 < d1) throw new Error('La fecha "Hasta" no puede ser antes que "Desde".');
-
-    const btn = $('#btnSendLeave');
-    if (btn) btn.disabled = true;
-
     const payload = {
-      employee_uid: stLic.employee.uid,
+      employee_uid: st.employee.uid,
       leave_type,
-      date_start,
-      date_end,
-      issuer: issuer || null,
-      certificate_no: certificate_no || null,
-      notes: notes || null,
-      // El resto de columnas se dejan en NULL / default:
-      // employer_pct_day1_3, employer_pct_after3, insurer_pct_after3, pay_hours_per_day
+      date_from,
+      date_to,
+      issuer,
+      cert_number,
+      notes,
+      status: 'pending',
     };
 
-    console.log('[LIC] insert employee_leaves payload:', payload);
+    console.log('[LICENCIAS] insert payload:', payload);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('employee_leaves')
       .insert(payload)
       .select()
       .single();
 
-    if (error) {
-      console.error('[LIC] insert error:', error);
-      throw new Error(error.message || 'No se pudo guardar la licencia.');
-    }
+    if (error) throw error;
 
-    // Limpia formulario
-    if (leaveTypeSel) leaveTypeSel.value = '';
-    if (startInput)   startInput.value = '';
-    if (endInput)     endInput.value = '';
-    if (issuerSel)    issuerSel.value = '';
-    if (certInput)    certInput.value = '';
-    if (notesInput)   notesInput.value = '';
+    console.log('[LICENCIAS] insert OK:', data);
 
-    await showInfoModal({
-      title: 'Licencia registrada',
-      html: 'Tu solicitud de licencia se guardó correctamente.',
-      okText: 'Perfecto'
-    });
+    // Limpia campos manteniendo tipo si quieres
+    fromEl.value = '';
+    toEl.value = '';
+    if (issuerEl) issuerEl.value = '';
+    if (certEl) certEl.value = '';
+    if (notesEl) notesEl.value = '';
 
-    toast(msgEl, 'Licencia registrada.');
+    setFormMsg('Solicitud enviada correctamente. Estado: pendiente.', false);
+
+    // Recarga historial
     await loadLeaves();
   } catch (e) {
-    console.error('[LIC] submitLeave error:', e);
-    toast($('#leaveMsg'), e.message || 'Error al registrar la licencia.');
+    console.error('[LICENCIAS] submitLeave error:', e);
+    setFormMsg('Error al registrar la licencia: ' + (e.message || e), true);
   } finally {
-    const btn = $('#btnSendLeave');
     if (btn) btn.disabled = false;
   }
 }
 
-// ==== BOTONES MENÚ / SALIR ========================================
-async function signOutLic() {
-  try {
-    console.log('[LIC] signOut');
-    await supabase.auth.signOut();
-  } catch (e) {
-    console.warn('[LIC] signOut warn:', e);
-  } finally {
-    // Limpia y devuelve al login principal
-    window.location.href = 'index.html';
-  }
-}
-
-// ==== BOOT ========================================================
+// === BOOT ===
 async function bootLicencias() {
+  console.log('[LICENCIAS] BOOT…');
+
+  // Botones Menú / Salir
+  $('#btnMenu')?.addEventListener('click', goMenu);
+  $('#btnLogout')?.addEventListener('click', signOut);
+
+  // Enviar solicitud
+  $('#btnSubmit')?.addEventListener('click', submitLeave);
+
   try {
-    console.log('[LIC] BOOT licencias…');
-
-    // Botones flotantes si existen
-    const btnSalir = $('#btnLogout2') || $('#btnSalirLic');
-    if (btnSalir) {
-      btnSalir.addEventListener('click', signOutLic);
-    }
-
-    const btnMenu = $('#btnMenu');
-    if (btnMenu) {
-      btnMenu.addEventListener('click', () => {
-        // Volver al portal principal
-        window.location.href = 'index.html';
-      });
-    }
-
-    const btnSend = $('#btnSendLeave');
-    if (btnSend) {
-      btnSend.addEventListener('click', submitLeave);
-    }
-
-    // Fecha mínima = hoy (opcional)
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const startInput = $('#leaveStart');
-    const endInput   = $('#leaveEnd');
-    if (startInput) startInput.min = todayStr;
-    if (endInput)   endInput.min = todayStr;
-
     const user = await loadSession();
     if (!user) {
-      console.log('[LIC] sin sesión → ir al login');
+      alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
       window.location.href = 'index.html';
       return;
     }
@@ -341,16 +359,16 @@ async function bootLicencias() {
     await loadEmployeeContext();
     await loadLeaves();
   } catch (e) {
-    console.error('[LIC] bootLicencias error:', e);
-    await showInfoModal({
-      title: 'Error al iniciar Licencias',
-      html: (e && e.message) ? e.message : 'Ocurrió un problema al cargar la página de licencias.',
-      okText: 'Cerrar'
-    });
+    console.error('[LICENCIAS] boot error:', e);
+    alert(
+      'Hubo un problema cargando tus datos: ' +
+        (e.message || e) +
+        '\nVuelve a entrar desde el portal.'
+    );
   }
 }
 
-// === START ===
+// Inicio
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootLicencias);
 } else {
