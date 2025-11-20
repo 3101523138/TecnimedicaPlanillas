@@ -1,59 +1,103 @@
-// licencias.js · Portal TMI · Licencias
-// =====================================
-console.log('[LICENCIAS] Cargando módulo licencias…');
+// activos/licencias.js
+// --------------------
+// Módulo de licencias del Portal TMI
 
+'use strict';
+
+// ===== CONFIG SUPABASE (MISMA QUE app.js) ======================
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  alert('Falta configurar Supabase en licencias.js');
-  throw new Error('Supabase config missing');
+if (!window.supabase || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('[LICENCIAS] Falta supabase-js o config');
 }
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const state = {
+// ===== ESTADO SIMPLE ==========================================
+const st = {
   user: null,
   employee: null, // { uid, full_name }
+  leaves: []
 };
 
-function $(s) { return document.querySelector(s); }
+// ===== HELPERS =================================================
+const $ = (sel) => document.querySelector(sel);
 
-function setMsg(text, isError = false) {
+function setFormMsg(msg, type = 'muted') {
   const el = $('#formMsg');
   if (!el) return;
-  el.textContent = text || '';
-  el.style.color = isError ? '#b91c1c' : '#6b7280';
+  el.textContent = msg || '';
+  el.classList.remove('error', 'ok');
+  if (type === 'error') el.classList.add('error');
+  if (type === 'ok') el.classList.add('ok');
 }
 
+function mapUITypeToDB(ui) {
+  switch (ui) {
+    case 'vacaciones':
+      return { db: 'VACACIONES', label: 'Vacaciones' };
+    case 'incapacidad_ccss':
+    case 'incapacidad_ins':
+      return { db: 'INCAPACIDAD', label: ui === 'incapacidad_ccss' ? 'Incapacidad CCSS' : 'Incapacidad INS' };
+    case 'permiso_con_goce':
+      return { db: 'OTRO', label: 'Permiso con goce' };
+    case 'permiso_sin_goce':
+      return { db: 'OTRO', label: 'Permiso sin goce' };
+    case 'otro':
+    default:
+      return { db: 'OTRO', label: 'Otro' };
+  }
+}
+
+function formatDateRange(start, end) {
+  if (!start || !end) return '—';
+  if (start === end) return start;
+  return `${start} → ${end}`;
+}
+
+function formatDateTime(dt) {
+  if (!dt) return '—';
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return dt;
+  return d.toLocaleString('es-CR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// ===== AUTH + EMPLEADO ========================================
 async function loadSession() {
   console.log('[LICENCIAS] loadSession…');
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await sb.auth.getSession();
   if (error) {
     console.error('[LICENCIAS] getSession error:', error);
     return null;
   }
-  state.user = data.session?.user || null;
-  console.log('[LICENCIAS] Sesión de usuario:', state.user?.email || null);
-  return state.user;
+  st.user = data?.session?.user || null;
+  console.log('[LICENCIAS] user:', st.user?.email || null);
+  return st.user;
 }
 
-async function loadEmployeeContext() {
-  console.log('[LICENCIAS] loadEmployeeContext…');
-  if (!state.user) throw new Error('Sin usuario en sesión');
+async function loadEmployee() {
+  if (!st.user) throw new Error('Sin usuario autenticado');
 
-  // Igual lógica que en app.js: primero por user_id, luego por email
-  let { data, error } = await supabase.from('employees')
-    .select('employee_uid, full_name, login_enabled, email')
-    .eq('user_id', state.user.id)
+  console.log('[LICENCIAS] loadEmployee…');
+  let { data, error } = await sb
+    .from('employees')
+    .select('employee_uid, full_name, login_enabled')
+    .eq('user_id', st.user.id)
     .single();
 
   if (error || !data) {
-    console.warn('[LICENCIAS] employees por user_id no encontrado, probando por email…', error);
-    const r = await supabase.from('employees')
-      .select('employee_uid, full_name, login_enabled, email')
-      .eq('email', state.user.email)
+    console.warn('[LICENCIAS] empleado por user_id no encontrado, probando email…', error);
+    const r = await sb
+      .from('employees')
+      .select('employee_uid, full_name, login_enabled')
+      .eq('email', st.user.email)
       .single();
     data = r.data || null;
     error = r.error || null;
@@ -61,234 +105,232 @@ async function loadEmployeeContext() {
 
   if (error || !data) {
     console.error('[LICENCIAS] No se encontró empleado para este usuario:', error);
-    throw new Error('No se encontró el empleado en la base de datos');
-  }
-  if (data.login_enabled === false) {
-    throw new Error('Tu usuario está deshabilitado. Contacta a administración.');
+    throw new Error('No se encontró tu ficha de empleado.');
   }
 
-  state.employee = {
+  if (data.login_enabled === false) {
+    throw new Error('Tu usuario está deshabilitado.');
+  }
+
+  st.employee = {
     uid: data.employee_uid,
-    full_name: data.full_name || '(sin nombre)',
+    full_name: data.full_name || '(sin nombre)'
   };
 
   const empNameEl = $('#empName');
-  if (empNameEl) empNameEl.textContent = state.employee.full_name;
+  if (empNameEl) empNameEl.textContent = st.employee.full_name;
 
-  console.log('[LICENCIAS] employee OK:', state.employee);
+  console.log('[LICENCIAS] employee OK:', st.employee);
 }
 
-// Navegación Menú / Salir
-function setupNav() {
-  const btnMenu = $('#btnMenu');
-  const btnLogout = $('#btnLogout');
+// ===== HISTORIAL ==============================================
+async function loadHistory() {
+  const cont = $('#historyContainer');
+  const summary = $('#historySummary');
 
-  if (btnMenu) {
-    btnMenu.addEventListener('click', () => {
-      console.log('[LICENCIAS] click Menú');
-      // Vuelve al portal principal
-      window.location.href = 'index.html';
-    });
+  if (cont) cont.textContent = 'Cargando licencias…';
+  if (summary) summary.textContent = '';
+
+  if (!st.employee?.uid) {
+    if (cont) cont.textContent = 'No se pudo cargar el empleado.';
+    return;
   }
 
-  if (btnLogout) {
-    btnLogout.addEventListener('click', async () => {
-      console.log('[LICENCIAS] click Salir');
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.warn('[LICENCIAS] signOut warn:', e);
-      }
-      window.location.href = 'index.html';
-    });
+  console.log('[LICENCIAS] loadHistory para empleado:', st.employee.uid);
+
+  const { data, error } = await sb
+    .from('employee_leaves')
+    .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, created_at')
+    .eq('employee_uid', st.employee.uid)
+    .order('date_start', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error('[LICENCIAS] error cargando historial:', error);
+    if (cont) cont.textContent = 'Error al cargar historial.';
+    return;
   }
+
+  st.leaves = data || [];
+
+  if (!st.leaves.length) {
+    if (cont) cont.textContent = 'No tienes licencias registradas aún.';
+    if (summary) summary.textContent = '';
+    return;
+  }
+
+  if (summary) summary.textContent = `${st.leaves.length} registro(s)`;
+
+  const rowsHtml = st.leaves
+    .map((r) => {
+      const range = formatDateRange(r.date_start, r.date_end);
+      const created = formatDateTime(r.created_at);
+      const type = r.leave_type || 'OTRO';
+      const issuer = r.issuer || '—';
+      const cert = r.certificate_no || '—';
+      const notes = r.notes ? r.notes : '—';
+
+      return `
+        <tr>
+          <td>${range}</td>
+          <td><span class="badge ${type}">${type}</span></td>
+          <td>${issuer}</td>
+          <td>${cert}</td>
+          <td>${notes}</td>
+          <td>${created}</td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const tableHtml = `
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Rango</th>
+          <th>Tipo</th>
+          <th>Emisor</th>
+          <th>Boleta</th>
+          <th>Notas</th>
+          <th>Creada</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+
+  if (cont) cont.innerHTML = tableHtml;
 }
 
-// Enviar la licencia a Supabase
-async function submitLeave() {
+// ===== GUARDAR LICENCIA =======================================
+async function handleSubmit() {
   try {
-    if (!state.employee?.uid) throw new Error('No se ha cargado el empleado.');
+    console.log('[LICENCIAS] handleSubmit click');
+    setFormMsg('');
 
-    const type = $('#leaveType')?.value || '';
-    const from = $('#leaveFrom')?.value || '';
-    const to   = $('#leaveTo')?.value || '';
-    const issuer = $('#leaveIssuer')?.value || '';
-    const cert   = $('#leaveCert')?.value.trim() || '';
-    const notes  = $('#leaveNotes')?.value.trim() || '';
-
-    console.log('[LICENCIAS] submitLeave payload (raw):', {
-      type, from, to, issuer, cert, notes,
-    });
-
-    // Validaciones mínimas
-    if (!type) {
-      setMsg('Selecciona el tipo de licencia.', true);
-      return;
-    }
-    if (!from || !to) {
-      setMsg('Completa la fecha de inicio y fin.', true);
-      return;
-    }
-    if (to < from) {
-      setMsg('La fecha "Hasta" no puede ser anterior a "Desde".', true);
-      return;
+    if (!st.employee?.uid) {
+      throw new Error('No se pudo identificar tu empleado.');
     }
 
-    setMsg('Enviando solicitud…');
+    const typeSel = $('#leaveType');
+    const fromEl = $('#leaveFrom');
+    const toEl = $('#leaveTo');
+    const issuerEl = $('#leaveIssuer');
+    const certEl = $('#leaveCert');
+    const notesEl = $('#leaveNotes');
 
-    // Insert en employee_leaves
+    const uiType = typeSel?.value || '';
+    const dateStart = fromEl?.value || '';
+    const dateEnd = toEl?.value || '';
+    const issuer = issuerEl?.value || '';
+    const certificate = (certEl?.value || '').trim();
+    const notesBase = (notesEl?.value || '').trim();
+
+    if (!uiType) {
+      throw new Error('Selecciona el tipo de licencia.');
+    }
+    if (!dateStart || !dateEnd) {
+      throw new Error('Debes indicar las fechas Desde y Hasta.');
+    }
+    if (dateEnd < dateStart) {
+      throw new Error('La fecha Hasta no puede ser anterior a Desde.');
+    }
+
+    const mapped = mapUITypeToDB(uiType);
+    const fullNotes =
+      notesBase ||
+      (mapped.label ? `Tipo: ${mapped.label}` : '');
+
     const payload = {
-      employee_uid: state.employee.uid,
-      leave_type: type,           // VACACIONES / INCAPACIDAD / MATERNIDAD / OTRO
-      date_start: from,
-      date_end: to,
+      employee_uid: st.employee.uid,
+      leave_type: mapped.db,        // VACACIONES / INCAPACIDAD / MATERNIDAD / OTRO
+      date_start: dateStart,
+      date_end: dateEnd,
       issuer: issuer || null,
-      certificate_no: cert || null,
-      notes: notes || null,
-      // employer_pct_day1_3, employer_pct_after3, insurer_pct_after3,
-      // pay_hours_per_day se pueden dejar en NULL por ahora
+      certificate_no: certificate || null,
+      notes: fullNotes || null
+      // employer_pct_day1_3 / pay_hours_per_day se pueden dejar nulos
     };
 
     console.log('[LICENCIAS] insert payload:', payload);
 
-    const { data, error } = await supabase
+    const btn = $('#btnSubmit');
+    if (btn) btn.disabled = true;
+
+    const { data, error } = await sb
       .from('employee_leaves')
       .insert(payload)
       .select()
       .single();
 
     if (error) {
-      console.error('[LICENCIAS] Error al insertar licencia:', error);
-      throw error;
+      console.error('[LICENCIAS] insert error:', error);
+      throw new Error(error.message || 'No se pudo guardar la licencia.');
     }
 
-    console.log('[LICENCIAS] Licencia creada:', data);
-    setMsg('Solicitud enviada correctamente.');
+    console.log('[LICENCIAS] insert OK:', data);
 
-    // Limpiar formulario
-    if ($('#leaveType'))   $('#leaveType').value = '';
-    if ($('#leaveFrom'))   $('#leaveFrom').value = '';
-    if ($('#leaveTo'))     $('#leaveTo').value = '';
-    if ($('#leaveIssuer')) $('#leaveIssuer').value = '';
-    if ($('#leaveCert'))   $('#leaveCert').value = '';
-    if ($('#leaveNotes'))  $('#leaveNotes').value = '';
+    // limpiar formulario
+    if (typeSel) typeSel.value = '';
+    if (fromEl) fromEl.value = '';
+    if (toEl) toEl.value = '';
+    if (issuerEl) issuerEl.value = '';
+    if (certEl) certEl.value = '';
+    if (notesEl) notesEl.value = '';
 
-    // Refrescar historial
+    setFormMsg('Solicitud registrada correctamente.', 'ok');
+
+    // recargar historial
     await loadHistory();
   } catch (e) {
-    console.error('[LICENCIAS] submitLeave error:', e);
-    setMsg(e.message || 'Error al enviar la solicitud.', true);
+    console.error('[LICENCIAS] handleSubmit error:', e);
+    setFormMsg(e.message || 'Error al enviar la solicitud.', 'error');
+  } finally {
+    const btn = $('#btnSubmit');
+    if (btn) btn.disabled = false;
   }
 }
 
-// Cargar historial de licencias para el empleado
-async function loadHistory() {
+// ===== NAV / LOGOUT ===========================================
+async function handleLogout() {
   try {
-    if (!state.employee?.uid) {
-      console.warn('[LICENCIAS] loadHistory sin employee_uid');
-      return;
-    }
-
-    const cont = $('#historyContainer');
-    const summary = $('#historySummary');
-    if (cont) cont.textContent = 'Cargando licencias…';
-    if (summary) summary.textContent = '';
-
-    const { data, error } = await supabase
-      .from('employee_leaves')
-      .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, created_at')
-      .eq('employee_uid', state.employee.uid)
-      .order('date_start', { ascending: false });
-
-    if (error) {
-      console.error('[LICENCIAS] loadHistory error:', error);
-      if (cont) cont.textContent = 'Error al cargar el historial.';
-      return;
-    }
-
-    const rows = data || [];
-    console.log('[LICENCIAS] Historial cargado, filas:', rows.length);
-
-    if (!rows.length) {
-      if (cont) cont.textContent = 'Sin licencias registradas.';
-      if (summary) summary.textContent = '';
-      return;
-    }
-
-    if (summary) {
-      summary.textContent = `${rows.length} licencia${rows.length === 1 ? '' : 's'} registradas`;
-    }
-
-    const html = [
-      '<table class="history-table">',
-      '<thead><tr>',
-      '<th>Desde</th>',
-      '<th>Hasta</th>',
-      '<th>Tipo</th>',
-      '<th>Emisor</th>',
-      '<th>Boleta</th>',
-      '<th>Notas</th>',
-      '</tr></thead><tbody>',
-      ...rows.map(r => {
-        const tipo = r.leave_type || '';
-        const em   = r.issuer || '—';
-        const cert = r.certificate_no && r.certificate_no !== '—'
-          ? r.certificate_no
-          : '—';
-        const notas = r.notes && r.notes !== '—'
-          ? r.notes
-          : '—';
-
-        return `<tr>
-          <td>${r.date_start}</td>
-          <td>${r.date_end}</td>
-          <td>${tipo}</td>
-          <td>${em}</td>
-          <td>${cert}</td>
-          <td>${notas}</td>
-        </tr>`;
-      }),
-      '</tbody></table>',
-    ].join('');
-
-    if (cont) {
-      cont.innerHTML = html;
-    }
+    console.log('[LICENCIAS] Logout');
+    await sb.auth.signOut();
   } catch (e) {
-    console.error('[LICENCIAS] loadHistory catch:', e);
-    const cont = $('#historyContainer');
-    if (cont) cont.textContent = 'Error al cargar el historial.';
-  }
-}
-
-// Boot
-async function bootLicencias() {
-  console.log('[LICENCIAS] bootLicencias…');
-
-  setupNav();
-
-  const btnSubmit = $('#btnSubmit');
-  if (btnSubmit) {
-    btnSubmit.addEventListener('click', (e) => {
-      e.preventDefault();
-      submitLeave();
-    });
-  }
-
-  // Sesión
-  const user = await loadSession();
-  if (!user) {
-    console.warn('[LICENCIAS] Sin sesión, redirigiendo a login…');
+    console.warn('[LICENCIAS] signOut warn:', e);
+  } finally {
     window.location.href = 'index.html';
-    return;
   }
+}
+
+function handleMenu() {
+  console.log('[LICENCIAS] Ir a menú');
+  window.location.href = 'index.html';
+}
+
+// ===== BOOT ===================================================
+async function bootLicencias() {
+  console.log('[LICENCIAS] BOOT…');
+
+  // wires UI
+  $('#btnSubmit')?.addEventListener('click', handleSubmit);
+  $('#btnLogout')?.addEventListener('click', handleLogout);
+  $('#btnMenu')?.addEventListener('click', handleMenu);
 
   try {
-    await loadEmployeeContext();
+    const user = await loadSession();
+    if (!user) {
+      console.warn('[LICENCIAS] Sin sesión, redirigiendo a login…');
+      window.location.href = 'index.html';
+      return;
+    }
+    await loadEmployee();
     await loadHistory();
   } catch (e) {
-    console.error('[LICENCIAS] Error en bootLicencias:', e);
-    setMsg(e.message || 'Error al cargar la página.', true);
+    console.error('[LICENCIAS] boot error:', e);
+    setFormMsg(e.message || 'Error al iniciar módulo de licencias.', 'error');
   }
 }
 
