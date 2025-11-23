@@ -1,167 +1,280 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Portal del Empleado · Tecnomedica Montajes Industriales S.A.</title>
-  <meta name="theme-color" content="#1e88e5" />
-  <link rel="icon" href="Logo.png" type="image/png" />
-  <link rel="stylesheet" href="./assets/app.css?v=26" />
-  <!-- Supabase global (CDN) -->
+  <meta charset="UTF-8">
+  <title>Licencias · Tecnomédica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Supabase -->
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <!-- CSS incrustado -->
+  <style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#1e88e5;
+    --logo-max-h:72px; --logo-max-h-sm:56px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+    background:var(--bg);
+    margin:0;
+    padding:16px;
+  }
+  .app{width:min(92vw,980px);margin:24px auto}
+  .card{
+    background:var(--card);
+    border-radius:24px;
+    padding:24px 28px;
+    box-shadow:0 16px 48px rgba(0,0,0,.10);
+    margin-bottom:18px;
+  }
+  .card.inner{padding:14px}
+
+  /* ───── Brand (logo + título) ───── */
+  .brand-row{display:flex;align-items:center;gap:18px;margin-bottom:10px}
+  .brand-row.no-gap{margin:0}
+  .brand-row img{
+    max-height:var(--logo-max-h);
+    height:auto;width:auto;
+    object-fit:contain;
+    border-radius:14px;
+    background:#fff;
+    box-shadow:0 6px 20px rgba(0,0,0,.12);
+  }
+  .brand-row .title{
+    font-size:clamp(20px, 6vw, 28px);
+    font-weight:800;
+    color:var(--text);
+    letter-spacing:.2px;
+    line-height:1.15;
+    word-break:normal;
+    overflow-wrap:break-word;
+    hyphens:none;
+  }
+
+  @media (max-width:480px){
+    .brand-row{flex-direction:column; align-items:center; text-align:center; gap:12px}
+    .brand-row img{max-height:var(--logo-max-h-sm); max-width:min(80vw, 360px)}
+  }
+
+  /* Titulares y formularios */
+  h1,h2{margin:8px 0 14px;color:var(--text)}
+  h1{font-size:32px}
+  h2{font-size:26px}
+  label{display:block;font-size:14px;color:var(--muted);margin:6px 0 4px}
+  input, select{
+    width:100%;
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid #d8dee8;
+    background:#fff;
+    font-size:16px;
+  }
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .row.between{justify-content:space-between}
+  .center{text-align:center}
+
+  /* Botones base */
+  .btn{
+    padding:13px 18px;
+    border:0;
+    border-radius:14px;
+    background:var(--primary);
+    color:#fff;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .btn:disabled{cursor:not-allowed;opacity:.6}
+  .btn.light{background:#e9eef5;color:#333}
+  .btn.block{width:100%}
+  .btnFull{width:100%;display:block;font-size:18px}
+  .btnPrimary{background:var(--primary)}
+  .link{background:none;border:0;color:var(--primary);padding:0;margin-top:6px;cursor:pointer}
+
+  .muted{color:var(--muted);font-size:13px}
+  .big{font-size:22px;font-weight:800}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+    margin-top:12px;
+  }
+  @media (max-width:640px){
+    .grid{
+      grid-template-columns:1fr; /* móvil: TODO uno bajo el otro */
+    }
+  }
+  .tile{
+    border:1px solid #e5e7eb;
+    border-radius:18px;
+    padding:16px 18px;
+    background:#fff;
+    box-shadow:0 4px 16px rgba(0,0,0,.06);
+    cursor:pointer;
+  }
+  .tile .k{font-size:22px;font-weight:800;margin-bottom:4px}
+  .tile .s{color:#6b7280}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .gap{gap:12px}
+  .m-t{margin-top:12px}
+  .m-b{margin-bottom:10px}
+  .m-b-sm{margin-bottom:6px}
+
+  /* Logo estilo portal */
+  .logoHero{display:flex;justify-content:center;margin:6px 0 10px}
+  .punchLogo{
+    width:100%;
+    max-width:260px;
+    height:auto;
+    border-radius:14px;
+    background:#fff;
+    box-shadow:0 6px 20px rgba(0,0,0,.12);
+  }
+
+  /* Botones flotantes (Menú / Salir) */
+  .floatBtn{
+    position: fixed;
+    right: 14px;
+    z-index: 1000;
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(0,0,0,.12);
+    border:0;
+  }
+  .floatBtn.red  { top: 14px; background:#ef4444; color:#fff; }
+  .floatBtn.grey { top: 68px; background:#cfd6df; color:#111; }
+
+  @media (min-width:1024px){
+    .floatBtn{ position:absolute; }
+    #btnLogout{ top:14px; right:14px; }
+    #btnMenu{   top:68px; right:14px; }
+  }
+
+  /* Sección historial de licencias */
+  #historyContainer{
+    font-size:14px;
+  }
+  .history-table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:8px;
+  }
+  .history-table th,
+  .history-table td{
+    padding:8px 10px;
+    border-bottom:1px solid #e5e7eb;
+    font-size:13px;
+  }
+  .history-table th{
+    text-align:left;
+    color:#6b7280;
+    font-weight:600;
+  }
+  .badge{
+    display:inline-block;
+    padding:4px 8px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:600;
+  }
+  .badge.VACACIONES{background:#DBEAFE;color:#1D4ED8;}
+  .badge.INCAPACIDAD{background:#FEF3C7;color:#92400E;}
+  .badge.MATERNIDAD{background:#FCE7F3;color:#9D174D;}
+  .badge.OTRO{background:#E5E7EB;color:#374151;}
+
+  textarea{
+    width:100%;
+    padding:12px 14px;
+    border-radius:14px;
+    border:1px solid #d8dee8;
+    font-size:15px;
+    resize:vertical;
+    min-height:80px;
+  }
+  </style>
+
+  <!-- JS de licencias (OJO: dentro de /activos) -->
+  <script defer src="activos/licencias.js"></script>
 </head>
 <body>
   <div class="app">
-    <!-- LOGIN -->
-    <div class="card" id="authCard">
-      <div class="brand-row">
-        <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
-        <div class="title">Tecnomedica Montajes Industriales S.A.</div>
-      </div>
-      <h2>Iniciar sesión</h2>
-      <label for="email">Correo</label>
-      <input id="email" type="email" placeholder="correo@dominio.com" autocomplete="username" inputmode="email">
-      <label for="password">Contraseña</label>
-      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
-      <div class="row between">
-        <button class="btn" id="btnLogin">Entrar</button>
-        <button class="link" id="btnForgot">¿Olvidaste tu contraseña?</button>
-      </div>
-      <div id="msg" class="muted"></div>
-    </div>
+    <!-- Botones flotantes -->
+    <button id="btnMenu"  class="floatBtn grey">← Menú</button>
+    <button id="btnLogout" class="floatBtn red">Salir</button>
 
-    <!-- RESET PASSWORD -->
-    <div class="card" id="resetCard" style="display:none;">
+    <!-- Tarjeta principal -->
+    <div class="card">
       <div class="brand-row">
-        <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
-        <div class="title">Tecnomedica Montajes Industriales S.A.</div>
-      </div>
-      <h2>Define una nueva contraseña</h2>
-      <label for="newPassword">Nueva contraseña</label>
-      <input id="newPassword" type="password" placeholder="••••••••" autocomplete="new-password">
-      <div class="row">
-        <button class="btn" id="btnSetNew">Guardar nueva contraseña</button>
-        <button class="link" id="btnCancelReset">Cancelar</button>
-      </div>
-      <div id="msg2" class="muted"></div>
-    </div>
-
-    <!-- HOME -->
-    <div class="card" id="homeCard" style="display:none;">
-      <div class="topbar">
-        <div class="brand-row no-gap">
-          <img src="Logo.png" alt="Tecnomedica Montajes Industriales S.A.">
-          <div class="title">Tecnomedica Montajes Industriales S.A.</div>
+        <!-- Logo en RAÍZ: Logotipo.png -->
+        <img src="Logotipo.png" alt="Tecnomédica" class="punchLogo">
+        <div>
+          <div class="title">Licencias · Tecnomédica</div>
+          <div class="muted m-t">
+            Iniciaste sesión como <strong id="empName">—</strong>
+          </div>
         </div>
-        <button class="btn light" id="btnLogout">Salir</button>
       </div>
-      <div class="muted">Bienvenido</div>
-      <div id="empName" class="big">—</div>
-      <div id="empUid" class="muted m-b">—</div>
+
+      <h2 class="m-b-sm">Nueva licencia</h2>
 
       <div class="grid">
-        <div class="tile" data-nav="/marcas">
-          <div class="k">Marcar IN/OUT</div>
-          <div class="s">Registrar entrada o salida</div>
+        <div>
+          <label for="leaveType">Tipo</label>
+          <select id="leaveType">
+            <option value="">— Selecciona tipo —</option>
+            <option value="vacaciones">Vacaciones</option>
+            <option value="incapacidad_ccss">Incapacidad CCSS</option>
+            <option value="incapacidad_ins">Incapacidad INS</option>
+            <option value="permiso_con_goce">Permiso con goce</option>
+            <option value="permiso_sin_goce">Permiso sin goce</option>
+            <option value="otro">Otro</option>
+          </select>
         </div>
-        <div class="tile" data-nav="/proyectos">
-          <div class="k">Proyectos</div>
-          <div class="s">Crear y ver proyectos</div>
+        <div>
+          <label for="leaveFrom">Desde</label>
+          <input type="date" id="leaveFrom">
         </div>
-        <div class="tile" data-nav="/licencias">
-          <div class="k">Licencias</div><div class="s">Solicitar y revisar historial</div>
+        <div>
+          <label for="leaveTo">Hasta</label>
+          <input type="date" id="leaveTo">
         </div>
-        <div class="tile" data-nav="/comprobantes">
-          <div class="k">Recibos</div><div class="s">Descargar tus pagos</div>
+        <div>
+          <label for="leaveIssuer">Emisor (opcional)</label>
+          <select id="leaveIssuer">
+            <option value="">— Selecciona emisor —</option>
+            <option value="CCSS">CCSS</option>
+            <option value="INS">INS</option>
+            <option value="EMPRESA">Empresa</option>
+            <option value="OTRO">Otro</option>
+          </select>
         </div>
+        <div>
+          <label for="leaveCert">N.º boleta / certificado (opcional)</label>
+          <input id="leaveCert" placeholder="Ej. INC-001">
+        </div>
+        <div style="grid-column:1 / -1">
+          <label for="leaveNotes">Notas</label>
+          <textarea id="leaveNotes" placeholder="Motivo o detalle de la licencia…"></textarea>
+        </div>
+      </div>
+
+      <div class="m-t">
+        <button id="btnSubmit" class="btn btnFull btnPrimary">Enviar solicitud</button>
+        <div id="formMsg" class="muted m-t"></div>
       </div>
     </div>
 
-    <!-- MARCAS -->
-    <div class="card" id="punchCard" style="display:none; position:relative;">
-      <!-- Botones flotantes iguales -->
-      <button class="btn floatBtn grey" id="btnMenu" data-nav="/app">← Menú</button>
-      <button class="btn floatBtn red"  id="btnLogout2">Salir</button>
-
-      <!-- LOGO ARRIBA -->
-      <div class="logoHero" id="logoHero">
-        <img class="punchLogo" src="Logo.png" alt="Tecnomedica">
+    <!-- Historial -->
+    <div class="card">
+      <div class="topbar">
+        <h2 class="m-b-sm">Historial</h2>
+        <span id="historySummary" class="muted"></span>
       </div>
-
-      <!-- El bloque “Estado actual / Horas de hoy” lo insertará el JS justo debajo de #logoHero -->
-
-      <!-- Identidad -->
-      <div class="muted">Marcas IN/OUT como</div>
-      <div id="empName2" class="big">—</div>
-      <div id="empUid2" class="muted">—</div>
-
-      <!-- ENTRADA ancho completo -->
-      <div class="m-t">
-        <button class="btn btnFull" id="btnIn">Marcar ENTRADA</button>
-      </div>
-
-      <div id="punchMsg" class="muted m-t"></div>
-
-      <!-- Últimas marcas -->
-      <div class="card inner">
-        <div class="listTitle m-b-sm">Últimas marcas</div>
-        <div id="recentPunches" class="punchList">—</div>
-      </div>
-
-      <!-- ASIGNACIÓN DE PROYECTOS -->
-      <div class="card inner">
-        <div class="center m-b-sm">
-          <div class="allocHeadTitle">Asignación de proyectos</div>
-          <div class="allocHeadSub">(obligatorio para cerrar)</div>
-          <div class="allocHeadWarn" id="allocInfo">Debes asignar 00:00 más.</div>
-        </div>
-
-        <!-- + Proyecto (mismo ancho que Guardar) -->
-        <button class="btn block darker m-b" id="btnAddAlloc">+ Proyecto</button>
-
-        <!-- Cliente -->
-        <label for="allocClient" class="muted">Cliente</label>
-        <select id="allocClient">
-          <option value="">— Todos los clientes —</option>
-        </select>
-
-        <!-- Divisor elegante -->
-        <hr class="dashDivider" />
-
-        <!-- Proyectos -->
-        <div id="allocContainer" class="m-t"></div>
-
-        <!-- Totales + Guardar -->
-        <div class="row between m-t">
-          <div class="muted">
-            <strong><span id="allocTotalHM">00:00</span> / <span id="allocRequiredHM">00:00</span></strong> asignados
-          </div>
-          <button class="btn block btnPrimary" id="btnSaveAlloc">Guardar asignación</button>
-        </div>
-      </div>
-
-      <!-- SALIDA al final -->
-      <div class="m-t">
-        <button class="btn success btnFull" id="btnOut">Marcar SALIDA</button>
-      </div>
-
-      <!-- Placeholders -->
-      <div class="card" id="projectsCard" style="display:none;">
-        <div class="topbar"><h1>Proyectos</h1><button class="btn light" data-nav="/app">← Menú</button></div>
-        <div class="muted">En construcción. Activaremos pivot <code>employee_projects</code> y RLS.</div>
-      </div>
-      <div class="card" id="leaveCard" style="display:none;">
-        <div class="topbar"><h1>Licencias</h1><button class="btn light" data-nav="/app">← Menú</button></div>
-        <div class="muted">En construcción. Usaremos <code>employee_leaves</code> con RLS.</div>
-      </div>
-      <div class="card" id="payslipsCard" style="display:none;">
-        <div class="topbar"><h1>Comprobantes</h1><button class="btn light" data-nav="/app">← Menú</button></div>
-        <div class="muted">En construcción. Bucket privado <code>payslips</code> + signed URLs.</div>
-      </div>
+      <div id="historyContainer" class="muted">Cargando licencias…</div>
     </div>
   </div>
-
-  <!-- App (con cache-bust) -->
-  <script type="module" src="./assets/app.js?v=26"></script>
 </body>
 </html>
