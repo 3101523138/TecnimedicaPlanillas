@@ -1,33 +1,28 @@
 // activos/licencias.js
 // Licencias · Tecnomédica
-// Logs activados para depurar
+// Todos los logs van con [LICENCIAS] para rastreo
 
 console.log('[LICENCIAS] Cargando script licencias.js…');
 
-// === CONFIG SUPABASE ===
-const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
+// ==== CONFIGURAR SUPABASE ====
+const URL_SUPABASE = 'https://xducrljbdyneyihjcjvo.supabase.co';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
 if (!window.supabase) {
   console.error('[LICENCIAS] supabase-js no está cargado.');
 }
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.supabase.createClient(URL_SUPABASE, SUPABASE_ANON_KEY);
 
-// === ESTADO SIMPLE ===
+// ==== ESTADO SIMPLE ====
 const st = {
   user: null,
   employee: null, // { uid, full_name }
 };
 
-// === HELPERS DOM ===
+// ==== AYUDANTES DOM ====
 const $ = (s) => document.querySelector(s);
-const fmtDate = (iso) => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('es-CR', { year:'numeric', month:'2-digit', day:'2-digit' });
-};
 
 function setFormMsg(msg, isError = false) {
   const el = $('#formMsg');
@@ -36,186 +31,181 @@ function setFormMsg(msg, isError = false) {
   el.style.color = isError ? '#b91c1c' : '#6b7280';
 }
 
-// === MAPEO TIPOS UI -> BD ===
-// Tabla employee_leaves.leave_type acepta: VACACIONES, INCAPACIDAD, MATERNIDAD, OTRO
-const TYPE_MAP = {
-  vacaciones:        { dbType: 'VACACIONES', label: 'Vacaciones' },
-  incapacidad_ccss:  { dbType: 'INCAPACIDAD', label: 'Incapacidad CCSS', defaultIssuer: 'CCSS' },
-  incapacidad_ins:   { dbType: 'INCAPACIDAD', label: 'Incapacidad INS',  defaultIssuer: 'INS' },
-  permiso_con_goce:  { dbType: 'OTRO',       label: 'Permiso con goce' },
-  permiso_sin_goce:  { dbType: 'OTRO',       label: 'Permiso sin goce' },
-  otro:              { dbType: 'OTRO',       label: 'Otro' },
-};
-
-// Traducción inversa para el historial
-function prettyType(row) {
-  const t = row.leave_type;
-  if (t === 'VACACIONES') return 'Vacaciones';
-  if (t === 'INCAPACIDAD') {
-    if (row.issuer === 'CCSS') return 'Incapacidad CCSS';
-    if (row.issuer === 'INS')  return 'Incapacidad INS';
-    return 'Incapacidad';
-  }
-  if (t === 'MATERNIDAD') return 'Maternidad';
-  return 'Otro';
+function setHistoryMsg(msg) {
+  const el = $('#historyContainer');
+  if (!el) return;
+  el.textContent = msg || '';
 }
 
-// === AUTH / EMPLEADO ===
-async function loadSession() {
-  console.log('[LICENCIAS] loadSession…');
-  const { data, error } = await supabase.auth.getSession();
-  if (error) {
-    console.error('[LICENCIAS] getSession error:', error);
-    return null;
+// Mapea los tipos del select a los valores permitidos por la tabla
+// CHECK: 'VACACIONES', 'INCAPACIDAD', 'MATERNIDAD', 'OTRO'
+function mapUiTypeToDb(value) {
+  switch (value) {
+    case 'vacaciones':
+      return 'VACACIONES';
+    case 'incapacidad_ccss':
+    case 'incapacidad_ins':
+      return 'INCAPACIDAD';
+    case 'permiso_con_goce':
+    case 'permiso_sin_goce':
+    case 'otro':
+    default:
+      return 'OTRO';
   }
-  st.user = data?.session?.user || null;
-  console.log('[LICENCIAS] session user:', st.user?.email || null);
-  return st.user;
 }
 
-async function loadEmployeeContext() {
-  if (!st.user) throw new Error('Sin sesión de usuario');
-
-  console.log('[LICENCIAS] loadEmployeeContext…');
-  let { data, error } = await supabase.from('employees')
-    .select('employee_uid, full_name, login_enabled')
-    .eq('user_id', st.user.id)
-    .single();
-
-  if (error || !data) {
-    console.warn('[LICENCIAS] empleado por user_id no encontrado; probando por email…', error);
-    const r = await supabase.from('employees')
-      .select('employee_uid, full_name, login_enabled')
-      .eq('email', st.user.email)
-      .single();
-    data = r.data || null;
-    error = r.error || null;
+function prettyType(dbValue, uiValue) {
+  // uiValue conserva la distinción “con goce / sin goce”
+  switch (uiValue) {
+    case 'vacaciones':
+      return 'Vacaciones';
+    case 'incapacidad_ccss':
+      return 'Incapacidad CCSS';
+    case 'incapacidad_ins':
+      return 'Incapacidad INS';
+    case 'permiso_con_goce':
+      return 'Permiso con goce';
+    case 'permiso_sin_goce':
+      return 'Permiso sin goce';
+    case 'otro':
+      return 'Otro';
+    default:
+      // fallback por si ya habían registros previos
+      switch (dbValue) {
+        case 'VACACIONES':
+          return 'Vacaciones';
+        case 'INCAPACIDAD':
+          return 'Incapacidad';
+        case 'MATERNIDAD':
+          return 'Maternidad';
+        case 'OTRO':
+        default:
+          return 'Otro';
+      }
   }
-
-  if (error || !data) throw new Error('No se encontró el empleado asociado.');
-  if (data.login_enabled === false) throw new Error('Usuario deshabilitado.');
-
-  st.employee = {
-    uid: data.employee_uid,
-    full_name: data.full_name || '(sin nombre)',
-  };
-
-  const nameEl = $('#empName');
-  if (nameEl) nameEl.textContent = st.employee.full_name;
-
-  console.log('[LICENCIAS] employee OK:', st.employee);
 }
 
-// === HISTORIAL ===
-async function loadHistory() {
-  const container = $('#historyContainer');
-  const summary = $('#historySummary');
-  if (!st.employee) {
-    if (container) container.textContent = 'No se pudo cargar el empleado.';
-    return;
-  }
-
+// ==== CARGAR SESIÓN Y EMPLEADO ====
+async function loadSessionAndEmployee() {
+  console.log('[LICENCIAS] loadSessionAndEmployee…');
   try {
-    if (container) container.textContent = 'Cargando licencias…';
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('[LICENCIAS] getSession error:', error);
+      throw error;
+    }
 
-    const { data, error } = await supabase
-      .from('employee_leaves')
-      .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, created_at')
-      .eq('employee_uid', st.employee.uid)
-      .order('date_start', { ascending: false });
+    const session = data?.session || null;
+    if (!session?.user) {
+      console.warn('[LICENCIAS] Sin sesión activa.');
+      setFormMsg('No hay sesión activa. Abre primero el portal y vuelve a intentar.', true);
+      return false;
+    }
 
-    if (error) throw error;
+    st.user = session.user;
+    console.log('[LICENCIAS] Usuario:', st.user.email);
 
-    if (!data || data.length === 0) {
-      if (container) container.textContent = 'Todavía no tienes licencias registradas.';
-      if (summary) summary.textContent = '';
-      console.log('[LICENCIAS] historial vacío');
+    // Buscar empleado por user_id (igual que en portal)
+    let { data: emp, error: empErr } = await supabase
+      .from('employees')
+      .select('employee_uid, full_name')
+      .eq('user_id', st.user.id)
+      .single();
+
+    if (empErr || !emp) {
+      console.warn('[LICENCIAS] Empleado por user_id no encontrado. Probando por email…', empErr);
+      const r = await supabase
+        .from('employees')
+        .select('employee_uid, full_name')
+        .eq('email', st.user.email)
+        .single();
+      emp = r.data || null;
+      empErr = r.error || null;
+    }
+
+    if (empErr || !emp) {
+      console.error('[LICENCIAS] No se encontró empleado para este usuario:', empErr);
+      setFormMsg('No se encontró tu ficha de empleado. Contacta a administración.', true);
+      return false;
+    }
+
+    st.employee = {
+      uid: emp.employee_uid,
+      full_name: emp.full_name || '(sin nombre)',
+    };
+
+    const n = $('#empName');
+    if (n) n.textContent = st.employee.full_name;
+
+    console.log('[LICENCIAS] Empleado OK:', st.employee);
+    return true;
+  } catch (err) {
+    console.error('[LICENCIAS] loadSessionAndEmployee catch:', err);
+    setFormMsg('Error cargando datos de usuario. Intenta recargar la página.', true);
+    return false;
+  }
+}
+
+// ==== INSERTAR NUEVA LICENCIA ====
+async function submitLeave() {
+  console.log('[LICENCIAS] submitLeave click');
+  try {
+    if (!st.employee?.uid) {
+      setFormMsg('No se encontró el empleado. Vuelve a entrar desde el portal.', true);
       return;
     }
 
-    // Resumen
-    if (summary) {
-      const total = data.length;
-      const first = data[data.length - 1];
-      const last  = data[0];
-      summary.textContent = `${total} licencia(s) · ${fmtDate(first.date_start)} – ${fmtDate(last.date_end)}`;
+    const typeEl = $('#leaveType');
+    const fromEl = $('#leaveFrom');
+    const toEl = $('#leaveTo');
+    const issuerEl = $('#leaveIssuer');
+    const certEl = $('#leaveCert');
+    const notesEl = $('#leaveNotes');
+
+    const uiType = (typeEl?.value || '').trim();
+    const dateStart = (fromEl?.value || '').trim();
+    const dateEnd = (toEl?.value || '').trim();
+    const issuer = (issuerEl?.value || '').trim();
+    const cert = (certEl?.value || '').trim();
+    const notes = (notesEl?.value || '').trim();
+
+    if (!uiType) {
+      setFormMsg('Selecciona el tipo de licencia.', true);
+      typeEl?.focus();
+      return;
+    }
+    if (!dateStart) {
+      setFormMsg('Selecciona la fecha de inicio.', true);
+      fromEl?.focus();
+      return;
+    }
+    if (!dateEnd) {
+      setFormMsg('Selecciona la fecha de fin.', true);
+      toEl?.focus();
+      return;
+    }
+    if (dateEnd < dateStart) {
+      setFormMsg('La fecha final no puede ser anterior a la inicial.', true);
+      toEl?.focus();
+      return;
     }
 
-    // Tabla
-    let html = '<table class="history-table"><thead><tr>' +
-      '<th>Tipo</th><th>Desde</th><th>Hasta</th><th>Emisor</th><th>Boleta</th><th>Notas</th>' +
-      '</tr></thead><tbody>';
+    const dbType = mapUiTypeToDb(uiType);
 
-    data.forEach(row => {
-      const badgeClass = row.leave_type || 'OTRO';
-      html += `<tr>
-        <td><span class="badge ${badgeClass}">${prettyType(row)}</span></td>
-        <td>${fmtDate(row.date_start)}</td>
-        <td>${fmtDate(row.date_end)}</td>
-        <td>${row.issuer || '—'}</td>
-        <td>${row.certificate_no || '—'}</td>
-        <td>${row.notes ? row.notes : '—'}</td>
-      </tr>`;
-    });
+    const payload = {
+      employee_uid: st.employee.uid,
+      leave_type: dbType,
+      date_start: dateStart,
+      date_end: dateEnd,
+      issuer: issuer || null,
+      certificate_no: cert || null,
+      notes: notes || null,
+    };
 
-    html += '</tbody></table>';
+    console.log('[LICENCIAS] Insert payload:', payload);
 
-    if (container) container.innerHTML = html;
-    console.log('[LICENCIAS] historial cargado:', data.length, 'fila(s)');
-  } catch (e) {
-    console.error('[LICENCIAS] loadHistory error:', e);
-    if (container) container.textContent = 'Error al cargar el historial.';
-    if (summary) summary.textContent = '';
-  }
-}
-
-// === GUARDAR LICENCIA ===
-async function handleSubmit() {
-  console.log('[LICENCIAS] handleSubmit click');
-
-  if (!st.employee) {
-    setFormMsg('No se encontró el empleado.', true);
-    return;
-  }
-
-  const typeVal   = $('#leaveType')?.value || '';
-  const fromVal   = $('#leaveFrom')?.value || '';
-  const toVal     = $('#leaveTo')?.value || '';
-  const issuerSel = $('#leaveIssuer')?.value || '';
-  const certVal   = $('#leaveCert')?.value?.trim() || '';
-  const notesVal  = $('#leaveNotes')?.value?.trim() || '';
-
-  const typeConf = TYPE_MAP[typeVal];
-  if (!typeConf) {
-    setFormMsg('Selecciona un tipo de licencia.', true);
-    return;
-  }
-
-  if (!fromVal || !toVal) {
-    setFormMsg('Completa las fechas Desde y Hasta.', true);
-    return;
-  }
-
-  if (toVal < fromVal) {
-    setFormMsg('La fecha Hasta no puede ser anterior a Desde.', true);
-    return;
-  }
-
-  const payload = {
-    employee_uid: st.employee.uid,
-    leave_type: typeConf.dbType,  // VACACIONES / INCAPACIDAD / MATERNIDAD / OTRO
-    date_start: fromVal,
-    date_end: toVal,
-    issuer: issuerSel || typeConf.defaultIssuer || null,
-    certificate_no: certVal || null,
-    notes: notesVal || null,
-  };
-
-  console.log('[LICENCIAS] insert payload:', payload);
-
-  try {
-    setFormMsg('Guardando licencia…');
-    $('#btnSubmit').disabled = true;
+    setFormMsg('Enviando solicitud…');
+    $('#btnSubmit') && ($('#btnSubmit').disabled = true);
 
     const { data, error } = await supabase
       .from('employee_leaves')
@@ -223,75 +213,174 @@ async function handleSubmit() {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[LICENCIAS] insert error:', error);
+      setFormMsg('Error al guardar la licencia. Revisa la consola.', true);
+      return;
+    }
 
-    console.log('[LICENCIAS] licencia insertada:', data);
-    setFormMsg('Licencia registrada correctamente.');
+    console.log('[LICENCIAS] Insert OK:', data);
+    setFormMsg('Solicitud registrada correctamente.');
 
-    // Limpiar solo campos no críticos
-    $('#leaveType').value = '';
-    $('#leaveFrom').value = '';
-    $('#leaveTo').value = '';
-    $('#leaveIssuer').value = '';
-    $('#leaveCert').value = '';
-    $('#leaveNotes').value = '';
+    // Limpiar formulario
+    typeEl.value = '';
+    fromEl.value = '';
+    toEl.value = '';
+    issuerEl.value = '';
+    certEl.value = '';
+    notesEl.value = '';
 
     // Recargar historial
     await loadHistory();
-  } catch (e) {
-    console.error('[LICENCIAS] error al insertar licencia:', e);
-    setFormMsg(`Error al guardar: ${e.message || e}`, true);
+  } catch (err) {
+    console.error('[LICENCIAS] submitLeave catch:', err);
+    setFormMsg('Error inesperado al guardar la licencia.', true);
   } finally {
-    $('#btnSubmit').disabled = false;
+    $('#btnSubmit') && ($('#btnSubmit').disabled = false);
   }
 }
 
-// === NAV ===
-async function handleLogout() {
-  console.log('[LICENCIAS] Logout');
+// ==== CARGAR HISTORIAL ====
+async function loadHistory() {
+  console.log('[LICENCIAS] loadHistory…');
+  const cont = $('#historyContainer');
+  const summary = $('#historySummary');
+  if (!cont) return;
+
+  if (!st.employee?.uid) {
+    setHistoryMsg('No se pudo cargar el historial (empleado no definido).');
+    return;
+  }
+
+  setHistoryMsg('Cargando licencias…');
+
   try {
-    await supabase.auth.signOut();
-  } catch (e) {
-    console.warn('[LICENCIAS] signOut error:', e);
-  } finally {
-    window.location.href = '/';
+    const { data, error } = await supabase
+      .from('employee_leaves')
+      .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, created_at')
+      .eq('employee_uid', st.employee.uid)
+      .order('date_start', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error('[LICENCIAS] loadHistory error:', error);
+      setHistoryMsg('Error al cargar el historial.');
+      return;
+    }
+
+    if (!data || !data.length) {
+      setHistoryMsg('Aún no tienes licencias registradas.');
+      if (summary) summary.textContent = '';
+      return;
+    }
+
+    console.log('[LICENCIAS] Historial cargado:', data.length, 'registros');
+
+    // Renderizar tabla
+    const rowsHtml = data
+      .map((r) => {
+        const d1 = r.date_start || '';
+        const d2 = r.date_end || '';
+        const issuer = r.issuer || '—';
+        const cert = r.certificate_no || '—';
+        const notes = r.notes || '—';
+        const badgeClass = r.leave_type || 'OTRO';
+        const label = prettyType(r.leave_type, null);
+
+        return `
+          <tr>
+            <td><span class="badge ${badgeClass}">${label}</span></td>
+            <td>${d1}</td>
+            <td>${d2}</td>
+            <td>${issuer}</td>
+            <td>${cert}</td>
+            <td>${notes}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    cont.innerHTML = `
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Desde</th>
+            <th>Hasta</th>
+            <th>Emisor</th>
+            <th>Boleta / cert.</th>
+            <th>Notas</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+
+    // Resumen
+    const total = data.length;
+    if (summary) {
+      summary.textContent = `${total} licencia${total !== 1 ? 's' : ''} registradas`;
+    }
+  } catch (err) {
+    console.error('[LICENCIAS] loadHistory catch:', err);
+    setHistoryMsg('Error inesperado al cargar el historial.');
   }
 }
 
-function handleMenu() {
-  console.log('[LICENCIAS] Volver a menú');
-  window.location.href = '/';
+// ==== BOTONES MENÚ / SALIR ====
+function bindNavButtons() {
+  const btnMenu = $('#btnMenu');
+  const btnLogout = $('#btnLogout');
+
+  if (btnMenu) {
+    btnMenu.addEventListener('click', () => {
+      console.log('[LICENCIAS] Click Menú');
+      // Ajusta la ruta si tu portal está en otro path
+      window.location.href = '/';
+    });
+  }
+
+  if (btnLogout) {
+    btnLogout.addEventListener('click', async () => {
+      console.log('[LICENCIAS] Click Salir');
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn('[LICENCIAS] signOut warn:', e);
+      }
+      window.location.href = '/';
+    });
+  }
 }
 
-// === BOOT ===
+// ==== BOOT ====
 async function bootLicencias() {
-  console.log('[LICENCIAS] bootLicencias…');
+  console.log('[LICENCIAS] BOOT start');
 
-  // Navegación
-  $('#btnLogout')?.addEventListener('click', handleLogout);
-  $('#btnMenu')?.addEventListener('click', handleMenu);
-  $('#btnSubmit')?.addEventListener('click', handleSubmit);
+  bindNavButtons();
 
-  // Auth + empleado
-  const user = await loadSession();
-  if (!user) {
-    console.warn('[LICENCIAS] sin sesión, redirigiendo a inicio…');
-    window.location.href = '/';
+  const ok = await loadSessionAndEmployee();
+  if (!ok) {
+    console.warn('[LICENCIAS] No se pudo cargar sesión/empleado.');
     return;
   }
 
-  try {
-    await loadEmployeeContext();
-  } catch (e) {
-    console.error('[LICENCIAS] error cargando empleado:', e);
-    setFormMsg(e.message || 'No se pudo cargar tu información.', true);
-    return;
+  // Listeners de formulario
+  const btnSubmit = $('#btnSubmit');
+  if (btnSubmit) {
+    btnSubmit.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      submitLeave();
+    });
   }
 
-  // Historial inicial
+  // Cargar historial inicial
   await loadHistory();
 }
 
+// Iniciar al cargar DOM
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootLicencias);
 } else {
