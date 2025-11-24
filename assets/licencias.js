@@ -1,4 +1,4 @@
-// activos/licencias.js
+// assets/licencias.js
 // Licencias · Tecnomédica
 // Todos los logs van con [LICENCIAS] para rastreo
 
@@ -337,7 +337,7 @@ function bindNavButtons() {
   if (btnMenu) {
     btnMenu.addEventListener('click', () => {
       console.log('[LICENCIAS] Click Menú');
-      // Ajusta la ruta si tu portal está en otro path
+      // El portal principal está en /
       window.location.href = '/';
     });
   }
