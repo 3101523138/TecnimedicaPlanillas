@@ -1,7 +1,5 @@
-/reset        /index.html      200
-/licencias    /licencias.html  200
-/licencias/*  /licencias.html  200
-/proyectos    /proyectos.html  200
-/proyectos/*  /proyectos.html  200
-/assets/*     /assets/:splat   200
-/*            /index.html      200
+/licencias     /licencias.html   200
+/proyectos     /proyectos.html   200
+/marcas        /index.html       200
+/reset         /index.html       200
+/*             /index.html       200
