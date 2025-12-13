@@ -1,5 +1,5 @@
 // assets/licencias.js
-// Licencias · Tecnomédica (Portal Empleado)
+// Licencias · Tecnomédica
 // Todos los logs van con [LICENCIAS] para rastreo
 
 console.log('[LICENCIAS] Cargando script licencias.js…');
@@ -12,13 +12,13 @@ const SUPABASE_ANON_KEY =
 if (!window.supabase) {
   console.error('[LICENCIAS] supabase-js no está cargado.');
 }
+
 const supabase = window.supabase.createClient(URL_SUPABASE, SUPABASE_ANON_KEY);
 
 // ==== ESTADO SIMPLE ====
 const st = {
   user: null,
   employee: null, // { uid, full_name }
-  lastInserted: null, // última licencia insertada
 };
 
 // ==== AYUDANTES DOM ====
@@ -37,14 +37,36 @@ function setHistoryMsg(msg) {
   el.textContent = msg || '';
 }
 
-function show(el, visible) {
-  if (!el) return;
-  el.style.display = visible ? '' : 'none';
+function setSummaryVisible(visible) {
+  const card = $('#summaryCard');
+  if (!card) return;
+  card.style.display = visible ? '' : 'none';
 }
 
-// ==== HELPERS DE TIPO / ESTADO ====
+function setSummaryHtml(html) {
+  const box = $('#summaryBox');
+  if (!box) return;
+  box.innerHTML = html || '';
+}
+
+function showIssuerCertIfNeeded() {
+  const typeEl = $('#leaveType');
+  const wrapIssuer = $('#issuerWrap');
+  const wrapCert = $('#certWrap');
+  if (!typeEl || !wrapIssuer || !wrapCert) return;
+
+  const v = (typeEl.value || '').trim();
+  const isIncap = v === 'incapacidad_ccss' || v === 'incapacidad_ins';
+
+  wrapIssuer.style.display = isIncap ? '' : 'none';
+  wrapCert.style.display = isIncap ? '' : 'none';
+
+  console.log('[LICENCIAS] showIssuerCertIfNeeded:', { v, isIncap });
+}
+
+// Mapea los tipos del select a los valores permitidos por la tabla
+// CHECK: 'VACACIONES', 'INCAPACIDAD', 'MATERNIDAD', 'OTRO'
 function mapUiTypeToDb(value) {
-  // CHECK en tabla: 'VACACIONES', 'INCAPACIDAD', 'MATERNIDAD', 'OTRO'
   switch (value) {
     case 'vacaciones':
       return 'VACACIONES';
@@ -60,7 +82,7 @@ function mapUiTypeToDb(value) {
 }
 
 function prettyType(dbValue, uiValue) {
-  // uiValue conserva distinción CCSS/INS y con/sin goce
+  // uiValue conserva la distinción “con goce / sin goce”
   switch (uiValue) {
     case 'vacaciones':
       return 'Vacaciones';
@@ -75,6 +97,7 @@ function prettyType(dbValue, uiValue) {
     case 'otro':
       return 'Otro';
     default:
+      // fallback por si ya habían registros previos
       switch (dbValue) {
         case 'VACACIONES':
           return 'Vacaciones';
@@ -89,138 +112,21 @@ function prettyType(dbValue, uiValue) {
   }
 }
 
-function prettyStatus(v) {
-  const s = (v || '').toLowerCase();
-  if (!s) return '—';
+// ===== ESTADOS (portal empleado) =====
+// No invento enum: uso lo que venga en la fila. Si no existe, fallback.
+function normalizeStatus(s) {
+  const raw = (s || '').toString().trim().toLowerCase();
+  if (!raw) return { key: 'OTRO', label: 'Sin estado' };
 
-  // Ajustá aquí si tu BD usa otros valores exactos
-  if (s === 'pendiente') return 'Pendiente';
-  if (s === 'aprobada' || s === 'aprobado') return 'Aprobada';
-  if (s === 'denegada' || s === 'rechazada' || s === 'denegado' || s === 'rechazado') return 'Denegada';
-  if (s === 'reabierta' || s === 'reabierto') return 'Reabierta';
-  if (s === 'cancelada' || s === 'cancelado') return 'Cancelada';
+  // mapeos comunes (ajusta si tu BD usa otros)
+  if (raw === 'pendiente') return { key: 'PENDIENTE', label: 'Pendiente' };
+  if (raw === 'aprobada' || raw === 'aprobado') return { key: 'APROBADA', label: 'Aprobada' };
+  if (raw === 'denegada' || raw === 'rechazada') return { key: 'DENEGADA', label: 'Denegada' };
+  if (raw === 'cancelada') return { key: 'CANCELADA', label: 'Cancelada' };
+  if (raw === 'reabierta') return { key: 'REABIERTA', label: 'Reabierta' };
 
-  // fallback: Capitaliza
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function statusClass(v) {
-  const s = (v || '').toLowerCase();
-  if (s === 'pendiente') return 'PENDIENTE';
-  if (s === 'aprobada' || s === 'aprobado') return 'APROBADA';
-  if (s === 'denegada' || s === 'rechazada' || s === 'denegado' || s === 'rechazado') return 'DENEGADA';
-  if (s === 'cancelada' || s === 'cancelado') return 'CANCELADA';
-  if (s === 'reabierta' || s === 'reabierto') return 'REABIERTA';
-  return 'OTRO';
-}
-
-function isIncapacityUiType(uiType) {
-  return uiType === 'incapacidad_ccss' || uiType === 'incapacidad_ins';
-}
-
-// ==== RESUMEN (arriba del historial) ====
-// Nota: aquí NO calculamos rebajos reales (eso lo hace Admin/Backoffice).
-// El resumen es informativo para el empleado: tipo, rango, días naturales, estado, etc.
-function calcNaturalDays(dateStart, dateEnd) {
-  if (!dateStart || !dateEnd) return null;
-  const a = new Date(dateStart);
-  const b = new Date(dateEnd);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
-  if (b < a) return null;
-  const diff = Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  return diff;
-}
-
-function renderSummary({ uiType, dateStart, dateEnd, issuer, cert, notes, status, createdAt } = {}) {
-  const wrap = $('#summaryCard');
-  const box = $('#summaryBox');
-  if (!wrap || !box) return;
-
-  // mostrar tarjeta siempre (pero con contenido)
-  show(wrap, true);
-
-  const labelType = prettyType(mapUiTypeToDb(uiType || ''), uiType || null);
-  const natDays = calcNaturalDays(dateStart, dateEnd);
-
-  const showIssuerCert = isIncapacityUiType(uiType);
-
-  // createdAt opcional
-  const createdLine = createdAt
-    ? `<div class="row"><div class="muted">Creada:</div><div><strong>${String(createdAt).slice(0, 19).replace('T',' ')}</strong></div></div>`
-    : '';
-
-  // estado (si no hay, asumimos borrador local)
-  const stLabel = status ? prettyStatus(status) : 'Borrador (sin enviar)';
-  const stCls = status ? statusClass(status) : 'BORRADOR';
-
-  // Si aún no hay datos suficientes, mostramos un resumen básico
-  const hasBasic = !!uiType || !!dateStart || !!dateEnd || !!notes || !!issuer || !!cert;
-
-  if (!hasBasic && !st.lastInserted) {
-    box.innerHTML = `
-      <div class="muted">Completa el formulario para ver el resumen aquí.</div>
-    `;
-    return;
-  }
-
-  box.innerHTML = `
-    <div class="row between gap" style="align-items:flex-start">
-      <div>
-        <div class="big">Resumen</div>
-        <div class="muted">Este resumen es informativo para tu solicitud.</div>
-      </div>
-      <div>
-        <span class="statusBadge ${stCls}">${stLabel}</span>
-      </div>
-    </div>
-
-    <div class="m-t" style="display:grid; grid-template-columns:1fr; gap:10px">
-      <div class="row"><div class="muted">Tipo:</div><div><strong>${labelType}</strong></div></div>
-      <div class="row"><div class="muted">Rango:</div><div><strong>${dateStart || '—'} → ${dateEnd || '—'}</strong></div></div>
-      <div class="row"><div class="muted">Días naturales:</div><div><strong>${natDays ?? '—'}</strong></div></div>
-
-      ${
-        showIssuerCert
-          ? `
-        <div class="row"><div class="muted">Emisor:</div><div><strong>${issuer || '—'}</strong></div></div>
-        <div class="row"><div class="muted">Boleta/Cert:</div><div><strong>${cert || '—'}</strong></div></div>
-      `
-          : ''
-      }
-
-      ${notes ? `<div><div class="muted">Notas:</div><div style="margin-top:4px"><strong>${escapeHtml(notes)}</strong></div></div>` : ''}
-
-      ${createdLine}
-    </div>
-  `;
-}
-
-function escapeHtml(s) {
-  return String(s || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-// ==== UI: OCULTAR emisor/cert cuando no aplica ====
-function updateIssuerVisibility() {
-  const uiType = ($('#leaveType')?.value || '').trim();
-  const showIt = isIncapacityUiType(uiType);
-
-  show($('#issuerWrap'), showIt);
-  show($('#certWrap'), showIt);
-
-  // Si no aplica, limpiamos para no enviar basura
-  if (!showIt) {
-    const issuerEl = $('#leaveIssuer');
-    const certEl = $('#leaveCert');
-    if (issuerEl) issuerEl.value = '';
-    if (certEl) certEl.value = '';
-  }
-
-  console.log('[LICENCIAS] updateIssuerVisibility ->', { uiType, showIt });
+  // otros estados: conservar texto
+  return { key: 'OTRO', label: s };
 }
 
 // ==== CARGAR SESIÓN Y EMPLEADO ====
@@ -243,7 +149,7 @@ async function loadSessionAndEmployee() {
     st.user = session.user;
     console.log('[LICENCIAS] Usuario:', st.user.email);
 
-    // Buscar empleado por user_id
+    // Buscar empleado por user_id (igual que en portal)
     let { data: emp, error: empErr } = await supabase
       .from('employees')
       .select('employee_uid, full_name')
@@ -284,6 +190,80 @@ async function loadSessionAndEmployee() {
   }
 }
 
+// ==== RESUMEN (informativo) ====
+// Reglas:
+// - Se muestra SI hay tipo + desde + hasta.
+// - Si el tipo es vacaciones, hace cálculo básico informativo: días naturales.
+// - Si tu backend ya guarda natural_days/workdays/vacation_days_to_deduct, también los muestra si existe un registro reciente.
+//   (Aquí NO invento funciones RPC; solo uso lo que ya está en employee_leaves.)
+function calcNaturalDays(dateStart, dateEnd) {
+  try {
+    const d1 = new Date(dateStart + 'T00:00:00');
+    const d2 = new Date(dateEnd + 'T00:00:00');
+    const ms = d2.getTime() - d1.getTime();
+    if (!Number.isFinite(ms) || ms < 0) return null;
+    return Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+  } catch (e) {
+    return null;
+  }
+}
+
+function renderSummaryDraft() {
+  const typeEl = $('#leaveType');
+  const fromEl = $('#leaveFrom');
+  const toEl = $('#leaveTo');
+  const notesEl = $('#leaveNotes');
+
+  const uiType = (typeEl?.value || '').trim();
+  const dateStart = (fromEl?.value || '').trim();
+  const dateEnd = (toEl?.value || '').trim();
+  const notes = (notesEl?.value || '').trim();
+
+  if (!uiType || !dateStart || !dateEnd) {
+    setSummaryVisible(false);
+    return;
+  }
+
+  const dbType = mapUiTypeToDb(uiType);
+  const typeLabel = prettyType(dbType, uiType);
+
+  const naturalDays = calcNaturalDays(dateStart, dateEnd);
+
+  // Estado: mientras no se guarda, siempre "BORRADOR"
+  const statusHtml = `<span class="statusBadge BORRADOR">Borrador (sin enviar)</span>`;
+
+  setSummaryVisible(true);
+  setSummaryHtml(`
+    <div class="summaryTitle">
+      <div>
+        <div class="big">Resumen</div>
+        <div class="muted">Este resumen es informativo para tu solicitud.</div>
+      </div>
+      ${statusHtml}
+    </div>
+
+    <div class="summaryGrid">
+      <div class="kv"><span>Tipo:</span><b>${typeLabel}</b></div>
+      <div class="kv"><span>Rango:</span><b>${dateStart} → ${dateEnd}</b></div>
+      <div class="kv"><span>Días naturales:</span><b>${naturalDays ?? '—'}</b></div>
+      <div class="kv"><span>Notas:</span><b>${notes ? escapeHtml(notes) : '—'}</b></div>
+    </div>
+
+    <div class="muted m-t">
+      Nota: administración calculará el rebajo exacto (laborables, feriados, etc.) al procesar tu solicitud.
+    </div>
+  `);
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 // ==== INSERTAR NUEVA LICENCIA ====
 async function submitLeave() {
   console.log('[LICENCIAS] submitLeave click');
@@ -303,8 +283,12 @@ async function submitLeave() {
     const uiType = (typeEl?.value || '').trim();
     const dateStart = (fromEl?.value || '').trim();
     const dateEnd = (toEl?.value || '').trim();
-    const issuer = (issuerEl?.value || '').trim();
-    const cert = (certEl?.value || '').trim();
+
+    // issuer/cert solo si incapacidad
+    const isIncap = uiType === 'incapacidad_ccss' || uiType === 'incapacidad_ins';
+    const issuer = isIncap ? (issuerEl?.value || '').trim() : '';
+    const cert = isIncap ? (certEl?.value || '').trim() : '';
+
     const notes = (notesEl?.value || '').trim();
 
     if (!uiType) {
@@ -328,8 +312,12 @@ async function submitLeave() {
       return;
     }
 
-    // ✅ Emisor/Cert SOLO si es incapacidad (si no, se manda null)
-    const allowIssuer = isIncapacityUiType(uiType);
+    // Validación extra para incapacidad (si aplica)
+    if (isIncap && !issuer) {
+      setFormMsg('Selecciona el emisor de la incapacidad (CCSS/INS).', true);
+      issuerEl?.focus();
+      return;
+    }
 
     const dbType = mapUiTypeToDb(uiType);
 
@@ -338,12 +326,11 @@ async function submitLeave() {
       leave_type: dbType,
       date_start: dateStart,
       date_end: dateEnd,
-      issuer: allowIssuer ? (issuer || null) : null,
-      certificate_no: allowIssuer ? (cert || null) : null,
+      issuer: isIncap ? (issuer || null) : null,
+      certificate_no: isIncap ? (cert || null) : null,
       notes: notes || null,
 
-      // ✅ Estado inicial desde el portal empleado
-      status: 'pendiente',
+      // status lo define tu backend/policy; si existe columna, dejamos que default mande
     };
 
     console.log('[LICENCIAS] Insert payload:', payload);
@@ -355,7 +342,7 @@ async function submitLeave() {
     const { data, error } = await supabase
       .from('employee_leaves')
       .insert(payload)
-      .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, status, created_at')
+      .select()
       .single();
 
     if (error) {
@@ -365,36 +352,20 @@ async function submitLeave() {
     }
 
     console.log('[LICENCIAS] Insert OK:', data);
-
-    // Guardar última insertada para resumen
-    st.lastInserted = data;
-
-    // Render resumen con estado real
-    renderSummary({
-      uiType,
-      dateStart,
-      dateEnd,
-      issuer: data.issuer || '',
-      cert: data.certificate_no || '',
-      notes,
-      status: data.status || 'pendiente',
-      createdAt: data.created_at || null,
-    });
-
-    setFormMsg('Solicitud enviada. Quedó en estado: Pendiente.');
+    setFormMsg('Solicitud registrada correctamente.');
 
     // Limpiar formulario
     typeEl.value = '';
     fromEl.value = '';
     toEl.value = '';
-    issuerEl.value = '';
-    certEl.value = '';
+    if (issuerEl) issuerEl.value = '';
+    if (certEl) certEl.value = '';
     notesEl.value = '';
 
-    // Reset visibilidad emisor/cert
-    updateIssuerVisibility();
+    showIssuerCertIfNeeded();
+    renderSummaryDraft(); // ocultará el resumen
 
-    // Recargar historial
+    // Recargar historial (y resumen basado en el último registro)
     await loadHistory();
   } catch (err) {
     console.error('[LICENCIAS] submitLeave catch:', err);
@@ -405,7 +376,7 @@ async function submitLeave() {
   }
 }
 
-// ==== CARGAR HISTORIAL ====
+// ==== CARGAR HISTORIAL + RESUMEN DESDE ÚLTIMO REGISTRO ====
 async function loadHistory() {
   console.log('[LICENCIAS] loadHistory…');
   const cont = $('#historyContainer');
@@ -420,9 +391,10 @@ async function loadHistory() {
   setHistoryMsg('Cargando licencias…');
 
   try {
+    // Incluimos status y (si existen) campos calculados por tu backend
     const { data, error } = await supabase
       .from('employee_leaves')
-      .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, status, created_at, approved_at, approval_notes')
+      .select('id, leave_type, date_start, date_end, issuer, certificate_no, notes, status, created_at, natural_days, workdays_in_range, vacation_days_to_deduct')
       .eq('employee_uid', st.employee.uid)
       .order('date_start', { ascending: false })
       .limit(50);
@@ -436,11 +408,54 @@ async function loadHistory() {
     if (!data || !data.length) {
       setHistoryMsg('Aún no tienes licencias registradas.');
       if (summary) summary.textContent = '';
+      setSummaryVisible(false);
       return;
     }
 
     console.log('[LICENCIAS] Historial cargado:', data.length, 'registros');
 
+    // ===== RESUMEN basado en el registro más reciente =====
+    const last = data[0];
+    const stNorm = normalizeStatus(last.status);
+    const lastTypeLabel = prettyType(last.leave_type, null);
+
+    // para vacaciones, si backend guardó los campos, los mostramos (sin inventar)
+    const isVac = (last.leave_type || '') === 'VACACIONES';
+
+    const natural = (last.natural_days != null) ? last.natural_days : calcNaturalDays(last.date_start, last.date_end);
+    const workdays = (last.workdays_in_range != null) ? last.workdays_in_range : null;
+    const toDeduct = (last.vacation_days_to_deduct != null) ? last.vacation_days_to_deduct : null;
+
+    setSummaryVisible(true);
+    setSummaryHtml(`
+      <div class="summaryTitle">
+        <div>
+          <div class="big">Resumen</div>
+          <div class="muted">Este resumen es informativo para tu solicitud más reciente.</div>
+        </div>
+        <span class="statusBadge ${stNorm.key}">${escapeHtml(stNorm.label)}</span>
+      </div>
+
+      <div class="summaryGrid">
+        <div class="kv"><span>Tipo:</span><b>${escapeHtml(lastTypeLabel)}</b></div>
+        <div class="kv"><span>Rango:</span><b>${escapeHtml(last.date_start)} → ${escapeHtml(last.date_end)}</b></div>
+        <div class="kv"><span>Días naturales:</span><b>${natural ?? '—'}</b></div>
+        ${isVac ? `
+          <div class="kv"><span>Días laborables:</span><b>${(workdays ?? '—')}</b></div>
+          <div class="kv"><span>A rebajar:</span><b>${(toDeduct ?? '—')}</b></div>
+        ` : `
+          <div class="kv"><span>Emisor:</span><b>${escapeHtml(last.issuer || '—')}</b></div>
+          <div class="kv"><span>Certificado:</span><b>${escapeHtml(last.certificate_no || '—')}</b></div>
+        `}
+        <div class="kv" style="grid-column:1/-1"><span>Notas:</span><b>${escapeHtml(last.notes || '—')}</b></div>
+      </div>
+
+      <div class="muted m-t">
+        El estado puede cambiar cuando administración apruebe o deniegue la solicitud.
+      </div>
+    `);
+
+    // ===== Tabla historial =====
     const rowsHtml = data
       .map((r) => {
         const d1 = r.date_start || '';
@@ -448,24 +463,25 @@ async function loadHistory() {
         const issuer = r.issuer || '—';
         const cert = r.certificate_no || '—';
         const notes = r.notes || '—';
+        const badgeClass = r.leave_type || 'OTRO';
+        const label = prettyType(r.leave_type, null);
 
-        const typeBadgeClass = r.leave_type || 'OTRO';
-        const typeLabel = prettyType(r.leave_type, null);
+        const s = normalizeStatus(r.status);
+        const statusMini = `<span class="statusMini ${s.key}">${escapeHtml(s.label)}</span>`;
 
-        const stLabel = prettyStatus(r.status);
-        const stBadge = statusClass(r.status);
-
-        // Emisor/cert solo deberían existir en incapacidad, pero si en BD hay valores viejos,
-        // los mostramos igual en historial, porque es “lo que quedó guardado”.
         return `
           <tr>
-            <td><span class="badge ${typeBadgeClass}">${typeLabel}</span></td>
-            <td><span class="statusMini ${stBadge}">${stLabel}</span></td>
-            <td>${d1}</td>
-            <td>${d2}</td>
-            <td class="hide-sm">${issuer}</td>
-            <td class="hide-sm">${cert}</td>
-            <td class="hide-sm">${escapeHtml(notes)}</td>
+            <td>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span class="badge ${badgeClass}">${escapeHtml(label)}</span>
+                ${statusMini}
+              </div>
+            </td>
+            <td>${escapeHtml(d1)}</td>
+            <td>${escapeHtml(d2)}</td>
+            <td class="hide-sm">${escapeHtml(issuer)}</td>
+            <td class="hide-sm">${escapeHtml(cert)}</td>
+            <td>${escapeHtml(notes)}</td>
           </tr>
         `;
       })
@@ -475,27 +491,25 @@ async function loadHistory() {
       <table class="history-table">
         <thead>
           <tr>
-            <th>Tipo</th>
-            <th>Estado</th>
+            <th>Tipo / Estado</th>
             <th>Desde</th>
             <th>Hasta</th>
             <th class="hide-sm">Emisor</th>
             <th class="hide-sm">Boleta / cert.</th>
-            <th class="hide-sm">Notas</th>
+            <th>Notas</th>
           </tr>
         </thead>
         <tbody>
           ${rowsHtml}
         </tbody>
       </table>
-
-      <div class="muted m-t">
-        * En celular se ocultan columnas secundarias (Emisor/Cert/Notas) para que se lea rápido.
-      </div>
     `;
 
+    // Resumen
     const total = data.length;
-    if (summary) summary.textContent = `${total} licencia${total !== 1 ? 's' : ''} registradas`;
+    if (summary) {
+      summary.textContent = `${total} licencia${total !== 1 ? 's' : ''} registradas`;
+    }
   } catch (err) {
     console.error('[LICENCIAS] loadHistory catch:', err);
     setHistoryMsg('Error inesperado al cargar el historial.');
@@ -527,45 +541,26 @@ function bindNavButtons() {
   }
 }
 
-// ==== LISTENERS PARA RESUMEN EN VIVO ====
-function bindLiveSummary() {
+// ==== LISTENERS PARA RESUMEN DRAFT + OCULTAR CAMPOS ====
+function bindFormLivePreview() {
   const typeEl = $('#leaveType');
   const fromEl = $('#leaveFrom');
   const toEl = $('#leaveTo');
-  const issuerEl = $('#leaveIssuer');
-  const certEl = $('#leaveCert');
   const notesEl = $('#leaveNotes');
 
-  const onAnyChange = () => {
-    const uiType = (typeEl?.value || '').trim();
-    const dateStart = (fromEl?.value || '').trim();
-    const dateEnd = (toEl?.value || '').trim();
-    const issuer = (issuerEl?.value || '').trim();
-    const cert = (certEl?.value || '').trim();
-    const notes = (notesEl?.value || '').trim();
-
-    updateIssuerVisibility();
-
-    renderSummary({
-      uiType,
-      dateStart,
-      dateEnd,
-      issuer,
-      cert,
-      notes,
-      status: null, // borrador local
-      createdAt: null,
-    });
+  const onChange = () => {
+    showIssuerCertIfNeeded();
+    renderSummaryDraft();
   };
 
-  [typeEl, fromEl, toEl, issuerEl, certEl, notesEl].forEach((el) => {
-    if (!el) return;
-    el.addEventListener('change', onAnyChange);
-    el.addEventListener('input', onAnyChange);
-  });
+  if (typeEl) typeEl.addEventListener('change', onChange);
+  if (fromEl) fromEl.addEventListener('change', onChange);
+  if (toEl) toEl.addEventListener('change', onChange);
+  if (notesEl) notesEl.addEventListener('input', onChange);
 
-  // Primer render
-  onAnyChange();
+  // estado inicial
+  showIssuerCertIfNeeded();
+  renderSummaryDraft();
 }
 
 // ==== BOOT ====
@@ -573,9 +568,7 @@ async function bootLicencias() {
   console.log('[LICENCIAS] BOOT start');
 
   bindNavButtons();
-
-  // Mostrar resumen vacío inicialmente
-  renderSummary({});
+  bindFormLivePreview();
 
   const ok = await loadSessionAndEmployee();
   if (!ok) {
@@ -583,13 +576,7 @@ async function bootLicencias() {
     return;
   }
 
-  // UI inicial: ocultar emisor/cert
-  updateIssuerVisibility();
-
-  // Resumen en vivo
-  bindLiveSummary();
-
-  // Listener botón enviar
+  // Listeners de formulario
   const btnSubmit = $('#btnSubmit');
   if (btnSubmit) {
     btnSubmit.addEventListener('click', (ev) => {
@@ -598,10 +585,11 @@ async function bootLicencias() {
     });
   }
 
-  // Cargar historial
+  // Cargar historial inicial + resumen del último registro
   await loadHistory();
 }
 
+// Iniciar al cargar DOM
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootLicencias);
 } else {
