@@ -51,13 +51,6 @@
     hyphens:none;
   }
 
-  /* ✅ faltaba en tu snippet (lo usas en <img class="punchLogo">) */
-  .punchLogo{
-    width:100%;
-    max-width:260px;
-    height:auto;
-  }
-
   @media (max-width:480px){
     .brand-row{flex-direction:column; align-items:center; text-align:center; gap:12px}
     .brand-row img{max-height:var(--logo-max-h-sm); max-width:min(70vw, 320px)}
@@ -203,57 +196,6 @@
   .statusMini.CANCELADA{background:#e5e7eb;color:#374151;border-color:#d1d5db;}
   .statusMini.REABIERTA{background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe;}
   .statusMini.OTRO{background:#e5e7eb;color:#374151;border-color:#d1d5db;}
-
-  /* ✅ Resumen tipo “Campo | Valor” como antes */
-  .summaryTitle{
-    font-size:44px;
-    font-weight:900;
-    margin:0 0 4px;
-    letter-spacing:.2px;
-  }
-  @media (max-width:640px){
-    .summaryTitle{font-size:40px;}
-  }
-  .summarySub{
-    color:var(--muted);
-    font-size:16px;
-    margin:0 0 14px;
-  }
-  .summaryGrid{
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-    margin-top:10px;
-  }
-  .summaryRow{
-    display:flex;
-    justify-content:space-between;
-    gap:14px;
-    background:#f3f4f6;
-    border:1px solid #e5e7eb;
-    border-radius:16px;
-    padding:12px 14px;
-    align-items:flex-start;
-  }
-  .summaryKey{
-    color:#6b7280;
-    font-weight:700;
-    font-size:14px;
-  }
-  .summaryVal{
-    color:#111827;
-    font-weight:800;
-    font-size:16px;
-    text-align:right;
-    word-break:break-word;
-    max-width:60%;
-  }
-  .summaryHint{
-    margin-top:10px;
-    color:#6b7280;
-    font-size:14px;
-    line-height:1.35;
-  }
   </style>
 
   <!-- JS de licencias -->
@@ -304,8 +246,8 @@
           <input type="date" id="leaveTo">
         </div>
 
-        <!-- ✅ Emisor SOLO para incapacidad (wrap para ocultar) -->
-        <div id="issuerWrap">
+        <!-- Emisor SOLO para incapacidad -->
+        <div id="issuerWrap" style="display:none;">
           <label for="leaveIssuer">Emisor</label>
           <select id="leaveIssuer">
             <option value="">— Selecciona emisor —</option>
@@ -316,8 +258,8 @@
           </select>
         </div>
 
-        <!-- ✅ Cert SOLO para incapacidad (wrap para ocultar) -->
-        <div id="certWrap">
+        <!-- Cert SOLO para incapacidad -->
+        <div id="certWrap" style="display:none;">
           <label for="leaveCert">N.º boleta / certificado</label>
           <input id="leaveCert" placeholder="Ej. INC-001">
         </div>
@@ -334,7 +276,7 @@
       </div>
     </div>
 
-    <!-- ✅ RESUMEN (ANTES DEL HISTORIAL) -->
+    <!-- RESUMEN (ANTES DEL HISTORIAL) -->
     <div class="card" id="summaryCard" style="display:none">
       <div id="summaryBox" class="muted">Cargando resumen…</div>
     </div>
