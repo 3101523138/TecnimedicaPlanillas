@@ -3,6 +3,13 @@
 // Todos los logs van con [LICENCIAS] para rastreo
 
 (() => {
+  // ✅ Guard: si el archivo se carga 2 veces, evitamos doble boot/listeners
+  if (window.__tmiLicenciasBooted) {
+    console.warn("[LICENCIAS] licencias.js ya estaba inicializado. Se evita doble carga.");
+    return;
+  }
+  window.__tmiLicenciasBooted = true;
+
   console.log("[LICENCIAS] Cargando script licencias.js…");
 
   // ==== CONFIGURAR SUPABASE ====
@@ -30,7 +37,9 @@
       // Caso 3: supabase-js CDN cargado (window.supabase es la LIBRERÍA y trae createClient)
       if (window.supabase && typeof window.supabase.createClient === "function") {
         console.log("[LICENCIAS] Creando cliente Supabase (createClient)");
-        window.__tmiSupabaseClient = window.supabase.createClient(URL_SUPABASE, SUPABASE_ANON_KEY);
+        window.__tmiSupabaseClient = window.supabase.createClient(URL_SUPABASE, SUPABASE_ANON_KEY, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+        });
         return window.__tmiSupabaseClient;
       }
 
@@ -184,7 +193,6 @@
       if (!session?.user) {
         console.warn("[LICENCIAS] Sin sesión activa.");
         setFormMsg("No hay sesión activa. Abre primero el portal y vuelve a intentar.", true);
-        // Aun así, intentamos mostrar algo mínimo:
         const n = $("#empName");
         if (n) n.textContent = "—";
         return false;
@@ -206,11 +214,7 @@
 
       if (empErr || !emp) {
         console.warn("[LICENCIAS] Empleado por user_id no encontrado. Probando por email…", empErr);
-        const r = await sb
-          .from("employees")
-          .select("employee_uid, full_name")
-          .eq("email", st.user.email)
-          .single();
+        const r = await sb.from("employees").select("employee_uid, full_name").eq("email", st.user.email).single();
         emp = r.data || null;
         empErr = r.error || null;
       }
@@ -218,7 +222,6 @@
       if (empErr || !emp) {
         console.error("[LICENCIAS] No se encontró empleado para este usuario:", empErr);
         setFormMsg("No se encontró tu ficha de empleado. Contacta a administración.", true);
-        // dejamos empName como email (ya lo pusimos)
         return false;
       }
 
@@ -577,12 +580,24 @@
     });
   }
 
+  // ✅ Limpia el mensaje “ya fue enviada” cuando el usuario empieza un nuevo llenado
+  function bindClearMsgOnInput() {
+    const ids = ["leaveType", "leaveFrom", "leaveTo", "leaveIssuer", "leaveCert", "leaveNotes"];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("input", () => setFormMsg(""));
+      el.addEventListener("change", () => setFormMsg(""));
+    });
+  }
+
   // ==== BOOT ====
   async function bootLicencias() {
     console.log("[LICENCIAS] BOOT start");
 
     bindNavButtons();
     bindTypeToggle();
+    bindClearMsgOnInput();
 
     const ok = await loadSessionAndEmployee();
     if (!ok) {
