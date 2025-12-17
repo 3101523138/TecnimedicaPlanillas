@@ -1,15 +1,52 @@
 // ===============================
 // TMI · Proyectos (Etapa 1)
-// 
+// (FIX) Evitar "Identifier 'supabase' has already been declared"
+//       + mostrar "Sesión: ..." sin tocar Marcas
 // ===============================
 
 // === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
-});
+// ✅ FIX: NO redeclarar "supabase".
+// Creamos/reciclamos un cliente único en window.__tmiSupabaseClient y usamos variable local "sb".
+function getSupabaseClient(){
+  try{
+    // 1) Ya existe nuestro cliente cacheado
+    if (window.__tmiSupabaseClient && window.__tmiSupabaseClient.from && window.__tmiSupabaseClient.auth){
+      console.log('[PROYECTOS] Reusando window.__tmiSupabaseClient');
+      return window.__tmiSupabaseClient;
+    }
+
+    // 2) Si alguien dejó un cliente en window.supabase (no es lo usual, pero pasa)
+    if (window.supabase && window.supabase.from && window.supabase.auth){
+      console.log('[PROYECTOS] Reusando cliente existente en window.supabase');
+      window.__tmiSupabaseClient = window.supabase;
+      return window.__tmiSupabaseClient;
+    }
+
+    // 3) supabase-js CDN cargado (window.supabase es la librería)
+    if (window.supabase && typeof window.supabase.createClient === 'function'){
+      console.log('[PROYECTOS] Creando cliente Supabase (createClient)');
+      window.__tmiSupabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+      });
+      return window.__tmiSupabaseClient;
+    }
+
+    console.error('[PROYECTOS] supabase-js no está cargado o no expone createClient.');
+    return null;
+  }catch(e){
+    console.error('[PROYECTOS] Error creando/obteniendo cliente Supabase:', e);
+    return null;
+  }
+}
+
+const sb = getSupabaseClient();
+if (!sb){
+  // sin cliente no seguimos
+  throw new Error('Supabase client no disponible');
+}
 
 // === UI refs ===
 const $ = (q) => document.querySelector(q);
@@ -58,20 +95,16 @@ function show(el, v){ el.style.display = v ? '' : 'none'; }
 function setText(el, t){ el.textContent = t; }
 
 // === Toasts reales + helpers centrales ===
-// === Toasts reales + helpers centrales ===
 function ensureToastHost(){
-  // Si hay un dialog abierto, montamos el toast dentro del dialog (top-layer)
-  // Si no, lo montamos en body.
   const host = document.querySelector('dialog[open]') || document.body;
 
-  // Reutiliza el mismo nodo si ya existe (y lo mueve dentro del host si está en otro lado)
   let t = document.querySelector('#toastHost');
   if (!t){
     t = document.createElement('div');
     t.id = 'toastHost';
   }
-  t.className = 'toast'; // clases CSS existentes (.toast, .toast.show, .toast.success, .toast.error)
-  host.appendChild(t);   // moverá el nodo si ya estaba en body y ahora hay dialog
+  t.className = 'toast';
+  host.appendChild(t);
 
   return t;
 }
@@ -83,7 +116,6 @@ function toast(msg, type='success', ms=2400){
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove('show'), ms);
 }
-
 
 // spinner/disabled en botón submit
 function setBtnLoading(btn, on){
@@ -139,10 +171,9 @@ function fmtPct(v){
   if (v === null || v === undefined || v === '') return '—';
   const n = Number(v);
   if (!Number.isFinite(n)) return '—';
-  const s = n.toFixed(2).replace(/\.00$/,''); // 12.00 -> 12
+  const s = n.toFixed(2).replace(/\.00$/,'');
   return `${s} %`;
 }
-
 
 // ---- Normalización de filas (acepta columnas en ES o EN) ----
 function normalizeRow(r){
@@ -159,11 +190,10 @@ function normalizeRow(r){
     end_date: r.end_date ?? r.fecha_fin ?? null,
     client_id: r.client_id ?? r.id_del_cliente ?? null,
     client_name: r.client_name ?? r.nombre_del_cliente ?? '',
-    is_active: isActive, // queda por compatibilidad/back-end, la UI lo ignora
+    is_active: isActive,
     presupuesto: r.presupuesto ?? null,
     afectacion: r.afectacion ?? null,
     updated_at: r.updated_at ?? r.actualizado_en ?? r.updatedAt ?? null,
-    // Auditoría de cierre
     closed_at: r.closed_at ?? r.cerrado_en ?? null,
     closed_by_email: r.closed_by_email ?? r.cerrado_por ?? null,
   };
@@ -187,7 +217,7 @@ function canReopen(p){ return (st.user?.email === REOPENER_EMAIL) && estadoDe(p)
 
 async function getUser(){
   try{
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { user }, error } = await sb.auth.getUser();
     if (error) console.warn('[auth.getUser]', error.message);
     return user || null;
   }catch(e){
@@ -198,7 +228,7 @@ async function getUser(){
 
 async function resolveIsAdmin(user){
   try{
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('employees')
       .select('is_admin')
       .eq('user_id', user.id)
@@ -211,20 +241,31 @@ async function resolveIsAdmin(user){
   }
 }
 
+// ✅ NUEVO: pintar quién inició sesión si existe #whoami en el HTML
+async function paintWhoAmI(){
+  const el = document.getElementById('whoami');
+  if (!el) return; // no rompe si tu HTML no lo tiene
+  try{
+    const { data, error } = await sb.auth.getSession();
+    if (error) throw error;
+    const user = data?.session?.user || null;
+    el.textContent = user ? `Sesión: ${user.email || user.id || '—'}` : 'Sesión: (no activa)';
+  }catch(e){
+    console.warn('[whoami]', e?.message);
+    el.textContent = 'Sesión: (error)';
+  }
+}
+
 // === Data ===
 async function fetchProjects(){
-  // SIN filtros. Tomamos todas las columnas para evitar errores de nombres.
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('projects')
     .select('*');
   if (error) throw error;
 
   const normalized = (data || []).map(normalizeRow);
-
-  // orden local por código si existe
   normalized.sort((a,b) => (a.project_code||'').localeCompare(b.project_code||''));
 
-  // debug útil (sin is_active para no confundir)
   console.info('[projects] total filas:', normalized.length);
   console.table(normalized.slice(0,10).map(p => ({
     project_code: p.project_code,
@@ -238,7 +279,7 @@ async function fetchProjects(){
 async function fetchClients(){
   // 1) Tabla clients
   try{
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('clients')
       .select('id,name,status')
       .eq('status','Activo')
@@ -249,7 +290,7 @@ async function fetchClients(){
     console.warn('[clients] no disponible o vacía:', e?.message);
   }
 
-  // 2) Fallback: desde projects normalizados
+  // 2) Fallback: desde projects
   try{
     const projs = st.all.length ? st.all : await fetchProjects();
     const names = Array.from(new Set(projs.map(p => p.client_name).filter(Boolean))).sort();
@@ -261,9 +302,7 @@ async function fetchClients(){
 }
 
 function populateClientSelects(){
-  // Filtro
   fClienteSel.innerHTML = `<option value="">— Todos los clientes —</option>`;
-  // Formulario
   cliSelect.innerHTML = `<option value="">— Seleccione un cliente —</option>`;
 
   for(const c of st.clients){
@@ -279,20 +318,18 @@ function populateClientSelects(){
   }
 }
 
-// === Acciones de estado (cerrar/reabrir) ===
+// === Acciones de estado ===
 function askConfirm(texto){ return window.confirm(texto); }
 
-// === Acciones de estado (cerrar/reabrir) — updateStatus  ===
 async function updateStatus(projectCode, nextStatus){
   try{
-    const { error } = await supabase
+    const { error } = await sb
       .from('projects')
       .update({ status: nextStatus })
       .eq('project_code', projectCode);
 
     if (error) throw error;
 
-    // refrescar datos y re-render
     st.all = await fetchProjects();
     applyFilter();
     toast(`Estado actualizado a ${nextStatus}.`, 'success');
@@ -300,7 +337,6 @@ async function updateStatus(projectCode, nextStatus){
     handleSupabaseError(e, 'projects.updateStatus');
   }
 }
-
 
 async function closeProject(p){
   if (!canClose(p)) return;
@@ -311,7 +347,7 @@ async function closeProject(p){
 async function reopenProject(p){
   if (!canReopen(p)) return;
   if (!askConfirm(`¿Reabrir el proyecto ${p.project_code}?`)) return;
-  await updateStatus(p.project_code, 'Activo'); // o 'Abierto' si prefieres
+  await updateStatus(p.project_code, 'Activo');
 }
 
 // === Render ===
@@ -328,7 +364,6 @@ function render(){
     if (st.openCode === p.project_code) row.classList.add('open');
     row.dataset.code = p.project_code;
 
-    // Columna izquierda: id, nombre, cliente
     const left = document.createElement('div');
     left.innerHTML = `
       <div class="id">${esc(p.project_code ?? '—')}</div>
@@ -336,21 +371,19 @@ function render(){
       <div class="client">${esc(p.client_name || '—')}</div>
     `;
 
-    // Pill de estado
     const pill = document.createElement('div');
     pill.className = pillClass(p);
     pill.textContent = pillText(p);
 
-    // Acciones (horizontal)
     const actions = document.createElement('div');
     actions.className = 'actions';
+
     const btnToggle = document.createElement('button');
     btnToggle.className = 'btn-slim';
     btnToggle.textContent = (st.openCode === p.project_code) ? 'Ocultar' : 'Ver detalle';
     btnToggle.addEventListener('click', () => toggleDrawer(p.project_code));
     actions.appendChild(btnToggle);
 
-    // Cerrar (solo admin cuando está activo)
     if (canClose(p)){
       const btnClose = document.createElement('button');
       btnClose.className = 'btn-slim solid-green';
@@ -359,7 +392,6 @@ function render(){
       actions.appendChild(btnClose);
     }
 
-    // Reabrir (solo jrojas cuando está cerrado)
     if (canReopen(p)){
       const btnOpen = document.createElement('button');
       btnOpen.className = 'btn-slim solid-blue';
@@ -368,12 +400,10 @@ function render(){
       actions.appendChild(btnOpen);
     }
 
-    // Montaje
     row.appendChild(left);
     row.appendChild(pill);
-    row.appendChild(actions); // se fuerza a ocupar 1/-1 por CSS
+    row.appendChild(actions);
 
-    // Drawer (detalle)
     if (st.openCode === p.project_code){
       const drawer = document.createElement('div');
       drawer.className = 'drawer';
@@ -405,15 +435,14 @@ function render(){
   }
 }
 
-
 function toggleDrawer(code){ st.openCode = (st.openCode === code) ? null : code; render(); }
 
 function applyFilter(){
-  const estado  = (fEstado.value || '').trim().toLowerCase(); // '', 'activo', 'cerrado'
+  const estado  = (fEstado.value || '').trim().toLowerCase();
   const cliente = (fClienteSel.value || '').trim().toLowerCase();
 
   st.filtered = st.all.filter(p => {
-    const e = estadoDe(p); // 'activo' | 'cerrado'
+    const e = estadoDe(p);
     const matchEstado   = !estado || e === estado;
     const matchCliente  = !cliente || (p.client_name || '').toLowerCase().includes(cliente);
     return matchEstado && matchCliente;
@@ -445,7 +474,7 @@ chkNewClient?.addEventListener('change', () => {
   if (isNew) cliSelect.value = '';
 });
 
-// ========== LISTENER SUBMIT) ==========
+// ========== LISTENER SUBMIT ==========
 frmCreate?.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   show(createMsg,false); show(createErr,false);
@@ -457,7 +486,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
   try{
     const fd = new FormData(frmCreate);
 
-    // Normalización + validación de código
     const codeRaw = (fd.get('project_code')||'').trim();
     const project_code = normalizeProjectCode(codeRaw);
     const codeInput = frmCreate.querySelector('[name="project_code"]');
@@ -469,7 +497,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
     const start_date  = (fd.get('start_date')||'') || null;
     const end_date    = (fd.get('end_date')||'') || null;
 
-    // Validaciones de UI
     let hasErr = false;
     if (!validateProjectCode(project_code)){
       markInvalid(codeInput, 'Formato requerido: PROJECT-000123');
@@ -496,7 +523,6 @@ frmCreate?.addEventListener('submit', async (ev) => {
       return;
     }
 
-    // Resolver cliente (existente / nuevo)
     let client_id = null, client_name = '';
     if (chkNewClient.checked){
       const cname = (newClientName.value||'').trim();
@@ -508,14 +534,15 @@ frmCreate?.addEventListener('submit', async (ev) => {
         toast('Falta el cliente', 'error');
         return;
       }
-      const { data: existing, error: eFind } = await supabase
+
+      const { data: existing, error: eFind } = await sb
         .from('clients').select('id,name').eq('name', cname).limit(1);
       if (eFind) throw eFind;
 
       if (existing && existing.length){
         client_id = existing[0].id; client_name = existing[0].name;
       }else{
-        const { data: ins, error: eIns } = await supabase
+        const { data: ins, error: eIns } = await sb
           .from('clients')
           .insert({ name: cname, tax_id: ctax, status: 'Activo' })
           .select('id,name')
@@ -526,7 +553,7 @@ frmCreate?.addEventListener('submit', async (ev) => {
         populateClientSelects();
       }
     }else{
-      const sel = cliSelect.value; // "id::name" o "::name"
+      const sel = cliSelect.value;
       if (!sel){
         markInvalid(cliSelect, 'Seleccione un cliente');
         createErr.textContent = 'Seleccione un cliente o marque "Nuevo cliente".';
@@ -538,29 +565,21 @@ frmCreate?.addEventListener('submit', async (ev) => {
       client_id = cid || null; client_name = cname || '';
     }
 
-    const payload = {
-      project_code, name, description, status, start_date, end_date,
-      client_id, client_name
-    };
+    const payload = { project_code, name, description, status, start_date, end_date, client_id, client_name };
 
-   // Campos admin opcionales (guardar % 0..100 como numérico)
-if (typeof st.isAdmin === 'boolean' && st.isAdmin){
-  const presStr = (frmCreate.querySelector('[name="presupuesto"]')?.value || '').trim();
-  const afeStr  = (frmCreate.querySelector('[name="afectacion"]')?.value || '').trim();
+    // Campos admin opcionales
+    if (typeof st.isAdmin === 'boolean' && st.isAdmin){
+      const presStr = (frmCreate.querySelector('[name="presupuesto"]')?.value || '').trim();
+      const afeStr  = (frmCreate.querySelector('[name="afectacion"]')?.value || '').trim();
+      payload.presupuesto = presStr === '' ? null : Number(presStr);
+      if (afeStr === '') payload.afectacion = null;
+      else {
+        const n = Number(afeStr.replace(',', '.'));
+        payload.afectacion = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
+      }
+    }
 
-  payload.presupuesto = presStr === '' ? null : Number(presStr);
-
-  if (afeStr === ''){
-    payload.afectacion = null;
-  } else {
-    const n = Number(afeStr.replace(',', '.'));
-    payload.afectacion = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
-  }
-}
-
-
-    // INSERT + retorno + manejo de errores (RLS/duplicados)
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from('projects')
       .insert(payload)
       .select('project_code')
@@ -574,17 +593,14 @@ if (typeof st.isAdmin === 'boolean' && st.isAdmin){
       return;
     }
 
-    // ÉXITO
     createMsg.textContent = '✅ Proyecto creado correctamente.';
     show(createMsg,true);
     toast(`Guardado: ${data?.project_code || project_code}`, 'success');
 
-    // Refrescar lista + selects
     const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
     st.all = freshProjects; st.clients = freshClients;
     populateClientSelects(); applyFilter();
 
-    // Autocierre
     setTimeout(() => {
       dlgCreate?.close();
       show(createMsg,false); show(createErr,false);
@@ -600,13 +616,18 @@ if (typeof st.isAdmin === 'boolean' && st.isAdmin){
   }
 });
 
-
 // === Navegación ===
 btnHome?.addEventListener('click', () => location.href = './');
-btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.signOut(); }catch{} location.href='./'; });
+btnSignOut?.addEventListener('click', async () => {
+  try{ await sb.auth.signOut(); }catch{}
+  location.href='./';
+});
 
 // === Init ===
 (async function init(){
+  // ✅ NUEVO: pintar sesión si existe #whoami
+  await paintWhoAmI();
+
   st.user = await getUser();
   if (!st.user){
     errEl.textContent = 'Sesión no válida. Inicie sesión.';
@@ -632,7 +653,6 @@ btnSignOut?.addEventListener('click', async () => { try{ await supabase.auth.sig
     console.warn('[clients]', e?.message);
   }
 
-  // Por defecto: Activo
   fEstado.value = 'Activo';
   applyFilter();
 
