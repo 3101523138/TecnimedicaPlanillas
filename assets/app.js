@@ -1,5 +1,8 @@
-//  Portal TMI · app.js (v14 LOG FIX)
+//  Portal TMI · app.js (JRA 10 feb2025 1245)
 // ===============================
+
+// ✅ FIRMA dura para confirmar que ESTE archivo está corriendo
+console.log('%c[APP] RUNNING app.js v14 LOG FIX · ' + new Date().toISOString(), 'color:#16a34a;font-weight:900');
 
 // Log global
 window.addEventListener('error', (e) => console.error('[APP] window.error:', e.message, e.filename, e.lineno));
@@ -248,6 +251,7 @@ function stopSessionTicker() {
   }
 }
 
+// ✅ FIX: redondeo a 5 + precarga que respeta options del select (0..55 step 5)
 function tickSessionClock(firstRun = false) {
   if (!st.sessionOpen) { stopSessionTicker(); return; }
 
@@ -256,7 +260,10 @@ function tickSessionClock(firstRun = false) {
   // --- Actualiza TRABAJADO (UI derecha / precarga)
   const startTs = new Date(st.sessionOpen.start_at).getTime();
   const effStart = Math.max(startTs, st._midnightTs || 0);
-  const diffMin = Math.max(0, Math.floor((nowTs - effStart) / 60000)); // real
+
+  const diffMinRaw = Math.max(0, Math.floor((nowTs - effStart) / 60000));
+  const diffMin = Math.floor(diffMinRaw / 5) * 5;
+
   st.workedMinutes   = diffMin;
   st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
 
@@ -265,13 +272,16 @@ function tickSessionClock(firstRun = false) {
 
   // --- Actualiza “Horas de hoy”
   if (Array.isArray(st.todaySessions)) {
-    const minsHoyLive = st.todaySessions.reduce((acc, r) => {
+    const minsHoyLiveRaw = st.todaySessions.reduce((acc, r) => {
       const s = new Date(r.start_at).getTime();
       const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
       const effS = Math.max(s, st._midnightTs || 0);
       const dMin = Math.max(0, Math.floor((e - effS) / 60000));
       return acc + dMin;
     }, 0);
+
+    const minsHoyLive = Math.floor(minsHoyLiveRaw / 5) * 5;
+
     const hoursTodayEl = $('#hoursTodayText');
     if (hoursTodayEl) hoursTodayEl.textContent = minToHM(minsHoyLive);
   }
@@ -279,7 +289,9 @@ function tickSessionClock(firstRun = false) {
   // --- Si el usuario no tocó HH/MM, mantenemos precarga con el restante
   if (!st.selectorDirty && st.allocRows && st.allocRows.length > 0) {
     const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
-    const restante = Math.max(0, st.workedMinutes - tot);
+
+    const restanteRaw = Math.max(0, st.workedMinutes - tot);
+    const restante = Math.floor(restanteRaw / 5) * 5;
 
     const rowsEls = [...document.querySelectorAll('#allocContainer .allocRow')];
     if (rowsEls.length) {
@@ -292,7 +304,13 @@ function tickSessionClock(firstRun = false) {
         if (curH === 0 && curM === 0) {
           const hh = Math.floor(restante / 60);
           const mm = restante % 60;
-          h.value = hh; m.value = mm;
+
+          h.value = String(hh);
+
+          const mmStr = String(mm);
+          const exists = [...m.options].some(o => o.value === mmStr);
+          m.value = exists ? mmStr : '0';
+
           syncAllocFromInputs();
         }
       }
@@ -320,7 +338,6 @@ function handleOutClick() {
     return;
   }
 
-  // Si aún no está listo → NO explicamos nada aquí. Solo llevamos al usuario a asignaciones.
   if (!st.outReady) {
     scrollToAlloc();
     return;
@@ -500,6 +517,9 @@ async function loadStatusAndRecent() {
       const deltaMin = Math.max(0, Math.floor((e - effStart) / 60000));
       return acc + deltaMin;
     }, 0);
+
+    // ✅ redondeo a 5 para mantener consistencia visual/guardado
+    minsHoy = Math.floor(minsHoy / 5) * 5;
   }
 
   // 3) Header “Estado actual / Horas de hoy”
@@ -566,11 +586,14 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Trabajado (UI) y Requerido (validación de OUT)
+  // 6) Trabajado (UI) y Requerido (validación de OUT) ✅ redondeo a 5
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
     const effStart = (start < midnightTs) ? midnightTs : start;
-    const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
+
+    const diffMinRaw = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
+    const diffMin = Math.floor(diffMinRaw / 5) * 5;
+
     st.workedMinutes   = diffMin;
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
   } else {
@@ -718,7 +741,6 @@ function readAllocFromDOM() {
 // --- Sincroniza minutos desde los inputs al estado antes de guardar ---
 function syncAllocFromInputs() {
   const rows = readAllocFromDOM();
-  // mantiene la estructura de st.allocRows, pero los minutos/proyectos vienen del DOM
   st.allocRows = rows.map(r => ({ project_code: r.project_code, minutes: r.minutes }));
 }
 
@@ -842,7 +864,11 @@ async function prepareAllocUI() {
     if (st.allocRows.length === 0) {
       const prev = await loadExistingAllocations();
       const sumPrev = prev.reduce((a, r) => a + (r.minutes || 0), 0);
-      const restante = Math.max(0, st.workedMinutes - sumPrev);
+
+      // ✅ redondeo a 5 para que la precarga siempre sea válida con el select
+      const restanteRaw = Math.max(0, st.workedMinutes - sumPrev);
+      const restante = Math.floor(restanteRaw / 5) * 5;
+
       st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restante }];
     }
   } else {
@@ -910,14 +936,12 @@ async function onMarkOut() {
   try {
     console.log('[APP] CLICK SALIDA');
 
-    // Anti-colgadas: refresca estado real antes de intentar cerrar/marcar
     await refreshOpenSessionOnly();
     if (!st.sessionOpen) {
       toast($('#punchMsg'), 'No hay jornada abierta.');
       return;
     }
 
-    // Blindaje: recalcular y exigir outReady aunque alguien llame onMarkOut directo
     updateAllocTotals();
     if (!st.outReady) {
       console.warn('[APP] SALIDA bloqueada: outReady=false (asignación incompleta o inválida).');
@@ -925,7 +949,6 @@ async function onMarkOut() {
       return;
     }
 
-    // Validar y guardar asignación (para cerrar)
     const ok = await onSaveAlloc(true);
     if (!ok) return;
 
@@ -986,13 +1009,11 @@ async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
 
-    // *** FIX: DOM como fuente de verdad SIEMPRE antes de guardar ***
     const domRows = readAllocFromDOM();
     st.allocRows = domRows.map(r => ({ project_code: r.project_code, minutes: r.minutes }));
 
     console.log('[APP] onSaveAlloc: st.allocRows (desde DOM) →', st.allocRows);
 
-    // Regla dura: no permitir proyecto con 00:00 (esto es lo que te está rompiendo el CHECK)
     const badZero = domRows.filter(r => r.project_code && (r.minutes <= 0));
     if (badZero.length) {
       console.warn('[APP] Bloqueado: hay proyectos con 00:00 →', badZero);
@@ -1004,10 +1025,8 @@ async function onSaveAlloc(forClosing = false) {
       return false;
     }
 
-    // Limpieza
     st.allocRows = st.allocRows.filter(r => (parseInt(r.minutes || 0, 10) > 0) || r.project_code);
 
-    // Unifica proyectos duplicados
     const byCode = new Map();
     for (const r of st.allocRows) {
       const code = r.project_code || '';
@@ -1030,7 +1049,6 @@ async function onSaveAlloc(forClosing = false) {
 
     const sid = st.sessionOpen.id;
 
-    // Borrar previas
     {
       const { error: delErr } = await supabase.from('work_session_allocations').delete().eq('session_id', sid);
       if (delErr) {
@@ -1039,7 +1057,6 @@ async function onSaveAlloc(forClosing = false) {
       }
     }
 
-    // Construir INSERT: solo minutes_alloc >= 1
     const rows = st.allocRows
       .filter(r => r.project_code && (parseInt(r.minutes, 10) >= 1))
       .map(r => ({
@@ -1050,7 +1067,6 @@ async function onSaveAlloc(forClosing = false) {
 
     console.log('[APP] onSaveAlloc rows a insertar →', rows);
 
-    // Si no hay filas, no intentamos insertar (y si es cierre, bloqueamos)
     if (!rows.length) {
       if (forClosing) {
         await showInfoModal({
@@ -1064,7 +1080,6 @@ async function onSaveAlloc(forClosing = false) {
       return true;
     }
 
-    // Insert
     {
       const { error: insErr } = await supabase.from('work_session_allocations').insert(rows);
       if (insErr) {
@@ -1073,7 +1088,6 @@ async function onSaveAlloc(forClosing = false) {
       }
     }
 
-    // Feedback
     if (!forClosing) {
       const resumen = (st.allocRows || [])
         .filter(r => r.project_code && r.minutes > 0)
