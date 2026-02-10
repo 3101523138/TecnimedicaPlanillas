@@ -1,13 +1,18 @@
-//  Portal TMI · app.js (v14 LOG)
-// ===============================
+//  Portal TMI · app.js (v14 LOG)  — FIX minutes_alloc=0 + LOGS
+// ============================================================
 
 // Log global
-window.addEventListener('error', (e) => console.error('[APP] window.error:', e.message, e.filename, e.lineno));
-window.addEventListener('unhandledrejection', (e) => console.error('[APP] unhandledrejection:', e.reason));
+window.addEventListener('error', (e) =>
+  console.error('[APP] window.error:', e.message, e.filename, e.lineno)
+);
+window.addEventListener('unhandledrejection', (e) =>
+  console.error('[APP] unhandledrejection:', e.reason)
+);
 
 // === CONFIG SUPABASE ===
 const SUPABASE_URL = 'https://xducrljbdyneyihjcjvo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('AQUI')) {
   alert('⚠️ Falta configurar SUPABASE_URL o SUPABASE_ANON_KEY en assets/app.js');
@@ -19,12 +24,12 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // === STATE ===
 const st = {
   user: null,
-  employee: null,        // { uid, code, full_name }
-  sessionOpen: null,     // última work_session abierta
-  requiredMinutes: 0,    // minutos trabajados (con margen aplicado)
-  allocRows: [],         // [{ project_code, minutes }]
-  projects: [],          // catálogo de proyectos activos
-  clientFilter: '',      // filtro por cliente
+  employee: null, // { uid, code, full_name }
+  sessionOpen: null, // última work_session abierta
+  requiredMinutes: 0, // minutos trabajados (con margen aplicado)
+  allocRows: [], // [{ project_code, minutes }]
+  projects: [], // catálogo de proyectos activos
+  clientFilter: '', // filtro por cliente
   lastOverWarnAt: 0,
 
   // añadidos recientes
@@ -33,14 +38,19 @@ const st = {
   sessionTickId: null,
   _midnightTs: null,
   selectorDirty: false,
-  outReady: false,       // indica si ya se puede marcar SALIDA
+  outReady: false, // indica si ya se puede marcar SALIDA
 };
 
 // === REGLAS / UTILIDADES TIEMPO ===
 const GRACE_MINUTES = 10; // margen para poder cerrar (±10 min)
 const fmt2 = (n) => (n < 10 ? `0${n}` : `${n}`);
-const minToHM = (mins) => `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs(mins || 0) % 60)}`;
-const hmToMin = (hhmm) => { if (!hhmm) return 0; const [h, m] = hhmm.split(':').map(v => parseInt(v || '0', 10)); return (h * 60 + (m || 0)) | 0; };
+const minToHM = (mins) =>
+  `${fmt2(Math.floor((mins || 0) / 60))}:${fmt2(Math.abs(mins || 0) % 60)}`;
+const hmToMin = (hhmm) => {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(':').map((v) => parseInt(v || '0', 10));
+  return (h * 60 + (m || 0)) | 0;
+};
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // Verificar si ya existe una jornada hoy (OPEN o CLOSED)
@@ -73,7 +83,10 @@ async function hasSessionToday() {
 // Refresca SOLO el estado de sesión abierta desde BD (para evitar “colgadas” si cambió en admin)
 async function refreshOpenSessionOnly() {
   try {
-    if (!st.employee?.uid) { st.sessionOpen = null; return null; }
+    if (!st.employee?.uid) {
+      st.sessionOpen = null;
+      return null;
+    }
 
     const { data, error } = await supabase
       .from('work_sessions')
@@ -89,7 +102,7 @@ async function refreshOpenSessionOnly() {
     }
 
     const ws = data && data[0];
-    st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
+    st.sessionOpen = ws && ws.status === 'OPEN' ? ws : null;
     return st.sessionOpen;
   } catch (e) {
     console.error('[APP] refreshOpenSessionOnly catch:', e);
@@ -101,35 +114,44 @@ async function refreshOpenSessionOnly() {
 const $ = (s) => document.querySelector(s);
 const show = (el) => el && (el.style.display = '');
 const hide = (el) => el && (el.style.display = 'none');
-function toast(el, msg){ if(!el) return; el.textContent = msg || ''; if(!msg) return; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; },6000); }
+function toast(el, msg) {
+  if (!el) return;
+  el.textContent = msg || '';
+  if (!msg) return;
+  setTimeout(() => {
+    if (el.textContent === msg) el.textContent = '';
+  }, 6000);
+}
 
 // ── Helpers visuales para selects y títulos ─────────
-function updateSelectStateClass(sel){
+function updateSelectStateClass(sel) {
   sel.classList.toggle('pending', !sel.value);
-  sel.classList.toggle('ready',  !!sel.value);
+  sel.classList.toggle('ready', !!sel.value);
 }
 
 // Select de horas 0..24
-function buildHourSelect(val = 0){
+function buildHourSelect(val = 0) {
   const h = document.createElement('select');
   h.className = 'allocH';
-  for(let i=0;i<=24;i++){
+  for (let i = 0; i <= 24; i++) {
     const o = document.createElement('option');
-    o.value = i; o.textContent = fmt2(i);
-    if(i===val) o.selected = true;
+    o.value = i;
+    o.textContent = fmt2(i);
+    if (i === val) o.selected = true;
     h.appendChild(o);
   }
   return h;
 }
 
 // Select de minutos 0..55 paso 5
-function buildMinuteSelect(val = 0, step = 5){
+function buildMinuteSelect(val = 0, step = 5) {
   const m = document.createElement('select');
   m.className = 'allocM';
-  for(let i=0;i<60;i+=step){
+  for (let i = 0; i < 60; i += step) {
     const o = document.createElement('option');
-    o.value = i; o.textContent = fmt2(i);
-    if(i===val) o.selected = true;
+    o.value = i;
+    o.textContent = fmt2(i);
+    if (i === val) o.selected = true;
     m.appendChild(o);
   }
   return m;
@@ -154,7 +176,12 @@ function ensureModalCSS() {
 }
 
 // Modal de confirmación (Sí/No)
-function showConfirmModal({ title='Confirmar', html='', confirmText='Aceptar', cancelText='Cancelar' } = {}) {
+function showConfirmModal({
+  title = 'Confirmar',
+  html = '',
+  confirmText = 'Aceptar',
+  cancelText = 'Cancelar',
+} = {}) {
   ensureModalCSS();
   return new Promise((resolve) => {
     const back = document.createElement('div');
@@ -169,16 +196,21 @@ function showConfirmModal({ title='Confirmar', html='', confirmText='Aceptar', c
         </div>
       </div>`;
     document.body.appendChild(back);
-    const finish = v => { back.remove(); resolve(v); };
+    const finish = (v) => {
+      back.remove();
+      resolve(v);
+    };
     back.querySelector('.tmiCancel').onclick = () => finish(false);
-    back.querySelector('.tmiOk').onclick     = () => finish(true);
-    const onKey = e => { if (e.key === 'Escape') finish(false); };
-    document.addEventListener('keydown', onKey, { once:true });
+    back.querySelector('.tmiOk').onclick = () => finish(true);
+    const onKey = (e) => {
+      if (e.key === 'Escape') finish(false);
+    };
+    document.addEventListener('keydown', onKey, { once: true });
   });
 }
 
 // Modal informativo (1 botón)
-function showInfoModal({ title='Información', html='', okText='Entendido' } = {}) {
+function showInfoModal({ title = 'Información', html = '', okText = 'Entendido' } = {}) {
   ensureModalCSS();
   return new Promise((resolve) => {
     const back = document.createElement('div');
@@ -192,17 +224,24 @@ function showInfoModal({ title='Información', html='', okText='Entendido' } = {
         </div>
       </div>`;
     document.body.appendChild(back);
-    const finish = () => { back.remove(); resolve(true); };
+    const finish = () => {
+      back.remove();
+      resolve(true);
+    };
     back.querySelector('.tmiOk').onclick = finish;
-    const onKey = e => { if (e.key === 'Escape') finish(); };
-    document.addEventListener('keydown', onKey, { once:true });
+    const onKey = (e) => {
+      if (e.key === 'Escape') finish();
+    };
+    document.addEventListener('keydown', onKey, { once: true });
   });
 }
 
 // Utilidad para hora “am/pm” legible
 function fmtTime(ts = Date.now()) {
   return new Date(ts).toLocaleTimeString(undefined, {
-    hour: 'numeric', minute: '2-digit', hour12: true
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
   });
 }
 
@@ -210,8 +249,13 @@ function fmtTime(ts = Date.now()) {
 function routeTo(path) {
   console.log('[APP] routeTo', path);
   history.replaceState({}, '', path);
-  hide($('#authCard')); hide($('#resetCard')); hide($('#homeCard'));
-  hide($('#punchCard')); hide($('#projectsCard')); hide($('#leaveCard')); hide($('#payslipsCard'));
+  hide($('#authCard'));
+  hide($('#resetCard'));
+  hide($('#homeCard'));
+  hide($('#punchCard'));
+  hide($('#projectsCard'));
+  hide($('#leaveCard'));
+  hide($('#payslipsCard'));
 
   if (path === '/' || path === '/login') show($('#authCard'));
   else if (path === '/reset') show($('#resetCard'));
@@ -240,7 +284,10 @@ function stopSessionTicker() {
 }
 
 function tickSessionClock(firstRun = false) {
-  if (!st.sessionOpen) { stopSessionTicker(); return; }
+  if (!st.sessionOpen) {
+    stopSessionTicker();
+    return;
+  }
 
   const nowTs = Date.now();
 
@@ -248,7 +295,7 @@ function tickSessionClock(firstRun = false) {
   const startTs = new Date(st.sessionOpen.start_at).getTime();
   const effStart = Math.max(startTs, st._midnightTs || 0);
   const diffMin = Math.max(0, Math.floor((nowTs - effStart) / 60000)); // real
-  st.workedMinutes   = diffMin;
+  st.workedMinutes = diffMin;
   st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
 
   const rightEl = $('#allocRequiredHM');
@@ -283,7 +330,8 @@ function tickSessionClock(firstRun = false) {
         if (curH === 0 && curM === 0) {
           const hh = Math.floor(restante / 60);
           const mm = restante % 60;
-          h.value = hh; m.value = mm;
+          h.value = hh;
+          m.value = mm;
           syncAllocFromInputs();
         }
       }
@@ -329,7 +377,7 @@ async function getGPS() {
     navigator.geolocation.getCurrentPosition(
       (p) => res({ lat: p.coords.latitude, lon: p.coords.longitude }),
       () => res(null),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   });
 }
@@ -337,7 +385,10 @@ async function getGPS() {
 // === AUTH ===
 async function loadSession() {
   console.log('[APP] loadSession…');
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
   if (error) console.error('[APP] getSession error:', error);
   st.user = session?.user || null;
   console.log('[APP] session user:', st.user?.email || null);
@@ -362,21 +413,17 @@ async function sendReset(email) {
 function clearAuthStorage() {
   try {
     const keys = Object.keys(localStorage);
-    keys.forEach(k => {
-      if (k.startsWith('sb-') || k.startsWith('supabase.')) {
-        localStorage.removeItem(k);
-      }
+    keys.forEach((k) => {
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) localStorage.removeItem(k);
     });
 
     const skeys = Object.keys(sessionStorage);
-    skeys.forEach(k => {
-      if (k.startsWith('sb-') || k.startsWith('supabase.')) {
-        sessionStorage.removeItem(k);
-      }
+    skeys.forEach((k) => {
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) sessionStorage.removeItem(k);
     });
 
     const cookieStr = document.cookie || '';
-    cookieStr.split(';').forEach(c => {
+    cookieStr.split(';').forEach((c) => {
       const name = c.split('=')[0]?.trim();
       if (!name) return;
       if (name.startsWith('sb-') || name.startsWith('supabase.')) {
@@ -410,10 +457,14 @@ async function signOut() {
   st.requiredMinutes = 0;
   st.allocRows = [];
 
-  try { history.replaceState({}, '', '/'); } catch (_) {}
+  try {
+    history.replaceState({}, '', '/');
+  } catch (_) {}
   location.hash = '';
 
-  try { routeTo('/'); } catch (_) {}
+  try {
+    routeTo('/');
+  } catch (_) {}
 
   const msgEl = document.getElementById('msg');
   if (msgEl) msgEl.textContent = 'Sesión cerrada.';
@@ -422,15 +473,19 @@ async function signOut() {
 // === EMPLEADO ===
 async function loadEmployeeContext() {
   console.log('[APP] loadEmployeeContext');
-  let { data, error } = await supabase.from('employees')
+  let { data, error } = await supabase
+    .from('employees')
     .select('employee_uid, employee_code, full_name, login_enabled')
-    .eq('user_id', st.user.id).single();
+    .eq('user_id', st.user.id)
+    .single();
 
   if (error || !data) {
     console.warn('[APP] employee por user_id no encontrado; probando por email…', error);
-    const r = await supabase.from('employees')
+    const r = await supabase
+      .from('employees')
       .select('employee_uid, employee_code, full_name, login_enabled')
-      .eq('email', st.user.email).single();
+      .eq('email', st.user.email)
+      .single();
     data = r.data || null;
   }
   if (!data) throw new Error('No se encontró el empleado');
@@ -442,11 +497,15 @@ async function loadEmployeeContext() {
     full_name: data.full_name || '(sin nombre)',
   };
 
-  const n1 = $('#empName');  if (n1) n1.textContent = st.employee.full_name;
-  const n2 = $('#empName2'); if (n2) n2.textContent = st.employee.full_name;
+  const n1 = $('#empName');
+  if (n1) n1.textContent = st.employee.full_name;
+  const n2 = $('#empName2');
+  if (n2) n2.textContent = st.employee.full_name;
 
-  const u1 = $('#empUid');  if (u1) u1.textContent = '';
-  const u2 = $('#empUid2'); if (u2) u2.textContent = '';
+  const u1 = $('#empUid');
+  if (u1) u1.textContent = '';
+  const u2 = $('#empUid2');
+  if (u2) u2.textContent = '';
 
   console.log('[APP] employee OK:', st.employee);
 }
@@ -460,7 +519,7 @@ async function loadStatusAndRecent() {
 
   const midnightLocal = new Date();
   midnightLocal.setHours(0, 0, 0, 0);
-  const midnightTs  = midnightLocal.getTime();
+  const midnightTs = midnightLocal.getTime();
   const midnightISO = midnightLocal.toISOString();
   const nowTs = Date.now();
 
@@ -474,7 +533,7 @@ async function loadStatusAndRecent() {
       .limit(1);
     if (error) console.error('[APP] work_sessions last error:', error);
     const ws = data && data[0];
-    st.sessionOpen = (ws && ws.status === 'OPEN') ? ws : null;
+    st.sessionOpen = ws && ws.status === 'OPEN' ? ws : null;
     estado = st.sessionOpen ? 'Dentro' : 'Fuera';
     console.log('[APP] sessionOpen:', st.sessionOpen);
   }
@@ -486,7 +545,7 @@ async function loadStatusAndRecent() {
       .select('start_at, end_at, status')
       .eq('employee_uid', st.employee.uid)
       .or(`start_at.gte.${midnightISO},end_at.gte.${midnightISO},end_at.is.null`);
-    st.todaySessions = error ? [] : (data || []);
+    st.todaySessions = error ? [] : data || [];
     minsHoy = st.todaySessions.reduce((acc, r) => {
       const s = new Date(r.start_at).getTime();
       const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
@@ -509,18 +568,15 @@ async function loadStatusAndRecent() {
       <div><strong>Estado actual:</strong> ${estado}</div>
       <div><strong>Horas de hoy:</strong> <span id="hoursTodayText">${minToHM(minsHoy)}</span></div>
     `;
-    if (anchor && anchor.insertAdjacentElement) {
-      anchor.insertAdjacentElement('afterend', hdr);
-    } else {
-      punch.prepend(hdr);
-    }
+    if (anchor && anchor.insertAdjacentElement) anchor.insertAdjacentElement('afterend', hdr);
+    else punch.prepend(hdr);
   }
 
   // 4) Botones IN/OUT
   {
-    const btnIn  = $('#btnIn');
+    const btnIn = $('#btnIn');
     const btnOut = $('#btnOut');
-    if (btnIn)  btnIn.disabled  = (estado === 'Dentro');
+    if (btnIn) btnIn.disabled = estado === 'Dentro';
     if (btnOut) {
       btnOut.disabled = false;
       btnOut.classList.remove('light');
@@ -542,30 +598,34 @@ async function loadStatusAndRecent() {
 
     const recentEl = $('#recentPunches');
     if (recentEl) {
-      recentEl.innerHTML = (!tps || !tps.length)
-        ? 'Sin marcas aún.'
-        : tps.map(tp => {
-            const d = new Date(tp.punch_at);
-            const dt = d.toLocaleString();
-            const coords = (tp.latitude && tp.longitude)
-              ? `${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)}`
-              : '';
-            return `
+      recentEl.innerHTML =
+        !tps || !tps.length
+          ? 'Sin marcas aún.'
+          : tps
+              .map((tp) => {
+                const d = new Date(tp.punch_at);
+                const dt = d.toLocaleString();
+                const coords =
+                  tp.latitude && tp.longitude
+                    ? `${tp.latitude.toFixed(5)}, ${tp.longitude.toFixed(5)}`
+                    : '';
+                return `
               <div class="punchItem">
                 <div class="dir">${tp.direction}</div>
                 <div class="dt">${dt}</div>
                 ${coords ? `<div class="coords">(${coords})</div>` : ``}
               </div>`;
-          }).join('');
+              })
+              .join('');
     }
   }
 
   // 6) Trabajado (UI) y Requerido (validación de OUT)
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
-    const effStart = (start < midnightTs) ? midnightTs : start;
+    const effStart = start < midnightTs ? midnightTs : start;
     const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
-    st.workedMinutes   = diffMin;
+    st.workedMinutes = diffMin;
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
   } else {
     st.workedMinutes = 0;
@@ -585,26 +645,34 @@ async function loadStatusAndRecent() {
 
 // === PROYECTOS ===
 async function loadProjects(client = null) {
-  let q = supabase.from('projects')
+  let q = supabase
+    .from('projects')
     .select('project_code, name, description, client_name')
     .eq('is_active', true)
     .order('client_name', { ascending: true })
     .order('project_code', { ascending: true });
   if (client) q = q.eq('client_name', client);
   const { data, error } = await q;
-  if (error) { console.error('[APP] loadProjects error:', error); return []; }
+  if (error) {
+    console.error('[APP] loadProjects error:', error);
+    return [];
+  }
   return data || [];
 }
 
 // === ASIGNACIONES existentes ===
 async function loadExistingAllocations() {
   if (!st.sessionOpen) return [];
-  const { data, error } = await supabase.from('work_session_allocations')
+  const { data, error } = await supabase
+    .from('work_session_allocations')
     .select('project_code, minutes_alloc')
     .eq('session_id', st.sessionOpen.id)
     .order('project_code', { ascending: true });
-  if (error) { console.error('[APP] loadExistingAllocations error:', error); return []; }
-  return (data || []).map(r => ({ project_code: r.project_code, minutes: r.minutes_alloc || 0 }));
+  if (error) {
+    console.error('[APP] loadExistingAllocations error:', error);
+    return [];
+  }
+  return (data || []).map((r) => ({ project_code: r.project_code, minutes: r.minutes_alloc || 0 }));
 }
 
 // === UI ASIGNACIONES ===
@@ -624,7 +692,7 @@ function renderAllocContainer() {
 
     const hdr = document.createElement('div');
     hdr.className = 'allocRowHeader';
-    hdr.textContent = (totalRows === 1) ? 'Proyecto' : `Proyecto ${idx+1}`;
+    hdr.textContent = totalRows === 1 ? 'Proyecto' : `Proyecto ${idx + 1}`;
     cont.appendChild(hdr);
 
     const line = document.createElement('div');
@@ -633,10 +701,11 @@ function renderAllocContainer() {
     const sel = document.createElement('select');
     sel.className = 'allocSelect';
     const optEmpty = document.createElement('option');
-    optEmpty.value = ''; optEmpty.textContent = '— Selecciona proyecto —';
+    optEmpty.value = '';
+    optEmpty.textContent = '— Selecciona proyecto —';
     sel.appendChild(optEmpty);
 
-    st.projects.forEach(p => {
+    st.projects.forEach((p) => {
       if (filter && p.client_name !== filter && p.project_code !== row.project_code) return;
       const o = document.createElement('option');
       o.value = p.project_code;
@@ -670,11 +739,16 @@ function renderAllocContainer() {
     const dur = document.createElement('div');
     dur.className = 'allocDuration';
     const sep = document.createElement('span');
-    sep.textContent = ':'; sep.className = 'allocSep';
-    dur.appendChild(h); dur.appendChild(sep); dur.appendChild(m);
+    sep.textContent = ':';
+    sep.className = 'allocSep';
+    dur.appendChild(h);
+    dur.appendChild(sep);
+    dur.appendChild(m);
 
     const del = document.createElement('button');
-    del.type = 'button'; del.className = 'btn light small'; del.textContent = 'Quitar';
+    del.type = 'button';
+    del.className = 'btn light small';
+    del.textContent = 'Quitar';
     del.addEventListener('click', () => {
       st.allocRows.splice(idx, 1);
       renderAllocContainer();
@@ -697,13 +771,16 @@ function syncAllocFromInputs() {
     if (!h || !m || !st.allocRows[i]) return;
     let hv = parseInt(h.value || '0', 10) || 0;
     let mv = parseInt(m.value || '0', 10) || 0;
-    if (mv > 59) { hv += Math.floor(mv / 60); mv = mv % 60; }
+    if (mv > 59) {
+      hv += Math.floor(mv / 60);
+      mv = mv % 60;
+    }
     st.allocRows[i].minutes = hv * 60 + mv;
   });
 }
 
 function validAllocRows() {
-  return st.allocRows.filter(r => r.project_code && (parseInt(r.minutes || 0, 10) > 0));
+  return st.allocRows.filter((r) => r.project_code && parseInt(r.minutes || 0, 10) > 0);
 }
 
 function remainingMinutes() {
@@ -714,19 +791,27 @@ function remainingMinutes() {
 function updateAllocTotals() {
   syncAllocFromInputs();
 
-  const tot    = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+  const tot = validAllocRows().reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
   const worked = st.workedMinutes;
 
-  const totalEl = $('#allocTotalHM');    if (totalEl) totalEl.textContent = minToHM(tot);
-  const rightEl = $('#allocRequiredHM'); if (rightEl) rightEl.textContent = minToHM(worked);
+  const totalEl = $('#allocTotalHM');
+  if (totalEl) totalEl.textContent = minToHM(tot);
+  const rightEl = $('#allocRequiredHM');
+  if (rightEl) rightEl.textContent = minToHM(worked);
 
   const info = $('#allocInfo');
 
   if (!st.sessionOpen) {
     st.outReady = false;
-    if (info) { info.textContent = ''; info.classList.remove('ok','warn','err'); }
+    if (info) {
+      info.textContent = '';
+      info.classList.remove('ok', 'warn', 'err');
+    }
     const outBtn = $('#btnOut');
-    if (outBtn) { outBtn.disabled = true; outBtn.classList.add('is-disabled'); }
+    if (outBtn) {
+      outBtn.disabled = true;
+      outBtn.classList.add('is-disabled');
+    }
     return;
   }
 
@@ -736,7 +821,7 @@ function updateAllocTotals() {
   const setInfo = (text, cls) => {
     if (!info) return;
     info.textContent = text;
-    info.classList.remove('ok','warn','err');
+    info.classList.remove('ok', 'warn', 'err');
     if (cls) info.classList.add(cls);
   };
 
@@ -745,7 +830,7 @@ function updateAllocTotals() {
     const wait = Math.max(0, GRACE_MINUTES - worked);
     setInfo(
       `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` +
-      `Podrás marcar SALIDA en ${minToHM(wait)}.`,
+        `Podrás marcar SALIDA en ${minToHM(wait)}.`,
       'warn'
     );
     st.outReady = false;
@@ -756,15 +841,14 @@ function updateAllocTotals() {
       const faltan = Math.max(0, worked - tot);
       const tieneAlgo = tot > 0;
       setInfo(
-        `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` +
-        `Faltan ${minToHM(faltan)}.`,
+        `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` + `Faltan ${minToHM(faltan)}.`,
         tieneAlgo ? 'warn' : 'err'
       );
     } else if (tot > upper) {
       const exceso = Math.max(0, tot - worked);
       setInfo(
         `Debes asignar ${minToHM(worked)} ± ${minToHM(GRACE_MINUTES)}. ` +
-        `Te pasaste ${minToHM(exceso)}.`,
+          `Te pasaste ${minToHM(exceso)}.`,
         'err'
       );
     } else {
@@ -801,10 +885,10 @@ async function prepareAllocUI() {
       st.projects = data || [];
     }
 
-    const clients = [...new Set(st.projects.map(p => p.client_name).filter(Boolean))].sort();
+    const clients = [...new Set(st.projects.map((p) => p.client_name).filter(Boolean))].sort();
     const selClient = $('#allocClient');
     if (selClient && selClient.options.length === 1) {
-      clients.forEach(c => {
+      clients.forEach((c) => {
         const o = document.createElement('option');
         o.value = c;
         o.textContent = c;
@@ -859,12 +943,13 @@ async function onMarkIn() {
         title: 'Segunda jornada hoy',
         html: 'Ya registraste una jornada hoy.<br>Iniciar otra puede afectar cálculos de planilla y generar reclamos.<br><br><strong>¿Deseas iniciar otra jornada?</strong>',
         confirmText: 'Sí, iniciar',
-        cancelText: 'No, cancelar'
+        cancelText: 'No, cancelar',
       });
       if (!ok) return;
     }
 
-    const bi = $('#btnIn'); if (bi) bi.disabled = true;
+    const bi = $('#btnIn');
+    if (bi) bi.disabled = true;
 
     await mark('IN');
 
@@ -872,7 +957,7 @@ async function onMarkIn() {
     await showInfoModal({
       title: '¡Bienvenido!',
       html: `Hola <strong>${nombre}</strong>. Iniciaste jornada a las <strong>${fmtTime()}</strong>.`,
-      okText: 'Continuar'
+      okText: 'Continuar',
     });
 
     toast($('#punchMsg'), 'Entrada registrada.');
@@ -900,14 +985,15 @@ async function onMarkOut() {
     const ok = await onSaveAlloc(true);
     if (!ok) return;
 
-    const bo = $('#btnOut'); if (bo) bo.disabled = true;
+    const bo = $('#btnOut');
+    if (bo) bo.disabled = true;
     await mark('OUT');
 
     const nombre = st.employee?.full_name || 'Usuario';
     await showInfoModal({
       title: '¡Gracias por tu labor!',
       html: `Gracias, <strong>${nombre}</strong>. Marcaste salida a las <strong>${fmtTime()}</strong>.`,
-      okText: 'Listo'
+      okText: 'Listo',
     });
 
     toast($('#punchMsg'), 'Salida registrada.');
@@ -922,14 +1008,20 @@ async function onMarkOut() {
 // + Proyecto (con reparto automático del restante)
 function onAddAlloc() {
   if (!st.sessionOpen) return;
-  if (st.allocRows.length >= 3) { toast($('#punchMsg'), 'Máximo 3 proyectos por jornada.'); return; }
+  if (st.allocRows.length >= 3) {
+    toast($('#punchMsg'), 'Máximo 3 proyectos por jornada.');
+    return;
+  }
 
   syncAllocFromInputs();
 
   const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
   const rem = Math.max(0, st.workedMinutes - tot);
 
-  if (rem <= 0) { toast($('#punchMsg'), 'No hay tiempo restante por asignar.'); return; }
+  if (rem <= 0) {
+    toast($('#punchMsg'), 'No hay tiempo restante por asignar.');
+    return;
+  }
 
   st.allocRows.push({ project_code: '', minutes: rem });
   renderAllocContainer();
@@ -943,7 +1035,10 @@ function rebalanceFrom(changedIdx) {
   const maxTotal = st.workedMinutes + GRACE_MINUTES;
   const rows = st.allocRows;
 
-  const sumOthers = rows.reduce((acc, r, i) => i === changedIdx ? acc : acc + (parseInt(r.minutes || 0, 10) || 0), 0);
+  const sumOthers = rows.reduce(
+    (acc, r, i) => (i === changedIdx ? acc : acc + (parseInt(r.minutes || 0, 10) || 0)),
+    0
+  );
   const maxForThis = Math.max(0, maxTotal - sumOthers);
 
   rows[changedIdx].minutes = Math.min(maxForThis, parseInt(rows[changedIdx].minutes || 0, 10) || 0);
@@ -952,31 +1047,47 @@ function rebalanceFrom(changedIdx) {
   updateAllocTotals();
 }
 
-// Guardar asignación (parcial o para cerrar)
+// Guardar asignación (parcial o para cerrar)  ✅ FIX: nunca insertar minutes_alloc <= 0
 async function onSaveAlloc(forClosing = false) {
   try {
     if (!st.sessionOpen) throw new Error('No hay jornada abierta.');
 
     syncAllocFromInputs();
 
-    // Limpieza
-    st.allocRows = st.allocRows.filter(r => (parseInt(r.minutes || 0, 10) > 0) || r.project_code);
+    // Limpieza suave (mantenemos filas con proyecto aunque 0 para no “perder” selección visual)
+    st.allocRows = st.allocRows.filter((r) => (parseInt(r.minutes || 0, 10) > 0) || r.project_code);
 
-    // Unifica proyectos duplicados
+    console.log('[APP] onSaveAlloc · entrada', {
+      forClosing,
+      session_id: st.sessionOpen?.id || null,
+      workedMinutes: st.workedMinutes,
+      allocRows: JSON.parse(JSON.stringify(st.allocRows || [])),
+    });
+
+    // Unifica proyectos duplicados (sumando minutos)
     const byCode = new Map();
     for (const r of st.allocRows) {
-      const code = r.project_code || '';
+      const code = (r.project_code || '').trim();
       const mins = parseInt(r.minutes || 0, 10) || 0;
       if (!code) continue;
       byCode.set(code, (byCode.get(code) || 0) + mins);
     }
-    st.allocRows = [
-      ...Array.from(byCode.entries()).map(([project_code, minutes]) => ({ project_code, minutes }))
-    ];
+    st.allocRows = Array.from(byCode.entries()).map(([project_code, minutes]) => ({
+      project_code,
+      minutes,
+    }));
 
-    const tot   = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
+    const tot = st.allocRows.reduce((a, r) => a + (parseInt(r.minutes || 0, 10) || 0), 0);
     const lower = Math.max(0, st.workedMinutes - GRACE_MINUTES);
     const upper = st.workedMinutes + GRACE_MINUTES;
+
+    console.log('[APP] onSaveAlloc · totales', {
+      forClosing,
+      tot,
+      lower,
+      upper,
+      rowsMerged: JSON.parse(JSON.stringify(st.allocRows || [])),
+    });
 
     if (forClosing) {
       if (tot < lower) throw new Error(`Faltan ${minToHM(lower - tot)}.`);
@@ -984,43 +1095,71 @@ async function onSaveAlloc(forClosing = false) {
     }
 
     const sid = st.sessionOpen.id;
-    await supabase.from('work_session_allocations').delete().eq('session_id', sid);
 
-    const rows = st.allocRows
-      .filter(r => r.project_code && (parseInt(r.minutes, 10) > 0))
-      .map(r => ({ session_id: sid, project_code: r.project_code, minutes_alloc: parseInt(r.minutes, 10) }));
+    // Borra lo previo
+    const delRes = await supabase.from('work_session_allocations').delete().eq('session_id', sid);
+    if (delRes?.error) {
+      console.error('[APP] onSaveAlloc · error borrando allocations:', delRes.error);
+      throw delRes.error;
+    }
+
+    // Payload duro: NUNCA minutes_alloc <= 0
+    const rawRows = (st.allocRows || []).map((r) => ({
+      session_id: sid,
+      project_code: (r.project_code || '').trim(),
+      minutes_alloc: parseInt(r.minutes || 0, 10) || 0,
+    }));
+
+    const dropped = rawRows.filter((x) => x.project_code && x.minutes_alloc <= 0);
+    const rows = rawRows.filter((x) => x.project_code && x.minutes_alloc > 0);
+
+    if (dropped.length) {
+      console.warn('[APP] onSaveAlloc · filas descartadas (minutes_alloc<=0)', dropped);
+    }
+
+    console.log('[APP] onSaveAlloc · payload insert', {
+      count: rows.length,
+      rows,
+    });
 
     if (rows.length) {
-      const { error } = await supabase.from('work_session_allocations').insert(rows);
-      if (error) throw error;
+      const insRes = await supabase.from('work_session_allocations').insert(rows);
+      if (insRes?.error) {
+        console.error('[APP] onSaveAlloc · error insert allocations:', insRes.error, { rows });
+        throw insRes.error;
+      }
+    } else {
+      console.warn('[APP] onSaveAlloc · no hay filas para insertar (payload vacío).');
+      // Si forClosing, esto normalmente no debería pasar, pero no rompemos aquí;
+      // la validación de cierre ya exige validAllocRows().length > 0 vía outReady.
     }
 
     // Feedback
     if (forClosing) {
       // “lo saca y punto”: no metemos explicación adicional aquí (la UI ya indica ok/warn/err).
-      // (mantenemos el flujo normal; onMarkOut continúa)
     } else {
       if (tot < lower) {
         await showInfoModal({
           title: 'Asignación incompleta',
           html: `Recuerda asignar <strong>${minToHM(lower - tot)}</strong> más a proyectos para poder cerrar la jornada.`,
-          okText: 'Entendido'
+          okText: 'Entendido',
         });
       } else if (tot > upper) {
         await showInfoModal({
           title: 'Asignación excedida',
           html: `Has asignado <strong>${minToHM(tot - upper)}</strong> de más. Reduce tiempo en algún proyecto para poder cerrar.`,
-          okText: 'Ok'
+          okText: 'Ok',
         });
       } else {
-        const resumen = (st.allocRows || [])
-          .filter(r => r.project_code && r.minutes > 0)
-          .map(r => `• <strong>${r.project_code}</strong> — ${minToHM(r.minutes)}`)
-          .join('<br>') || 'Sin proyectos asignados.';
+        const resumen =
+          (st.allocRows || [])
+            .filter((r) => r.project_code && r.minutes > 0)
+            .map((r) => `• <strong>${r.project_code}</strong> — ${minToHM(r.minutes)}`)
+            .join('<br>') || 'Sin proyectos asignados.';
         await showInfoModal({
           title: 'Asignación guardada',
           html: `Quedó así:<br><br>${resumen}`,
-          okText: 'Perfecto'
+          okText: 'Perfecto',
         });
         toast($('#punchMsg'), 'Asignación guardada.');
       }
@@ -1050,7 +1189,7 @@ function setNavListeners() {
   if (listenersBound) return;
   listenersBound = true;
 
-  document.querySelectorAll('[data-nav]').forEach(el => {
+  document.querySelectorAll('[data-nav]').forEach((el) => {
     el.addEventListener('click', () => {
       const to = el.getAttribute('data-nav');
 
@@ -1083,32 +1222,42 @@ function setNavListeners() {
 // === POLISH VISUAL MOVIL ===
 function applyMobilePolish() {
   const all = document.querySelectorAll('#homeCard *');
-  all.forEach(el => {
+  all.forEach((el) => {
     if (el.childNodes && el.childNodes.length === 1) {
       const t = (el.textContent || '').trim();
-      if (t === 'Registrar entrada o salida con GPS') {
-        el.textContent = 'Registrar entrada o salida';
-      }
+      if (t === 'Registrar entrada o salida con GPS') el.textContent = 'Registrar entrada o salida';
     }
   });
 
   const uidEls = [document.getElementById('empUid'), document.getElementById('empUid2')];
-  uidEls.forEach(el => { if (el) el.textContent = ''; });
+  uidEls.forEach((el) => {
+    if (el) el.textContent = '';
+  });
 }
 
 // ───────────────── Auth error → modal amigable ─────────────────
 function parseAuthError(err, ctx = '') {
-  const raw = (err && (err.message || err.error_description || err.error || String(err))) || 'Error desconocido';
+  const raw =
+    (err && (err.message || err.error_description || err.error || String(err))) || 'Error desconocido';
   const low = raw.toLowerCase();
 
   if (low.includes('invalid login') || low.includes('invalid_grant') || low.includes('email or password')) {
-    return { title: 'Credenciales inválidas', html: 'El correo o la contraseña no son correctos. Verifica e inténtalo de nuevo.' };
+    return {
+      title: 'Credenciales inválidas',
+      html: 'El correo o la contraseña no son correctos. Verifica e inténtalo de nuevo.',
+    };
   }
   if (low.includes('email not confirmed') || low.includes('email not verified')) {
-    return { title: 'Correo sin confirmar', html: 'Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja o solicita un nuevo enlace.' };
+    return {
+      title: 'Correo sin confirmar',
+      html: 'Debes confirmar tu correo antes de iniciar sesión. Revisa tu bandeja o solicita un nuevo enlace.',
+    };
   }
   if (low.includes('auth session missing') || low.includes('no current user')) {
-    return { title: 'Sesión de recuperación no activa', html: 'Abre el enlace del correo nuevamente. Si expiró, solicita otro desde “¿Olvidaste tu contraseña?”.' };
+    return {
+      title: 'Sesión de recuperación no activa',
+      html: 'Abre el enlace del correo nuevamente. Si expiró, solicita otro desde “¿Olvidaste tu contraseña?”.',
+    };
   }
   if (low.includes('password should be at least') || low.includes('password is too short')) {
     return { title: 'Contraseña demasiado corta', html: 'La contraseña debe tener al menos <strong>6 caracteres</strong>.' };
@@ -1140,16 +1289,16 @@ async function boot() {
   const hashParams = new URLSearchParams(rawHash);
   const queryParams = new URLSearchParams(location.search || '');
 
-  const access_token  = hashParams.get('access_token');
+  const access_token = hashParams.get('access_token');
   const refresh_token = hashParams.get('refresh_token');
-  const typeFromHash  = hashParams.get('type');
+  const typeFromHash = hashParams.get('type');
 
   const code = queryParams.get('code');
   const typeFromQuery = queryParams.get('type');
 
   const isRecoveryFlow =
-    (typeFromHash === 'recovery') ||
-    (typeFromQuery === 'recovery') ||
+    typeFromHash === 'recovery' ||
+    typeFromQuery === 'recovery' ||
     (!!access_token && !!refresh_token) ||
     !!code;
 
@@ -1174,11 +1323,18 @@ async function boot() {
         console.log('[APP] CLICK SetNew (recovery)');
         const pw = ($('#newPassword')?.value || '').trim();
         if (!pw || pw.length < 6) {
-          await showInfoModal({ title: 'Contraseña muy corta', html: 'Debe tener <strong>6 o más</strong> caracteres.', okText: 'Entendido' });
-          $('#newPassword')?.focus(); return;
+          await showInfoModal({
+            title: 'Contraseña muy corta',
+            html: 'Debe tener <strong>6 o más</strong> caracteres.',
+            okText: 'Entendido',
+          });
+          $('#newPassword')?.focus();
+          return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!session) {
           await showAuthError(new Error('Auth session missing'), 'reset');
           return;
@@ -1192,7 +1348,7 @@ async function boot() {
         await showInfoModal({
           title: 'Contraseña actualizada',
           html: 'Ya puedes iniciar sesión con tu nueva contraseña.',
-          okText: 'Ir al inicio'
+          okText: 'Ir al inicio',
         });
 
         history.replaceState({}, '', '/');
@@ -1225,12 +1381,22 @@ async function boot() {
         const password = $('#password')?.value || '';
 
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          await showInfoModal({ title: 'Correo inválido', html: 'Escribe un <strong>correo válido</strong> para continuar.', okText: 'Entendido' });
-          $('#email')?.focus(); return;
+          await showInfoModal({
+            title: 'Correo inválido',
+            html: 'Escribe un <strong>correo válido</strong> para continuar.',
+            okText: 'Entendido',
+          });
+          $('#email')?.focus();
+          return;
         }
         if (!password) {
-          await showInfoModal({ title: 'Contraseña requerido', html: 'Escribe tu <strong>contraseña</strong> para iniciar sesión.', okText: 'Entendido' });
-          $('#password')?.focus(); return;
+          await showInfoModal({
+            title: 'Contraseña requerido',
+            html: 'Escribe tu <strong>contraseña</strong> para iniciar sesión.',
+            okText: 'Entendido',
+          });
+          $('#password')?.focus();
+          return;
         }
 
         btn && (btn.disabled = true);
@@ -1258,9 +1424,10 @@ async function boot() {
           await showInfoModal({
             title: 'Necesitamos tu correo',
             html: 'Escribe un <strong>correo válido</strong> y vuelve a pulsar “¿Olvidaste tu contraseña?”.',
-            okText: 'Entendido'
+            okText: 'Entendido',
           });
-          emailInput?.focus(); return;
+          emailInput?.focus();
+          return;
         }
 
         btn && (btn.disabled = true);
@@ -1270,7 +1437,7 @@ async function boot() {
         await showInfoModal({
           title: 'Revisa tu correo',
           html: 'Si la dirección existe, te enviamos el <strong>enlace para restablecer</strong> la contraseña. Revisa también <em>Spam</em> o <em>Promociones</em>.',
-          okText: 'Listo'
+          okText: 'Listo',
         });
 
         $('#password')?.focus();
@@ -1296,7 +1463,8 @@ async function boot() {
       clearAuthStorage();
       await supabase.auth.signOut({ scope: 'local' });
     } catch (_) {}
-    st.user = null; st.employee = null;
+    st.user = null;
+    st.employee = null;
     routeTo('/');
     await showAuthError(e, 'login');
     toast($('#msg'), 'Tu sesión caducó. Vuelve a iniciar sesión.');
