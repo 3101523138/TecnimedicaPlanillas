@@ -1,4 +1,4 @@
-//  Portal TMI · app.js (JRA 10 feb2025 1245)
+//  Portal TMI · app.js (JRA 10feb2025 0119)
 // ===============================
 
 // ✅ FIRMA dura para confirmar que ESTE archivo está corriendo
@@ -675,10 +675,11 @@ function renderAllocContainer() {
     });
     updateSelectStateClass(sel);
 
+    // ✅ FIX: NO re-render aquí (eso rompía el select y lo “des-seleccionaba”)
     sel.addEventListener('change', () => {
       row.project_code = sel.value || '';
       updateSelectStateClass(sel);
-      renderAllocContainer();
+      syncAllocFromInputs();
       updateAllocTotals();
     });
 
