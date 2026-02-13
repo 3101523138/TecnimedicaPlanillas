@@ -241,6 +241,7 @@ function startSessionTicker() {
   stopSessionTicker();
   if (!st.sessionOpen) return;
   tickSessionClock(true);
+  // ✅ refresco minuto a minuto (como era antes)
   st.sessionTickId = setInterval(() => tickSessionClock(false), 60 * 1000);
 }
 
@@ -251,18 +252,18 @@ function stopSessionTicker() {
   }
 }
 
-// ✅ FIX: redondeo a 5 + precarga que respeta options del select (0..55 step 5)
+// ✅ SAFETY + RESTORE: minuto a minuto en workedMinutes, SIN redondear a 5.
+//    Solo “ajustamos” al step=5 cuando queremos precargar el select de minutos (para que exista el option).
 function tickSessionClock(firstRun = false) {
   if (!st.sessionOpen) { stopSessionTicker(); return; }
 
   const nowTs = Date.now();
 
-  // --- Actualiza TRABAJADO (UI derecha / precarga)
+  // --- Actualiza TRABAJADO (UI derecha / precarga) minuto-a-minuto
   const startTs = new Date(st.sessionOpen.start_at).getTime();
   const effStart = Math.max(startTs, st._midnightTs || 0);
 
-  const diffMinRaw = Math.max(0, Math.floor((nowTs - effStart) / 60000));
-  const diffMin = Math.floor(diffMinRaw / 5) * 5;
+  const diffMin = Math.max(0, Math.floor((nowTs - effStart) / 60000));
 
   st.workedMinutes   = diffMin;
   st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
@@ -270,9 +271,9 @@ function tickSessionClock(firstRun = false) {
   const rightEl = $('#allocRequiredHM');
   if (rightEl) rightEl.textContent = minToHM(st.workedMinutes);
 
-  // --- Actualiza “Horas de hoy”
+  // --- Actualiza “Horas de hoy” minuto-a-minuto (sin redondeo)
   if (Array.isArray(st.todaySessions)) {
-    const minsHoyLiveRaw = st.todaySessions.reduce((acc, r) => {
+    const minsHoyLive = st.todaySessions.reduce((acc, r) => {
       const s = new Date(r.start_at).getTime();
       const e = r.end_at ? new Date(r.end_at).getTime() : nowTs;
       const effS = Math.max(s, st._midnightTs || 0);
@@ -280,18 +281,19 @@ function tickSessionClock(firstRun = false) {
       return acc + dMin;
     }, 0);
 
-    const minsHoyLive = Math.floor(minsHoyLiveRaw / 5) * 5;
-
     const hoursTodayEl = $('#hoursTodayText');
     if (hoursTodayEl) hoursTodayEl.textContent = minToHM(minsHoyLive);
   }
 
   // --- Si el usuario no tocó HH/MM, mantenemos precarga con el restante
+  //     ⚠️ pero el select de minutos es step 5 → precargamos un valor válido SOLO para el select
   if (!st.selectorDirty && st.allocRows && st.allocRows.length > 0) {
     const tot = validAllocRows().reduce((a, r) => a + (r.minutes || 0), 0);
 
     const restanteRaw = Math.max(0, st.workedMinutes - tot);
-    const restante = Math.floor(restanteRaw / 5) * 5;
+
+    // ✅ SOLO para el select: redondeo al múltiplo de 5 más cercano (para que exista en options)
+    const restanteForSelect = Math.max(0, Math.round(restanteRaw / 5) * 5);
 
     const rowsEls = [...document.querySelectorAll('#allocContainer .allocRow')];
     if (rowsEls.length) {
@@ -302,8 +304,8 @@ function tickSessionClock(firstRun = false) {
         const curH = parseInt(h.value || '0', 10);
         const curM = parseInt(m.value || '0', 10);
         if (curH === 0 && curM === 0) {
-          const hh = Math.floor(restante / 60);
-          const mm = restante % 60;
+          const hh = Math.floor(restanteForSelect / 60);
+          const mm = restanteForSelect % 60;
 
           h.value = String(hh);
 
@@ -518,8 +520,8 @@ async function loadStatusAndRecent() {
       return acc + deltaMin;
     }, 0);
 
-    // ✅ redondeo a 5 para mantener consistencia visual/guardado
-    minsHoy = Math.floor(minsHoy / 5) * 5;
+    // ✅ RESTORE: minuto-a-minuto (sin redondeo)
+    minsHoy = Math.max(0, Math.floor(minsHoy));
   }
 
   // 3) Header “Estado actual / Horas de hoy”
@@ -586,13 +588,12 @@ async function loadStatusAndRecent() {
     }
   }
 
-  // 6) Trabajado (UI) y Requerido (validación de OUT) ✅ redondeo a 5
+  // 6) Trabajado (UI) y Requerido (validación de OUT) ✅ RESTORE: minuto-a-minuto
   if (st.sessionOpen) {
     const start = new Date(st.sessionOpen.start_at).getTime();
     const effStart = (start < midnightTs) ? midnightTs : start;
 
-    const diffMinRaw = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
-    const diffMin = Math.floor(diffMinRaw / 5) * 5;
+    const diffMin = Math.max(0, Math.floor((Date.now() - effStart) / 60000));
 
     st.workedMinutes   = diffMin;
     st.requiredMinutes = Math.max(0, diffMin - GRACE_MINUTES);
@@ -866,11 +867,12 @@ async function prepareAllocUI() {
       const prev = await loadExistingAllocations();
       const sumPrev = prev.reduce((a, r) => a + (r.minutes || 0), 0);
 
-      // ✅ redondeo a 5 para que la precarga siempre sea válida con el select
+      // ✅ SAFETY: workedMinutes es minuto-a-minuto, pero el select es step 5.
+      //    Precargamos SOLO un valor válido para el select (round a 5), sin afectar workedMinutes.
       const restanteRaw = Math.max(0, st.workedMinutes - sumPrev);
-      const restante = Math.floor(restanteRaw / 5) * 5;
+      const restanteForSelect = Math.max(0, Math.round(restanteRaw / 5) * 5);
 
-      st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restante }];
+      st.allocRows = prev.length ? prev : [{ project_code: '', minutes: restanteForSelect }];
     }
   } else {
     st.allocRows = [];
