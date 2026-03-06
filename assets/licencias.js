@@ -17,29 +17,36 @@
   const SUPABASE_ANON_KEY =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkdWNybGpiZHluZXlpaGpjanZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIzMTYzNDIsImV4cCI6MjA2Nzg5MjM0Mn0.I0JcXD9jUZNNefpt5vyBFBxwQncV9TSwsG8FHp0n85Y";
 
-  // ✅ FIX: NO redeclarar "supabase" (evita: Identifier 'supabase' has already been declared)
-  // Creamos/reciclamos un cliente en window.__tmiSupabaseClient y usamos una variable local "sb".
   function getSupabaseClient() {
     try {
-      // Caso 1: ya existe nuestro cliente cacheado
-      if (window.__tmiSupabaseClient && window.__tmiSupabaseClient.from && window.__tmiSupabaseClient.auth) {
+      if (
+        window.__tmiSupabaseClient &&
+        window.__tmiSupabaseClient.from &&
+        window.__tmiSupabaseClient.auth
+      ) {
         console.log("[LICENCIAS] Reusando window.__tmiSupabaseClient");
         return window.__tmiSupabaseClient;
       }
 
-      // Caso 2: alguien dejó un cliente en window.supabase (no es lo típico, pero pasa)
       if (window.supabase && window.supabase.from && window.supabase.auth) {
         console.log("[LICENCIAS] Reusando cliente existente en window.supabase");
         window.__tmiSupabaseClient = window.supabase;
         return window.__tmiSupabaseClient;
       }
 
-      // Caso 3: supabase-js CDN cargado (window.supabase es la LIBRERÍA y trae createClient)
       if (window.supabase && typeof window.supabase.createClient === "function") {
         console.log("[LICENCIAS] Creando cliente Supabase (createClient)");
-        window.__tmiSupabaseClient = window.supabase.createClient(URL_SUPABASE, SUPABASE_ANON_KEY, {
-          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
-        });
+        window.__tmiSupabaseClient = window.supabase.createClient(
+          URL_SUPABASE,
+          SUPABASE_ANON_KEY,
+          {
+            auth: {
+              persistSession: true,
+              autoRefreshToken: true,
+              detectSessionInUrl: false,
+            },
+          }
+        );
         return window.__tmiSupabaseClient;
       }
 
@@ -52,10 +59,7 @@
   }
 
   const sb = getSupabaseClient();
-  if (!sb) {
-    // No seguimos: sin cliente no hay nada que hacer
-    return;
-  }
+  if (!sb) return;
 
   // ==== ESTADO SIMPLE ====
   const st = {
@@ -94,24 +98,43 @@
     return String(v);
   }
 
+  function normText(v) {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    const s = String(v).trim();
+    return s.length ? s : null;
+  }
+
+  function upperKey(v) {
+    const s = normText(v);
+    if (!s) return "";
+    return String(s).trim().toUpperCase();
+  }
+
   function normalizeStatus(s) {
     const raw = String(s || "").trim().toLowerCase();
     if (!raw) return { key: "OTRO", label: "Sin estado" };
 
     if (raw === "pendiente") return { key: "PENDIENTE", label: "Pendiente" };
-    if (raw === "aprobada" || raw === "aprobado") return { key: "APROBADA", label: "Aprobada" };
+    if (raw === "aprobada" || raw === "aprobado")
+      return { key: "APROBADA", label: "Aprobada" };
     if (raw === "denegada" || raw === "rechazada" || raw === "rechazado")
       return { key: "DENEGADA", label: "Denegada" };
-    if (raw === "cancelada" || raw === "cancelado") return { key: "CANCELADA", label: "Cancelada" };
-    if (raw === "reabierta" || raw === "reabierto") return { key: "REABIERTA", label: "Reabierta" };
+    if (raw === "cancelada" || raw === "cancelado")
+      return { key: "CANCELADA", label: "Cancelada" };
+    if (raw === "reabierta" || raw === "reabierto")
+      return { key: "REABIERTA", label: "Reabierta" };
     if (raw === "borrador" || raw === "no guardado" || raw === "no_guardado")
       return { key: "BORRADOR", label: "No guardado" };
 
     return { key: "OTRO", label: s };
   }
 
+  // ============================
+  // ✅ NUEVA REGLA UI
+  // ============================
   function isIncapacityUiType(uiType) {
-    return uiType === "incapacidad_ccss" || uiType === "incapacidad_ins";
+    return uiType === "incapacidad_medica";
   }
 
   function toggleIssuerCertByUiType(uiType) {
@@ -131,52 +154,83 @@
     }
   }
 
-  // Mapea los tipos del select a los valores permitidos por la tabla
-  // CHECK: 'VACACIONES', 'INCAPACIDAD', 'MATERNIDAD', 'OTRO'
-  function mapUiTypeToDb(value) {
+  // ============================
+  // ✅ MAPEO UI -> BD
+  // ============================
+  function mapUiTypeToDbType(value) {
     switch (value) {
       case "vacaciones":
         return "VACACIONES";
-      case "incapacidad_ccss":
-      case "incapacidad_ins":
+      case "incapacidad_medica":
         return "INCAPACIDAD";
-      case "permiso_con_goce":
-      case "permiso_sin_goce":
-      case "otro":
       default:
         return "OTRO";
     }
   }
 
-  function prettyType(dbValue, uiValue) {
-    // uiValue conserva la distinción “con goce / sin goce”
-    switch (uiValue) {
+  function mapUiTypeToDbSubtype(value) {
+    switch (value) {
       case "vacaciones":
-        return "Vacaciones";
-      case "incapacidad_ccss":
-        return "Incapacidad CCSS";
-      case "incapacidad_ins":
-        return "Incapacidad INS";
+        return "VACACIONES";
+      case "incapacidad_medica":
+        return "INCAPACIDAD_MEDICA";
       case "permiso_con_goce":
-        return "Permiso con goce";
+        return "PERMISO_CON_GOCE";
       case "permiso_sin_goce":
-        return "Permiso sin goce";
+        return "PERMISO_SIN_GOCE";
+      case "duelo":
+        return "DUELO";
       case "otro":
-        return "Otro";
       default:
-        // fallback por si ya habían registros previos
-        switch (dbValue) {
-          case "VACACIONES":
-            return "Vacaciones";
-          case "INCAPACIDAD":
-            return "Incapacidad";
-          case "MATERNIDAD":
-            return "Maternidad";
-          case "OTRO":
-          default:
-            return "Otro";
-        }
+        return "HORAS_AUSENCIA_DIA";
     }
+  }
+
+  function prettyType(dbValue, uiValue = null, dbSubtype = null) {
+    const ui = String(uiValue || "").trim().toLowerCase();
+    const st = upperKey(dbSubtype);
+    const lt = upperKey(dbValue);
+
+    if (ui === "vacaciones") return "Vacaciones";
+    if (ui === "incapacidad_medica") return "Incapacidad Médica";
+    if (ui === "permiso_con_goce") return "Permiso con goce";
+    if (ui === "permiso_sin_goce") return "Permiso sin goce";
+    if (ui === "duelo") return "Duelo";
+    if (ui === "otro") return "Horas Ausencia día";
+
+    if (st === "VACACIONES") return "Vacaciones";
+    if (st === "INCAPACIDAD_MEDICA" || st === "INCAPACIDAD") return "Incapacidad Médica";
+    if (st === "PERMISO_CON_GOCE") return "Permiso con goce";
+    if (st === "PERMISO_SIN_GOCE") return "Permiso sin goce";
+    if (st === "DUELO") return "Duelo";
+    if (st === "HORAS_AUSENCIA_DIA") return "Horas Ausencia día";
+
+    if (lt === "VACACIONES") return "Vacaciones";
+    if (lt === "INCAPACIDAD") return "Incapacidad Médica";
+    if (lt === "MATERNIDAD") return "Maternidad";
+    if (lt === "OTRO") return st || "Otro";
+
+    return dbValue || "Otro";
+  }
+
+  function inferUiTypeFromRecord(record) {
+    const lt = upperKey(record?.leave_type);
+    const st = upperKey(record?.leave_subtype);
+
+    if (st === "VACACIONES" || lt === "VACACIONES") return "vacaciones";
+    if (
+      st === "INCAPACIDAD_MEDICA" ||
+      st === "INCAPACIDAD" ||
+      lt === "INCAPACIDAD"
+    ) {
+      return "incapacidad_medica";
+    }
+    if (st === "PERMISO_CON_GOCE") return "permiso_con_goce";
+    if (st === "PERMISO_SIN_GOCE") return "permiso_sin_goce";
+    if (st === "DUELO") return "duelo";
+    if (st === "HORAS_AUSENCIA_DIA") return "otro";
+
+    return "";
   }
 
   // ==== CARGAR SESIÓN Y EMPLEADO ====
@@ -192,7 +246,10 @@
       const session = data?.session || null;
       if (!session?.user) {
         console.warn("[LICENCIAS] Sin sesión activa.");
-        setFormMsg("No hay sesión activa. Abre primero el portal y vuelve a intentar.", true);
+        setFormMsg(
+          "No hay sesión activa. Abre primero el portal y vuelve a intentar.",
+          true
+        );
         const n = $("#empName");
         if (n) n.textContent = "—";
         return false;
@@ -201,11 +258,9 @@
       st.user = session.user;
       console.log("[LICENCIAS] Usuario:", st.user.email, "user.id:", st.user.id);
 
-      // Mostrar “quién inició sesión” aunque no exista match en employees
       const n = $("#empName");
       if (n) n.textContent = st.user.email || "—";
 
-      // Buscar empleado por user_id (igual que en portal)
       let { data: emp, error: empErr } = await sb
         .from("employees")
         .select("employee_uid, full_name")
@@ -213,15 +268,25 @@
         .single();
 
       if (empErr || !emp) {
-        console.warn("[LICENCIAS] Empleado por user_id no encontrado. Probando por email…", empErr);
-        const r = await sb.from("employees").select("employee_uid, full_name").eq("email", st.user.email).single();
+        console.warn(
+          "[LICENCIAS] Empleado por user_id no encontrado. Probando por email…",
+          empErr
+        );
+        const r = await sb
+          .from("employees")
+          .select("employee_uid, full_name")
+          .eq("email", st.user.email)
+          .single();
         emp = r.data || null;
         empErr = r.error || null;
       }
 
       if (empErr || !emp) {
         console.error("[LICENCIAS] No se encontró empleado para este usuario:", empErr);
-        setFormMsg("No se encontró tu ficha de empleado. Contacta a administración.", true);
+        setFormMsg(
+          "No se encontró tu ficha de empleado. Contacta a administración.",
+          true
+        );
         return false;
       }
 
@@ -253,10 +318,12 @@
       return;
     }
 
-    const uiType = uiTypeHint;
-    const typeLabel = prettyType(record.leave_type, uiType);
+    const uiType = uiTypeHint || inferUiTypeFromRecord(record);
+    const typeLabel = prettyType(record.leave_type, uiType, record.leave_subtype);
     const status = normalizeStatus(record.status);
-    const createdAt = record.created_at ? String(record.created_at).replace("T", " ").replace("Z", "") : "—";
+    const createdAt = record.created_at
+      ? String(record.created_at).replace("T", " ").replace("Z", "")
+      : "—";
 
     const baseRows = [];
     baseRows.push(`<div class="row between gap" style="align-items:flex-start;flex-wrap:wrap;">
@@ -282,7 +349,8 @@
         ${inner}
       </div>`;
 
-    const dbType = record.leave_type;
+    const dbType = upperKey(record.leave_type);
+    const dbSubtype = upperKey(record.leave_subtype);
 
     if (dbType === "VACACIONES") {
       let inner = "";
@@ -292,7 +360,7 @@
       baseRows.push(section("Resumen (Vacaciones)", inner));
     }
 
-    if (dbType === "INCAPACIDAD") {
+    if (dbType === "INCAPACIDAD" || dbSubtype === "INCAPACIDAD_MEDICA") {
       let inner = "";
       inner += fields("Emisor", record.issuer);
       inner += fields("Certificado", record.certificate_no);
@@ -300,16 +368,20 @@
       inner += fields("Días hábiles en rango", record.workdays_in_range);
 
       if ("pay_hours_per_day" in record) inner += fields("Horas/día", record.pay_hours_per_day);
-      if ("employer_pct_day1_3" in record) inner += fields("% patrono días 1–3", record.employer_pct_day1_3);
-      if ("employer_pct_after3" in record) inner += fields("% patrono después de 3", record.employer_pct_after3);
-      if ("insurer_pct_after3" in record) inner += fields("% aseguradora después de 3", record.insurer_pct_after3);
+      if ("employer_pct_day1_3" in record)
+        inner += fields("% patrono días 1–3", record.employer_pct_day1_3);
+      if ("employer_pct_after3" in record)
+        inner += fields("% patrono después de 3", record.employer_pct_after3);
+      if ("insurer_pct_after3" in record)
+        inner += fields("% aseguradora después de 3", record.insurer_pct_after3);
 
-      baseRows.push(section("Resumen (Incapacidad)", inner));
+      baseRows.push(section("Resumen (Incapacidad Médica)", inner));
     }
 
-    if (dbType !== "VACACIONES" && dbType !== "INCAPACIDAD") {
+    if (dbType === "OTRO") {
       let inner = "";
-      inner += fields("Notas", record.notes);
+      inner += fields("Subtipo", prettyType(dbType, null, dbSubtype));
+      if ("pay_hours_per_day" in record) inner += fields("Horas/día", record.pay_hours_per_day);
       baseRows.push(section("Resumen", inner));
     }
 
@@ -328,7 +400,12 @@
 
   async function fetchLeaveById(id) {
     console.log("[LICENCIAS] fetchLeaveById:", id);
-    const { data, error } = await sb.from("employee_leaves").select("*").eq("id", id).single();
+    const { data, error } = await sb
+      .from("employee_leaves")
+      .select("*")
+      .eq("id", id)
+      .single();
+
     if (error) {
       console.error("[LICENCIAS] fetchLeaveById error:", error);
       return null;
@@ -341,7 +418,10 @@
     console.log("[LICENCIAS] submitLeave click");
     try {
       if (!st.employee?.uid) {
-        setFormMsg("No se encontró el empleado. Vuelve a entrar desde el portal.", true);
+        setFormMsg(
+          "No se encontró el empleado. Vuelve a entrar desde el portal.",
+          true
+        );
         return;
       }
 
@@ -382,17 +462,34 @@
         return;
       }
 
-      const dbType = mapUiTypeToDb(uiType);
+      const dbType = mapUiTypeToDbType(uiType);
+      const dbSubtype = mapUiTypeToDbSubtype(uiType);
       const needsIssuer = isIncapacityUiType(uiType);
+
+      if (needsIssuer) {
+        const issuerUpper = upperKey(issuer);
+        if (!issuerUpper) {
+          setFormMsg("Debes seleccionar el emisor (CCSS o INS).", true);
+          issuerEl?.focus();
+          return;
+        }
+        if (issuerUpper !== "CCSS" && issuerUpper !== "INS") {
+          setFormMsg("El emisor debe ser CCSS o INS.", true);
+          issuerEl?.focus();
+          return;
+        }
+      }
 
       const payload = {
         employee_uid: st.employee.uid,
         leave_type: dbType,
+        leave_subtype: dbSubtype,
         date_start: dateStart,
         date_end: dateEnd,
-        issuer: needsIssuer ? issuer || null : null,
+        issuer: needsIssuer ? upperKey(issuer) || null : null,
         certificate_no: needsIssuer ? cert || null : null,
         notes: notes || null,
+        status: "pendiente",
       };
 
       console.log("[LICENCIAS] Insert payload:", payload);
@@ -401,7 +498,11 @@
       const btn = $("#btnSubmit");
       if (btn) btn.disabled = true;
 
-      const { data: inserted, error: insErr } = await sb.from("employee_leaves").insert(payload).select("*").single();
+      const { data: inserted, error: insErr } = await sb
+        .from("employee_leaves")
+        .insert(payload)
+        .select("*")
+        .single();
 
       if (insErr) {
         console.error("[LICENCIAS] insert error:", insErr);
@@ -412,7 +513,6 @@
       console.log("[LICENCIAS] Insert OK:", inserted);
       st.lastInsertedId = inserted?.id || null;
 
-      // Leer la fila nuevamente (por si triggers calcularon campos)
       let finalRow = null;
       if (st.lastInsertedId) finalRow = await fetchLeaveById(st.lastInsertedId);
       if (!finalRow) finalRow = inserted;
@@ -421,13 +521,12 @@
 
       setFormMsg("Solicitud registrada correctamente.");
 
-      // Limpiar formulario
       typeEl.value = "";
       fromEl.value = "";
       toEl.value = "";
       if (issuerEl) issuerEl.value = "";
       if (certEl) certEl.value = "";
-      notesEl.value = "";
+      if (notesEl) notesEl.value = "";
 
       toggleIssuerCertByUiType("");
 
@@ -458,7 +557,9 @@
     try {
       const { data, error } = await sb
         .from("employee_leaves")
-        .select("id, leave_type, date_start, date_end, issuer, certificate_no, notes, status, created_at")
+        .select(
+          "id, leave_type, leave_subtype, date_start, date_end, issuer, certificate_no, notes, status, created_at"
+        )
         .eq("employee_uid", st.employee.uid)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -485,8 +586,8 @@
           const issuer = r.issuer || "—";
           const cert = r.certificate_no || "—";
           const notes = r.notes || "—";
-          const badgeClass = r.leave_type || "OTRO";
-          const label = prettyType(r.leave_type, null);
+          const badgeClass = upperKey(r.leave_type) || "OTRO";
+          const label = prettyType(r.leave_type, null, r.leave_subtype);
           const stx = normalizeStatus(r.status);
 
           return `
@@ -526,13 +627,14 @@
       `;
 
       const total = data.length;
-      if (summary) summary.textContent = `${total} licencia${total !== 1 ? "s" : ""} registradas`;
+      if (summary) {
+        summary.textContent = `${total} licencia${total !== 1 ? "s" : ""} registradas`;
+      }
 
-      // Resumen principal siempre del último creado (created_at desc)
       const latest = data[0] || null;
       if (latest?.id) {
         const full = await fetchLeaveById(latest.id);
-        renderSummary(full || latest, null);
+        renderSummary(full || latest, inferUiTypeFromRecord(full || latest));
       } else {
         renderSummary(null);
       }
@@ -580,9 +682,15 @@
     });
   }
 
-  // ✅ Limpia el mensaje “ya fue enviada” cuando el usuario empieza un nuevo llenado
   function bindClearMsgOnInput() {
-    const ids = ["leaveType", "leaveFrom", "leaveTo", "leaveIssuer", "leaveCert", "leaveNotes"];
+    const ids = [
+      "leaveType",
+      "leaveFrom",
+      "leaveTo",
+      "leaveIssuer",
+      "leaveCert",
+      "leaveNotes",
+    ];
     ids.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
