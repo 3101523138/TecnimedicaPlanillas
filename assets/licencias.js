@@ -111,6 +111,17 @@
     return String(s).trim().toUpperCase();
   }
 
+  function parseNumberLoose(v) {
+    if (v === undefined || v === null) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+
+    const normalized = s.replace(",", ".");
+    const n = Number(normalized);
+    if (!Number.isFinite(n)) return null;
+    return n;
+  }
+
   function normalizeStatus(s) {
     const raw = String(s || "").trim().toLowerCase();
     if (!raw) return { key: "OTRO", label: "Sin estado" };
@@ -137,6 +148,10 @@
     return uiType === "incapacidad_medica";
   }
 
+  function isHorasAusenciaUiType(uiType) {
+    return uiType === "otro";
+  }
+
   function toggleIssuerCertByUiType(uiType) {
     const issuerWrap = $("#issuerWrap");
     const certWrap = $("#certWrap");
@@ -151,6 +166,19 @@
     if (!show) {
       if (issuerEl) issuerEl.value = "";
       if (certEl) certEl.value = "";
+    }
+  }
+
+  function toggleHoursAbsentByUiType(uiType) {
+    const hoursWrap = $("#hoursWrap");
+    const hoursEl = $("#leaveHoursAbsent");
+
+    const show = isHorasAusenciaUiType(uiType);
+
+    if (hoursWrap) hoursWrap.style.display = show ? "" : "none";
+
+    if (!show && hoursEl) {
+      hoursEl.value = "";
     }
   }
 
@@ -431,6 +459,7 @@
       const issuerEl = $("#leaveIssuer");
       const certEl = $("#leaveCert");
       const notesEl = $("#leaveNotes");
+      const hoursEl = $("#leaveHoursAbsent");
 
       const uiType = (typeEl?.value || "").trim();
       const dateStart = (fromEl?.value || "").trim();
@@ -438,6 +467,7 @@
       const issuer = (issuerEl?.value || "").trim();
       const cert = (certEl?.value || "").trim();
       const notes = (notesEl?.value || "").trim();
+      const hoursAbsentRaw = (hoursEl?.value || "").trim();
 
       setFormMsg("");
 
@@ -465,6 +495,7 @@
       const dbType = mapUiTypeToDbType(uiType);
       const dbSubtype = mapUiTypeToDbSubtype(uiType);
       const needsIssuer = isIncapacityUiType(uiType);
+      const needsHoursAbsent = isHorasAusenciaUiType(uiType);
 
       if (needsIssuer) {
         const issuerUpper = upperKey(issuer);
@@ -480,6 +511,17 @@
         }
       }
 
+      let payHoursPerDay = null;
+      if (needsHoursAbsent) {
+        const parsedHours = parseNumberLoose(hoursAbsentRaw);
+        if (!Number.isFinite(parsedHours) || parsedHours <= 0) {
+          setFormMsg("Debes indicar las horas de ausencia del día.", true);
+          hoursEl?.focus();
+          return;
+        }
+        payHoursPerDay = parsedHours;
+      }
+
       const payload = {
         employee_uid: st.employee.uid,
         leave_type: dbType,
@@ -489,6 +531,7 @@
         issuer: needsIssuer ? upperKey(issuer) || null : null,
         certificate_no: needsIssuer ? cert || null : null,
         notes: notes || null,
+        pay_hours_per_day: payHoursPerDay,
         status: "pendiente",
       };
 
@@ -521,14 +564,16 @@
 
       setFormMsg("Solicitud registrada correctamente.");
 
-      typeEl.value = "";
-      fromEl.value = "";
-      toEl.value = "";
+      if (typeEl) typeEl.value = "";
+      if (fromEl) fromEl.value = "";
+      if (toEl) toEl.value = "";
       if (issuerEl) issuerEl.value = "";
       if (certEl) certEl.value = "";
       if (notesEl) notesEl.value = "";
+      if (hoursEl) hoursEl.value = "";
 
       toggleIssuerCertByUiType("");
+      toggleHoursAbsentByUiType("");
 
       await loadHistory();
     } catch (err) {
@@ -558,7 +603,7 @@
       const { data, error } = await sb
         .from("employee_leaves")
         .select(
-          "id, leave_type, leave_subtype, date_start, date_end, issuer, certificate_no, notes, status, created_at"
+          "id, leave_type, leave_subtype, date_start, date_end, issuer, certificate_no, notes, pay_hours_per_day, status, created_at"
         )
         .eq("employee_uid", st.employee.uid)
         .order("created_at", { ascending: false })
@@ -673,13 +718,15 @@
     const typeEl = $("#leaveType");
     if (!typeEl) return;
 
-    toggleIssuerCertByUiType((typeEl.value || "").trim());
-
-    typeEl.addEventListener("change", () => {
+    const applyVisibility = () => {
       const v = (typeEl.value || "").trim();
       console.log("[LICENCIAS] leaveType change:", v);
       toggleIssuerCertByUiType(v);
-    });
+      toggleHoursAbsentByUiType(v);
+    };
+
+    applyVisibility();
+    typeEl.addEventListener("change", applyVisibility);
   }
 
   function bindClearMsgOnInput() {
@@ -690,6 +737,7 @@
       "leaveIssuer",
       "leaveCert",
       "leaveNotes",
+      "leaveHoursAbsent",
     ];
     ids.forEach((id) => {
       const el = document.getElementById(id);
