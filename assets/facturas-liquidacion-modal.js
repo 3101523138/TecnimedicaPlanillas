@@ -1,4 +1,5 @@
-// Ruta: assets/facturas-liquidacion-modal.js
+// Ruta: assets/facturas-liquidacion-modal.js  [v=07]
+console.error("🔴 MODAL v07 CARGADO", new Date().toISOString());
 
 //#1 constantes internas del modal
 // define ids, opciones y límites de la UI de liquidación
@@ -14,13 +15,19 @@ const OPCIONES_LIQ_TYPE = [
   "Personal",
 ];
 
-const OPCIONES_CAPA = [
-  "Materiales",
-  "Subcontrato",
-  "Alquiler",
-  "Equipos",
-  "Entrenamiento",
-  "Otros",
+// opciones de tipo de liquidación visibles solo para empleados (sin tarjetas corporativas)
+const OPCIONES_LIQ_TYPE_EMPLEADO = [
+  "Personal",
+];
+
+// capas para proyectos SICLA (prefijo PROJECT-)
+const OPCIONES_CAPA_PROJECT = [
+  "⚠️ FALLBACK-PROJECT (BD falló)",
+];
+
+// capas para gastos internos TMI (prefijo TMI-)
+const OPCIONES_CAPA_TMI = [
+  "⚠️ FALLBACK-TMI (BD falló)",
 ];
 
 //#2 fábrica del controlador del modal
@@ -37,6 +44,9 @@ export function createFacturasLiquidacionModalController({
   const state = {
     proyectosSicla: [],
     empleadosActivos: [],
+    destinosGasto: [],      // inv.expense_destinations (capas por prefijo)
+    metodosPago: [],        // inv.payment_methods (todos, filtrar en uso)
+    currentUserIsAdmin: false, // is_admin del usuario logueado, cargado desde BD
     catalogsLoaded: false,
     modalOpen: false,
     guardando: false,
@@ -80,6 +90,13 @@ export function createFacturasLiquidacionModalController({
     return String(
       typeof getLoggedEmployeeName === "function" ? getLoggedEmployeeName() : ""
     ).trim();
+  }
+
+  function getIsAdmin() {
+    // si catálogos ya cargados, usar el valor leído directamente de BD (más confiable)
+    if (state.catalogsLoaded) return state.currentUserIsAdmin;
+    // fallback al contexto compartido si aún no cargamos
+    return !!window.__TMI_APP_CONTEXT__?.st?.employee?.isAdmin;
   }
 
   function escapeHtml(value) {
@@ -255,7 +272,7 @@ export function createFacturasLiquidacionModalController({
     const link = document.createElement("link");
     link.id = LIQ_MODAL_CSS_ID;
     link.rel = "stylesheet";
-    link.href = new URL("./facturas-liquidacion-modal.css", import.meta.url).href;
+    link.href = new URL("./facturas-liquidacion-modal.css?v=02", import.meta.url).href;
     document.head.appendChild(link);
 
     log("css externo del modal enlazado");
@@ -398,8 +415,11 @@ export function createFacturasLiquidacionModalController({
       <div class="facturasLiqEditModal" role="dialog" aria-modal="true" aria-label="Liquidación de factura">
         <div class="facturasLiqEditHead">
           <div class="facturasLiqEditHeadText">
-            <h3>Liquidación de factura</h3>
-            <p class="facturasLiqEditDoc" id="facturasLiqEditDoc">Sin documento</p>
+            <h3>
+              <span id="facturasLiqTipoDoc">Liquidación de factura</span>
+              <span class="facturasLiqDocSep"> · </span>
+              <span id="facturasLiqEditDoc">Sin documento</span>
+            </h3>
           </div>
           <button
             id="facturasLiqEditCloseBtn"
@@ -476,6 +496,16 @@ export function createFacturasLiquidacionModalController({
               <div class="facturasLiqEditInfoPill">
                 <span class="facturasLiqEditLabel">Capa actual</span>
                 <strong id="facturasLiqEditCapaActual">Sin capa asignada</strong>
+              </div>
+
+              <div class="facturasLiqEditInfoPill">
+                <span class="facturasLiqEditLabel">Método de pago</span>
+                <strong id="facturasLiqEditLiqType">—</strong>
+              </div>
+
+              <div class="facturasLiqEditInfoPill">
+                <span class="facturasLiqEditLabel">Reclamado por</span>
+                <strong id="facturasLiqEditReclamadoPor">—</strong>
               </div>
             </div>
           </section>
@@ -700,6 +730,7 @@ export function createFacturasLiquidacionModalController({
 
     return {
       modal,
+      tipoDoc: modal.querySelector("#facturasLiqTipoDoc"),
       docSmall: modal.querySelector("#facturasLiqEditDoc"),
       docBig: modal.querySelector("#facturasLiqEditDocValue"),
       fecha: modal.querySelector("#facturasLiqEditFecha"),
@@ -711,6 +742,8 @@ export function createFacturasLiquidacionModalController({
       proyectoName: modal.querySelector("#facturasLiqEditProyectoName"),
       proyectoStatus: modal.querySelector("#facturasLiqEditProyectoStatus"),
       capaActual: modal.querySelector("#facturasLiqEditCapaActual"),
+      liqTypeActual: modal.querySelector("#facturasLiqEditLiqType"),
+      reclamadoPor: modal.querySelector("#facturasLiqEditReclamadoPor"),
       pdfBtn: modal.querySelector("#facturasLiqEditPdfBtn"),
 
       clienteTrigger: modal.querySelector("#facturasLiqClienteTrigger"),
@@ -783,7 +816,11 @@ export function createFacturasLiquidacionModalController({
 
     log("cargando catálogos del modal...");
 
-    const [proyectosRes, tercerosRes, empleadosRes] = await Promise.all([
+    // obtener usuario actual para consultar su is_admin directamente desde BD
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id || null;
+
+    const [proyectosRes, tercerosRes, empleadosRes, destinosRes, metodosRes, adminRes] = await Promise.all([
       supabase
         .schema("sicla")
         .from("projects")
@@ -805,6 +842,25 @@ export function createFacturasLiquidacionModalController({
         .select("full_name, status")
         .eq("status", "Activo")
         .order("full_name", { ascending: true }),
+      supabase
+        .schema("inv")
+        .from("expense_destinations")
+        .select("category_code, category_label, project_prefix, allowed_capas, is_active")
+        .eq("is_active", true),
+      supabase
+        .schema("inv")
+        .from("payment_methods")
+        .select("code, label, available_for, sort_order, is_active")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
+      userId
+        ? supabase
+            .schema("public")
+            .from("employees")
+            .select("is_admin")
+            .eq("user_id", userId)
+            .single()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (proyectosRes.error) {
@@ -818,6 +874,18 @@ export function createFacturasLiquidacionModalController({
 
     if (empleadosRes.error) {
       logError("error employees:", empleadosRes.error);
+    }
+
+    if (destinosRes.error) {
+      logError("error inv.expense_destinations:", destinosRes.error);
+    }
+
+    if (metodosRes.error) {
+      logError("error inv.payment_methods:", metodosRes.error);
+    }
+
+    if (adminRes.error) {
+      logError("error leyendo is_admin del usuario:", adminRes.error);
     }
 
     const thirdPartyMap = new Map();
@@ -850,11 +918,17 @@ export function createFacturasLiquidacionModalController({
     ).sort((a, b) => a.localeCompare(b, "es"));
 
     state.empleadosActivos = names;
+    state.destinosGasto = destinosRes.data || [];
+    state.metodosPago = metodosRes.data || [];
+    state.currentUserIsAdmin = !!adminRes.data?.is_admin;
     state.catalogsLoaded = true;
 
     log("catálogos cargados:", {
       proyectos: state.proyectosSicla.length,
       empleados: state.empleadosActivos.length,
+      destinos: state.destinosGasto.length,
+      metodosPago: state.metodosPago.length,
+      isAdmin: state.currentUserIsAdmin,
     });
   }
 
@@ -959,6 +1033,13 @@ export function createFacturasLiquidacionModalController({
 
     els.capaActual.textContent =
       String(factura.capa || "").trim() || "Sin capa asignada";
+
+    els.liqTypeActual.textContent =
+      String(factura.liq_type || "").trim() || "—";
+
+    // Reclamado por: liq_assigned_to (legacy) con fallback a liq_claimed_by si existiera
+    els.reclamadoPor.textContent =
+      String(factura.liq_assigned_to || factura.liq_claimed_by || "").trim() || "—";
   }
 
   //#16 actualizar textos de triggers
@@ -987,14 +1068,54 @@ export function createFacturasLiquidacionModalController({
     const els = getEls();
     if (!els) return;
 
+    // capas según prefijo del proyecto — desde inv.expense_destinations (con fallback a constantes)
+    const codigoProyecto = String(factura?.project_code || "").trim();
+    let capasDisponibles = [];
+
+    console.error("🔴 CAPAS DEBUG | destinosGasto.length:", state.destinosGasto.length, "| project_code:", codigoProyecto);
+    console.error("🔴 CAPAS DEBUG | destinosGasto:", JSON.stringify(state.destinosGasto));
+
+    if (state.destinosGasto.length > 0) {
+      const destino = state.destinosGasto.find((d) =>
+        codigoProyecto.startsWith(String(d.project_prefix || "").trim())
+      );
+      console.error("🔴 CAPAS DEBUG | destino encontrado:", JSON.stringify(destino));
+      capasDisponibles = Array.isArray(destino?.allowed_capas) ? destino.allowed_capas : [];
+    }
+    // fallback a constantes si BD no respondió o no hay coincidencia
+    if (capasDisponibles.length === 0) {
+      console.error("🔴 CAPAS DEBUG | USANDO FALLBACK — BD no tuvo datos o no hubo match");
+      capasDisponibles = codigoProyecto.toUpperCase().startsWith("TMI-")
+        ? OPCIONES_CAPA_TMI
+        : OPCIONES_CAPA_PROJECT;
+    }
+
+    log("populateSelects | project_code:", codigoProyecto, "→ capas:", capasDisponibles.join(", "));
+
     els.capaSelect.innerHTML = `
       <option value="">Seleccionar capa</option>
-      ${OPCIONES_CAPA.map((op) => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join("")}
+      ${capasDisponibles.map((op) => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join("")}
     `;
+
+    // tipos de liquidación desde inv.payment_methods filtrados por rol
+    const esAdmin = getIsAdmin();
+    const rol = esAdmin ? "admin" : "empleado";
+    let tiposDisponibles = [];
+    if (state.metodosPago.length > 0) {
+      tiposDisponibles = state.metodosPago
+        .filter((m) => !m.available_for || m.available_for.includes(rol))
+        .map((m) => m.label);
+    }
+    // fallback a constantes si BD no respondió
+    if (tiposDisponibles.length === 0) {
+      tiposDisponibles = esAdmin ? OPCIONES_LIQ_TYPE : OPCIONES_LIQ_TYPE_EMPLEADO;
+    }
+
+    log("populateSelects | rol:", rol, "→ tipos:", tiposDisponibles.join(", "));
 
     els.tipoSelect.innerHTML = `
       <option value="">Seleccionar tipo</option>
-      ${OPCIONES_LIQ_TYPE.map((op) => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join("")}
+      ${tiposDisponibles.map((op) => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join("")}
     `;
 
     els.responsableSelect.innerHTML =
@@ -1258,6 +1379,10 @@ export function createFacturasLiquidacionModalController({
 
     updatePickerTriggerTexts();
     updateCurrentInfo();
+    // si cambió el proyecto, recalcular las capas disponibles según el nuevo prefijo
+    if (activeType === "proyecto") {
+      populateSelects(state.facturaActual);
+    }
     closePicker();
 
     log("picker selección aplicada:", {
@@ -1331,6 +1456,11 @@ export function createFacturasLiquidacionModalController({
 
     const estadoVisible = resolveLiquidacionEstadoVisible(factura);
     const monto = resolveDisplayAmount(factura);
+
+    // tipo de documento en el header (a la par del número)
+    if (els.tipoDoc) {
+      els.tipoDoc.textContent = formatTipoDocumento(factura.document_type);
+    }
 
     els.docSmall.textContent =
       String(factura.document_number || "").trim() || "Sin número";
@@ -1608,4 +1738,18 @@ export function createFacturasLiquidacionModalController({
     isOpen: () => state.modalOpen,
     isSaving: () => state.guardando,
   };
+}
+
+//#util formatTipoDocumento
+// traduce el tipo técnico de Hacienda a texto legible para el header del modal
+function formatTipoDocumento(tipo) {
+  const mapa = {
+    FacturaElectronica: "Factura Electrónica",
+    NotaCreditoElectronica: "Nota de Crédito Electrónica",
+    NotaDebitoElectronica: "Nota de Débito Electrónica",
+    TiqueteElectronico: "Tiquete Electrónico",
+    FacturaElectronicaCompra: "Factura de Compra",
+    FacturaElectronicaExportacion: "Factura de Exportación",
+  };
+  return mapa[String(tipo || "").trim()] || String(tipo || "").trim() || "Liquidación de factura";
 }

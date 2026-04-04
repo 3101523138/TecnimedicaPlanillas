@@ -49,6 +49,7 @@
 .facturasLiqEditHeadText{
   min-width: 0;
   flex: 1 1 auto;
+  text-align: center;
 }
 
 .facturasLiqEditHeadText h3{
@@ -56,17 +57,32 @@
   font-size: 1.02rem;
   font-weight: 700;
   color: #0f172a;
-  line-height: 1.1;
+  line-height: 1.2;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0;
 }
 
-.facturasLiqEditDoc{
-  margin: 3px 0 0;
-  color: #64748b;
-  font-size: 0.8rem;
-  line-height: 1.1;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+/* tipo de documento — mismo peso que el número, ambos en la misma línea */
+#facturasLiqTipoDoc{
   font-weight: 700;
+  color: #0f172a;
+}
+
+.facturasLiqDocSep{
+  font-weight: 400;
+  color: #94a3b8;
+  margin: 0 4px;
+}
+
+#facturasLiqEditDoc{
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.96rem;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 /* //#4 cuerpo scrolleable
@@ -169,7 +185,7 @@
 
 .facturasLiqEditInfoGridThree{
   display: grid;
-  grid-template-columns: 1fr 1.35fr .8fr;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
 }
 

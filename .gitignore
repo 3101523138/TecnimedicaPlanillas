@@ -1,1 +1,6 @@
 .DS_Store
+
+# Respaldos
+_backup_*/
+*.backup
+RESPALDO_*/

@@ -2,7 +2,7 @@
 
 //#1 import del modal de liquidación
 // mueve la lógica pesada del modal interno a un archivo aparte
-import { createFacturasLiquidacionModalController } from './facturas-liquidacion-modal.js';
+import { createFacturasLiquidacionModalController } from './facturas-liquidacion-modal.js?v=07';
 
 //#2 constantes del módulo
 // define tamaños, estados e ids usados por la vista principal

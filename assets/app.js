@@ -5,7 +5,7 @@
 
 //#1 IMPORT DEL MÓDULO DE LIQUIDACIÓN
 // carga el módulo independiente de facturas sin romper la base actual
-import * as FacturasLiquidacionModule from './facturas-liquidacion.js';
+import * as FacturasLiquidacionModule from './facturas-liquidacion.js?v=07';
 
 //#2 FIRMA DURA Y LOGS GLOBALES
 // confirma que este archivo está corriendo y captura errores globales
@@ -639,14 +639,14 @@ async function loadEmployeeContext() {
   console.log('[APP] loadEmployeeContext');
 
   let { data, error } = await supabase.from('employees')
-    .select('employee_uid, employee_code, full_name, login_enabled')
+    .select('employee_uid, employee_code, full_name, login_enabled, is_admin')
     .eq('user_id', st.user.id)
     .single();
 
   if (error || !data) {
     console.warn('[APP] employee por user_id no encontrado; probando por email…', error);
     const r = await supabase.from('employees')
-      .select('employee_uid, employee_code, full_name, login_enabled')
+      .select('employee_uid, employee_code, full_name, login_enabled, is_admin')
       .eq('email', st.user.email)
       .single();
     data = r.data || null;
@@ -659,6 +659,7 @@ async function loadEmployeeContext() {
     uid: data.employee_uid,
     code: data.employee_code || null,
     full_name: data.full_name || '(sin nombre)',
+    isAdmin: !!data.is_admin,
   };
 
   const n1 = $('#empName'); if (n1) n1.textContent = st.employee.full_name;
