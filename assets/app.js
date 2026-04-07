@@ -384,6 +384,73 @@ function showInfoModal({ title = 'Información', html = '', okText = 'Entendido'
   });
 }
 
+//#18b MODAL DE JUSTIFICACIÓN DE UBICACIÓN
+// Se muestra cuando el empleado niega el GPS y requires_location_justification = true.
+// Devuelve el texto escrito, o null si el empleado cancela (→ marca abortada).
+function showJustificationModal() {
+  ensureModalCSS();
+  return new Promise((resolve) => {
+    const back = document.createElement('div');
+    back.className = 'tmiModalBack';
+    back.innerHTML = `
+      <div class="tmiModal" role="dialog" aria-modal="true">
+        <h3>📍 Ubicación no compartida</h3>
+        <div class="body">
+          Para continuar con su marca debe justificar el motivo
+          por el que no comparte su ubicación.
+        </div>
+        <textarea id="tmiJustTxt" rows="3"
+          placeholder="Escriba aquí su justificación…"
+          style="width:100%;border:1.5px solid #d1d5db;border-radius:10px;
+                 padding:10px;font-size:14px;resize:vertical;
+                 box-sizing:border-box;margin-bottom:8px;outline:none">
+        </textarea>
+        <div id="tmiJustWarn"
+          style="display:none;background:#fef2f2;border:1px solid #fecaca;
+                 border-radius:8px;padding:8px 10px;color:#dc2626;
+                 font-size:13px;font-weight:700;margin-bottom:8px">
+          ⚠️ No se puede proceder sin la marca o sin la justificación.
+        </div>
+        <div class="tmiRow" id="tmiJustBtns">
+          <button class="tmiBtn tmiCancel">Cancelar</button>
+          <button class="tmiBtn" id="tmiJustOk"
+            style="background:#16a34a;color:#fff;opacity:.45;cursor:not-allowed"
+            disabled>Confirmar marca</button>
+        </div>
+      </div>`;
+    document.body.appendChild(back);
+
+    const textarea = back.querySelector('#tmiJustTxt');
+    const okBtn    = back.querySelector('#tmiJustOk');
+    const warn     = back.querySelector('#tmiJustWarn');
+    const btnsRow  = back.querySelector('#tmiJustBtns');
+
+    // Habilita el botón solo cuando hay texto
+    textarea.addEventListener('input', () => {
+      const has = textarea.value.trim().length > 0;
+      okBtn.disabled      = !has;
+      okBtn.style.opacity = has ? '1' : '.45';
+      okBtn.style.cursor  = has ? 'pointer' : 'not-allowed';
+    });
+    setTimeout(() => textarea.focus(), 50);
+
+    const finish = (v) => { back.remove(); resolve(v); };
+
+    // Cancelar: muestra advertencia y cambia botón a "Cerrar"
+    back.querySelector('.tmiCancel').onclick = () => {
+      textarea.disabled    = true;
+      warn.style.display   = 'block';
+      btnsRow.innerHTML    = '<button class="tmiBtn tmiCancel">Cerrar</button>';
+      btnsRow.querySelector('.tmiCancel').onclick = () => finish(null);
+    };
+
+    okBtn.onclick = () => {
+      const text = textarea.value.trim();
+      if (text) finish(text);
+    };
+  });
+}
+
 //#19 FORMATO DE HORA LEGIBLE
 // devuelve hora tipo am/pm
 function fmtTime(ts = Date.now()) {
@@ -639,14 +706,14 @@ async function loadEmployeeContext() {
   console.log('[APP] loadEmployeeContext');
 
   let { data, error } = await supabase.from('employees')
-    .select('employee_uid, employee_code, full_name, login_enabled, is_admin')
+    .select('employee_uid, employee_code, full_name, login_enabled, is_admin, requires_location_justification')
     .eq('user_id', st.user.id)
     .single();
 
   if (error || !data) {
     console.warn('[APP] employee por user_id no encontrado; probando por email…', error);
     const r = await supabase.from('employees')
-      .select('employee_uid, employee_code, full_name, login_enabled, is_admin')
+      .select('employee_uid, employee_code, full_name, login_enabled, is_admin, requires_location_justification')
       .eq('email', st.user.email)
       .single();
     data = r.data || null;
@@ -660,6 +727,7 @@ async function loadEmployeeContext() {
     code: data.employee_code || null,
     full_name: data.full_name || '(sin nombre)',
     isAdmin: !!data.is_admin,
+    requiresLocationJustification: !!data.requires_location_justification,
   };
 
   const n1 = $('#empName'); if (n1) n1.textContent = st.employee.full_name;
@@ -1111,15 +1179,46 @@ async function prepareAllocUI() {
 
 //#38 MARCAR IN/OUT
 // inserta marcas en time_punches
+// Comportamiento de GPS:
+//   requiresLocationJustification = true  → si niega GPS debe justificar; si cancela lanza MARK_ABORTED
+//   requiresLocationJustification = false → si niega GPS continúa sin coords, sin preguntar nada
 async function mark(direction) {
   console.log('[APP] mark', direction);
 
+  // Consulta siempre la BD para tener el flag actualizado, sin depender
+  // del valor cacheado al login (empleados pueden tener sesión muy larga).
+  let requiresJustification = false;
+  if (st.employee?.uid) {
+    const { data: empFresh } = await supabase
+      .from('employees')
+      .select('requires_location_justification')
+      .eq('employee_uid', st.employee.uid)
+      .single();
+    if (empFresh) {
+      requiresJustification = !!empFresh.requires_location_justification;
+      st.employee.requiresLocationJustification = requiresJustification; // mantiene caché sincronizado
+    }
+  }
+
   const gps = await getGPS();
+
+  let locationJustification = null;
+
+  if (!gps && requiresJustification) {
+    const justification = await showJustificationModal();
+    if (!justification) {
+      // Usuario canceló sin justificar → abortar marca silenciosamente
+      throw Object.assign(new Error('Marca cancelada por el usuario.'), { code: 'MARK_ABORTED' });
+    }
+    locationJustification = justification;
+  }
+
   const payload = {
     employee_uid: st.employee.uid,
     direction,
-    latitude: gps?.lat ?? null,
-    longitude: gps?.lon ?? null,
+    latitude:              gps?.lat ?? null,
+    longitude:             gps?.lon ?? null,
+    location_justification: locationJustification,
   };
 
   if (st.employee.code) payload.employee_code = st.employee.code;
@@ -1159,6 +1258,7 @@ async function onMarkIn() {
 
     toast($('#punchMsg'), 'Entrada registrada.');
   } catch (e) {
+    if (e?.code === 'MARK_ABORTED') return; // usuario canceló justificación — sin toast de error
     console.error('[APP] onMarkIn error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
@@ -1202,6 +1302,7 @@ async function onMarkOut() {
 
     toast($('#punchMsg'), 'Salida registrada.');
   } catch (e) {
+    if (e?.code === 'MARK_ABORTED') return; // usuario canceló justificación — sin toast de error
     console.error('[APP] onMarkOut error:', e);
     toast($('#punchMsg'), `Error al marcar: ${e.message}`);
   } finally {
