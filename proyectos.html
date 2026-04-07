@@ -52,72 +52,34 @@
     <div id="empty" class="empty">No hay proyectos para mostrar.</div>
   </div>
 
-  <!-- Modal Crear -->
-  <dialog id="dlgCreate">
-    <form id="frmCreate" method="dialog" class="card">
-      <h3 style="margin:0 0 10px">Crear proyecto</h3>
-      <p class="muted" style="margin:0 0 12px">Campos con * son obligatorios.</p>
-
-      <div class="grid2">
-        <label> Código (project_code)* <input name="project_code" class="input" required maxlength="64" /></label>
-        <label> Nombre (name)* <input name="name" class="input" required /></label>
-
-        <label class="full"> Descripción (description)
-          <textarea name="description" class="input" rows="3" style="resize:vertical"></textarea>
-        </label>
-
-        <label> Estado (status)
-          <select name="status" class="select">
-            <option value="Activo" selected>Activo</option>
-            <option value="Cerrado">Cerrado</option>
-          </select>
-        </label>
-
-        <label> Fecha inicio (start_date) <input name="start_date" type="date" class="input" /></label>
-        <label> Fecha fin (end_date) <input name="end_date" type="date" class="input" /></label>
-
-        <!-- Cliente existente -->
-        <label class="full"> Cliente (seleccione)
-          <select id="cliSelect" class="select" required>
-            <option value="">— Seleccione un cliente —</option>
-          </select>
-        </label>
-
-        <!-- Alternativa: Nuevo cliente -->
-        <div class="full" style="display:flex;align-items:center;gap:8px">
-          <input id="chkNewClient" type="checkbox" />
-          <label for="chkNewClient" class="muted">Nuevo cliente (ingresar manualmente)</label>
-        </div>
-
-        <div id="newClientFields" class="grid2" style="display:none">
-          <label> Nombre de cliente* <input id="newClientName" class="input" /></label>
-          <label> Identificación (opcional) <input id="newClientTaxId" class="input" /></label>
-        </div>
-
-        <!-- Solo Admin -->
-        <div class="full" id="adminFields" style="display:none">
-          <div class="grid2">
-            <label> Presupuesto (numeric) <input name="presupuesto" class="input" inputmode="decimal" placeholder="ej. 150000.00" /></label>
-            <label> Afectación
-              <select name="afectacion" class="select">
-                <option value="">—</option>
-                <option value="Baja">Baja</option>
-                <option value="Media">Media</option>
-                <option value="Alta">Alta</option>
-              </select>
-            </label>
-          </div>
-        </div>
+  <!-- Aviso: creación de proyectos movida a Sicla -->
+  <dialog id="dlgSiclaInfo">
+    <div class="card" style="max-width:460px;">
+      <div style="text-align:center;margin-bottom:12px;">
+        <div style="font-size:2rem;margin-bottom:6px;">🚫</div>
+        <h3 style="margin:0 0 4px">Función eliminada</h3>
+        <p style="margin:0;color:#c00;font-size:.9rem">No es posible crear proyectos desde acá.</p>
       </div>
 
-      <div class="actions">
-        <button type="button" id="btnCancel" class="btn-slim">Cancelar</button>
-        <button type="submit" class="btn">Guardar</button>
-      </div>
+      <p style="margin:0 0 12px;font-size:.93rem;color:#444">
+        Los proyectos se gestionan en <strong>Sicla</strong>. Para que los cambios
+        aparezcan en esta app seguí el procedimiento:
+      </p>
 
-      <div id="createMsg" class="ok"></div>
-      <div id="createErr" class="err"></div>
-    </form>
+      <ol style="margin:0 0 16px;padding-left:1.3rem;font-size:.93rem;color:#333;line-height:1.8">
+        <li>Entrá a <strong>Sicla</strong> y creá o modificá el proyecto.</li>
+        <li>En Sicla, descargá el <strong>archivo SQL</strong> de exportación de proyectos.</li>
+        <li>Volvé a esta app y abrí el <strong>Sincronizador</strong> disponible en el menú.</li>
+        <li>Elegí el archivo <strong>.sql</strong> descargado.</li>
+        <li>Ejecutá la acción de sincronización.</li>
+      </ol>
+
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://tecnomedica.sicla.cr/" target="_blank" rel="noopener"
+           class="btn" style="text-decoration:none">Ir a Sicla</a>
+        <button id="btnSiclaClose" class="btn-slim">Cerrar</button>
+      </div>
+    </div>
   </dialog>
 
   <script src="./proyectos.js" defer></script>

@@ -58,22 +58,9 @@ const chipCount = $('#chipCount');
 const fEstado = $('#fEstado');
 const fClienteSel = $('#fClienteSel');
 
-const dlgCreate = $('#dlgCreate');
-const frmCreate = $('#frmCreate');
-const btnCancel = $('#btnCancel');
 const btnCreate = $('#btnCreate');
 const btnHome = $('#btnHome');
 const btnSignOut = $('#btnSignOut');
-const adminFields = $('#adminFields');
-const createMsg = $('#createMsg');
-const createErr = $('#createErr');
-
-// Formulario - cliente select & nuevo cliente
-const cliSelect = $('#cliSelect');
-const chkNewClient = $('#chkNewClient');
-const newClientFields = $('#newClientFields');
-const newClientName = $('#newClientName');
-const newClientTaxId = $('#newClientTaxId');
 
 // === Estado ===
 const st = {
@@ -82,7 +69,7 @@ const st = {
   all: [],
   filtered: [],
   openCode: null,
-  clients: []
+
 };
 window.st = st; // para debug rápido en consola
 
@@ -163,7 +150,6 @@ function handleSupabaseError(error, ctx=''){
   }else if (error?.message){
     human = 'No se pudo guardar: ' + error.message;
   }
-  if (createErr){ createErr.textContent = human; createErr.style.display = ''; }
   toast(human, 'error', 3400);
 }
 
@@ -276,45 +262,16 @@ async function fetchProjects(){
   return normalized;
 }
 
-async function fetchClients(){
-  // 1) Tabla clients
-  try{
-    const { data, error } = await sb
-      .from('clients')
-      .select('id,name,status')
-      .eq('status','Activo')
-      .order('name', { ascending: true });
-    if (error) throw error;
-    if (data && data.length) return data.map(c => ({ id: c.id, name: c.name }));
-  }catch(e){
-    console.warn('[clients] no disponible o vacía:', e?.message);
-  }
-
-  // 2) Fallback: desde projects
-  try{
-    const projs = st.all.length ? st.all : await fetchProjects();
-    const names = Array.from(new Set(projs.map(p => p.client_name).filter(Boolean))).sort();
-    return names.map(n => ({ id: null, name: n }));
-  }catch(e){
-    console.error('[clients fallback]', e);
-    return [];
-  }
-}
 
 function populateClientSelects(){
+  // Usa nombres reales de proyectos para concordancia exacta con datos sincronizados de Sicla.
   fClienteSel.innerHTML = `<option value="">— Todos los clientes —</option>`;
-  cliSelect.innerHTML = `<option value="">— Seleccione un cliente —</option>`;
-
-  for(const c of st.clients){
-    const opt1 = document.createElement('option');
-    opt1.value = c.name;
-    opt1.textContent = c.name;
-    fClienteSel.appendChild(opt1);
-
-    const opt2 = document.createElement('option');
-    opt2.value = c.id ? `${c.id}::${c.name}` : `::${c.name}`;
-    opt2.textContent = c.name;
-    cliSelect.appendChild(opt2);
+  const clientesEnProyectos = [...new Set(st.all.map(p => p.client_name).filter(Boolean))].sort();
+  for(const name of clientesEnProyectos){
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    fClienteSel.appendChild(opt);
   }
 }
 
@@ -452,169 +409,12 @@ function applyFilter(){
   render();
 }
 
-// === Crear proyecto ===
-function openCreate(){ dlgCreate.showModal(); }
-function closeCreate(){
-  dlgCreate.close();
-  show(createMsg,false); show(createErr,false);
-  frmCreate.reset();
-  adminFields.style.display = st.isAdmin ? '' : 'none';
-}
+// === Crear proyecto → aviso: función movida a Sicla ===
+const dlgSiclaInfo  = $('#dlgSiclaInfo');
+const btnSiclaClose = $('#btnSiclaClose');
 
-btnCreate?.addEventListener('click', () => {
-  adminFields.style.display = st.isAdmin ? '' : 'none';
-  openCreate();
-});
-btnCancel?.addEventListener('click', closeCreate);
-
-// === Toggle Nuevo Cliente ===
-chkNewClient?.addEventListener('change', () => {
-  const isNew = chkNewClient.checked;
-  newClientFields.style.display = isNew ? '' : 'none';
-  if (isNew) cliSelect.value = '';
-});
-
-// ========== LISTENER SUBMIT ==========
-frmCreate?.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  show(createMsg,false); show(createErr,false);
-  clearInvalids(frmCreate);
-
-  const submitBtn = frmCreate.querySelector('button[type="submit"]');
-  setBtnLoading(submitBtn, true);
-
-  try{
-    const fd = new FormData(frmCreate);
-
-    const codeRaw = (fd.get('project_code')||'').trim();
-    const project_code = normalizeProjectCode(codeRaw);
-    const codeInput = frmCreate.querySelector('[name="project_code"]');
-    if (codeInput) codeInput.value = project_code;
-
-    const name        = (fd.get('name')||'').trim();
-    const description = (fd.get('description')||'').trim() || null;
-    let   status      = (fd.get('status')||'Activo').trim();
-    const start_date  = (fd.get('start_date')||'') || null;
-    const end_date    = (fd.get('end_date')||'') || null;
-
-    let hasErr = false;
-    if (!validateProjectCode(project_code)){
-      markInvalid(codeInput, 'Formato requerido: PROJECT-000123');
-      hasErr = true;
-    }
-    if (!name){
-      markInvalid(frmCreate.querySelector('[name="name"]'), 'Requerido');
-      hasErr = true;
-    }
-    const stLower = status.toLowerCase();
-    if (!['activo','abierto','abierta','cerrado','cerrada'].includes(stLower)){
-      markInvalid(frmCreate.querySelector('[name="status"]'), 'Activo o Cerrado');
-      hasErr = true;
-    }
-    if (['abierto','abierta'].includes(stLower)) status = 'Activo';
-    if (start_date && end_date && end_date < start_date){
-      markInvalid(frmCreate.querySelector('[name="end_date"]'), 'La fecha fin no puede ser anterior al inicio');
-      hasErr = true;
-    }
-    if (hasErr){
-      createErr.textContent = 'Revise los campos marcados.';
-      show(createErr,true);
-      toast('Faltan campos obligatorios', 'error');
-      return;
-    }
-
-    let client_id = null, client_name = '';
-    if (chkNewClient.checked){
-      const cname = (newClientName.value||'').trim();
-      const ctax  = (newClientTaxId.value||'').trim() || null;
-      if (!cname){
-        markInvalid(newClientName, 'Ingrese el nombre del nuevo cliente');
-        createErr.textContent = 'Ingrese el nombre del nuevo cliente.';
-        show(createErr,true);
-        toast('Falta el cliente', 'error');
-        return;
-      }
-
-      const { data: existing, error: eFind } = await sb
-        .from('clients').select('id,name').eq('name', cname).limit(1);
-      if (eFind) throw eFind;
-
-      if (existing && existing.length){
-        client_id = existing[0].id; client_name = existing[0].name;
-      }else{
-        const { data: ins, error: eIns } = await sb
-          .from('clients')
-          .insert({ name: cname, tax_id: ctax, status: 'Activo' })
-          .select('id,name')
-          .single();
-        if (eIns) throw eIns;
-        client_id = ins.id; client_name = ins.name;
-        st.clients.push({ id: client_id, name: client_name });
-        populateClientSelects();
-      }
-    }else{
-      const sel = cliSelect.value;
-      if (!sel){
-        markInvalid(cliSelect, 'Seleccione un cliente');
-        createErr.textContent = 'Seleccione un cliente o marque "Nuevo cliente".';
-        show(createErr,true);
-        toast('Seleccione un cliente', 'error');
-        return;
-      }
-      const [cid, cname] = sel.split('::');
-      client_id = cid || null; client_name = cname || '';
-    }
-
-    const payload = { project_code, name, description, status, start_date, end_date, client_id, client_name };
-
-    // Campos admin opcionales
-    if (typeof st.isAdmin === 'boolean' && st.isAdmin){
-      const presStr = (frmCreate.querySelector('[name="presupuesto"]')?.value || '').trim();
-      const afeStr  = (frmCreate.querySelector('[name="afectacion"]')?.value || '').trim();
-      payload.presupuesto = presStr === '' ? null : Number(presStr);
-      if (afeStr === '') payload.afectacion = null;
-      else {
-        const n = Number(afeStr.replace(',', '.'));
-        payload.afectacion = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
-      }
-    }
-
-    const { data, error } = await sb
-      .from('projects')
-      .insert(payload)
-      .select('project_code')
-      .single();
-
-    if (error){
-      if (/duplicate|unique/i.test(error.message || '')){
-        markInvalid(codeInput, 'Ese código ya existe');
-      }
-      handleSupabaseError(error, 'projects.insert');
-      return;
-    }
-
-    createMsg.textContent = '✅ Proyecto creado correctamente.';
-    show(createMsg,true);
-    toast(`Guardado: ${data?.project_code || project_code}`, 'success');
-
-    const [freshProjects, freshClients] = await Promise.all([fetchProjects(), fetchClients()]);
-    st.all = freshProjects; st.clients = freshClients;
-    populateClientSelects(); applyFilter();
-
-    setTimeout(() => {
-      dlgCreate?.close();
-      show(createMsg,false); show(createErr,false);
-      frmCreate?.reset();
-      newClientFields.style.display = 'none';
-      chkNewClient.checked = false;
-    }, 600);
-
-  }catch(e){
-    handleSupabaseError(e, 'projects.insert.catch');
-  }finally{
-    setBtnLoading(submitBtn, false);
-  }
-});
+btnCreate?.addEventListener('click', () => dlgSiclaInfo?.showModal());
+btnSiclaClose?.addEventListener('click', () => dlgSiclaInfo?.close());
 
 // === Navegación ===
 btnHome?.addEventListener('click', () => location.href = './');
@@ -646,12 +446,7 @@ btnSignOut?.addEventListener('click', async () => {
     return;
   }
 
-  try{
-    st.clients = await fetchClients();
-    populateClientSelects();
-  }catch(e){
-    console.warn('[clients]', e?.message);
-  }
+  populateClientSelects();
 
   fEstado.value = 'Activo';
   applyFilter();
