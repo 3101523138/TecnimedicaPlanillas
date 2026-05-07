@@ -590,6 +590,22 @@
   padding: 6px 12px; /* compensa el +1px del border */
 }
 
+/* //#14e highlight del siguiente campo a llenar
+   marca con borde azul el primer campo obligatorio que aún no está
+   completo, para que el empleado sepa sin pensar dónde sigue. Aplica a
+   selects, picker triggers y la sección entera de instrumento de pago. */
+.is-next-field{
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 10px;
+  animation: facturasLiqPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes facturasLiqPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.18); }
+  50%      { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+}
+
 /* //#15 bottom sheet picker
    selector tipo app nativa para cliente y proyecto */
 .facturasLiqPickerBack{

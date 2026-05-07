@@ -1,4 +1,4 @@
-// Ruta: assets/facturas-liquidacion-modal.js  [v=09]
+// Ruta: assets/facturas-liquidacion-modal.js  [v=10]
 // Modal de reclamo (paso 2) — adaptado al patrón de Meridian:
 //   1. Resumen del documento
 //   2. Destino del gasto         (combo destino + combo capa)
@@ -11,7 +11,7 @@
 // frontend de Meridian (LiqPanel.jsx — sección "Reclamar factura").
 //
 // Backend: complete-claim del backend de Meridian (vía meridian-api.js).
-console.error("🟢 MODAL v09 (paso 2 Meridian — sin filtro tipo_uso) CARGADO", new Date().toISOString());
+console.error("🟢 MODAL v10 (filtro tipo_uso restaurado + highlight siguiente campo) CARGADO", new Date().toISOString());
 
 // Wrapper a Meridian — los catálogos del paso 2 y el guardado se hacen
 // contra el backend de Meridian, no contra el Supabase de Planillas.
@@ -558,10 +558,9 @@ export function createFacturasLiquidacionModalController({
       }))
       .filter((d) => d.activo);
 
-    // Mostrar TODOS los métodos activos del tenant (sin filtro de tipo_uso).
-    // El backend ya devuelve solo los relevantes; cualquier filtrado adicional
-    // es responsabilidad del backend, no del cliente. Esto replica lo que
-    // ve el superadmin en el modal paso 2 de Meridian web.
+    // Solo mostramos métodos con tipo_uso="reclamo" o "ambos". Los marcados
+    // tipo_uso="pago" son exclusivos del paso 6 (Pagar al proveedor) y no
+    // deben aparecer en el modal de reclamo. Mismo criterio que Meridian web.
     state.metodosPago = (mRes.status === "fulfilled" ? (mRes.value || []) : [])
       .map((m) => ({
         id:               m.id,
@@ -575,7 +574,8 @@ export function createFacturasLiquidacionModalController({
         sort_order:       m.sort_order ?? 99,
         activo:           m.activo !== false,
       }))
-      .filter((m) => m.activo);
+      .filter((m) => m.activo)
+      .filter((m) => !m.tipo_uso || m.tipo_uso === "reclamo" || m.tipo_uso === "ambos");
 
     state.catalogsLoaded = true;
     log("catálogos:", {
@@ -693,6 +693,46 @@ export function createFacturasLiquidacionModalController({
     updatePickerTriggerTexts();
   }
 
+  //#15b highlight del siguiente campo a llenar
+  // Resalta con borde azul el primer campo obligatorio que aún no está
+  // completo. Ayuda al empleado a saber sin pensar dónde es la próxima
+  // acción. La lógica sigue el orden visual: destino → capa → cliente →
+  // proyecto → instrumento de pago.
+  function highlightNextField() {
+    const els = getEls();
+    if (!els) return;
+
+    // Limpia cualquier highlight previo.
+    [
+      els.destinoSelect,
+      els.capaSelect,
+      els.clienteTrigger,
+      els.proyectoTrigger,
+      els.instrumentoSection,
+    ].forEach((node) => node && node.classList.remove("is-next-field"));
+
+    const f = state.form;
+    let next = null;
+
+    if (!f.expense_destination_id) {
+      next = els.destinoSelect;
+    } else {
+      const dest = getSelectedDestino();
+      const requiereCapa = !!(dest && Array.isArray(dest.capas) && dest.capas.length > 0);
+      if (requiereCapa && !f.capa) {
+        next = els.capaSelect;
+      } else if (!f.cliente_sel) {
+        next = els.clienteTrigger;
+      } else if (!f.proyecto_id) {
+        next = els.proyectoTrigger;
+      } else if (!f.tipo_pago) {
+        next = els.instrumentoSection;
+      }
+    }
+
+    if (next) next.classList.add("is-next-field");
+  }
+
   function updatePickerTriggerTexts() {
     const els = getEls();
     if (!els) return;
@@ -786,6 +826,7 @@ export function createFacturasLiquidacionModalController({
         state.form.tipo_pago      = codigo;
         state.form.metodo_pago_id = id;
         renderInstrumentoSection();
+        highlightNextField();
       });
     });
   }
@@ -915,6 +956,7 @@ export function createFacturasLiquidacionModalController({
       if (p.cliente_nombre) state.form.cliente_sel = p.cliente_nombre;
     }
     updatePickerTriggerTexts();
+    highlightNextField();
     closePicker();
   }
 
@@ -940,10 +982,12 @@ export function createFacturasLiquidacionModalController({
       renderCapaSelect();
       renderClienteProyectoSection();
       renderInstrumentoSection();
+      highlightNextField();
     });
 
     els.capaSelect.addEventListener("change", () => {
       state.form.capa = els.capaSelect.value || "";
+      highlightNextField();
     });
 
     els.clienteTrigger.addEventListener("click", () => openPicker("cliente"));
@@ -955,6 +999,7 @@ export function createFacturasLiquidacionModalController({
       state.form.proyecto_codigo = "";
       state.form.proyecto_nombre = "";
       updatePickerTriggerTexts();
+      highlightNextField();
     });
 
     els.clearProyectoBtn.addEventListener("click", () => {
@@ -962,6 +1007,7 @@ export function createFacturasLiquidacionModalController({
       state.form.proyecto_codigo = "";
       state.form.proyecto_nombre = "";
       updatePickerTriggerTexts();
+      highlightNextField();
     });
 
     els.comentarioInput.addEventListener("input", () => {
@@ -1036,6 +1082,8 @@ export function createFacturasLiquidacionModalController({
     els.pdfBtn.disabled = !resolvePdfInfo(factura).hasPdf;
     els.guardarBtn.disabled = false;
     els.guardarBtn.textContent = "Guardar reclamo";
+
+    highlightNextField();
   }
 
   //#20 validate
