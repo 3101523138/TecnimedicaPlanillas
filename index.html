@@ -1,4 +1,3 @@
-// Ruta: index.html
 <!doctype html>
 <html lang="es">
 <head>
@@ -29,6 +28,20 @@
   <!-- //#4 supabase global
        carga la librería de Supabase desde CDN -->
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <!-- //#4b URL del backend de Meridian
+       el módulo de Liquidación de facturas habla con este backend, no con
+       el Supabase de Planillas. Detecta el host: localhost en desarrollo,
+       Fly (tecnomedicacr-facturas.fly.dev) en producción. -->
+  <script>
+    (function () {
+      var h = (window.location && window.location.hostname) || '';
+      var esLocal = h === 'localhost' || h === '127.0.0.1' || h.startsWith('192.168.') || h.endsWith('.local');
+      window.__TMI_MERIDIAN_API_URL__ = esLocal
+        ? 'http://localhost:8080'
+        : 'https://tecnomedicacr-facturas.fly.dev';
+    })();
+  </script>
 
   <!-- //#5 override local del home
        deja el home en formato de lista y adapta proporciones móviles -->

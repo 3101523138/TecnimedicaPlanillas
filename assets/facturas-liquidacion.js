@@ -2,7 +2,17 @@
 
 //#1 import del modal de liquidación
 // mueve la lógica pesada del modal interno a un archivo aparte
-import { createFacturasLiquidacionModalController } from './facturas-liquidacion-modal.js?v=07';
+import { createFacturasLiquidacionModalController } from './facturas-liquidacion-modal.js?v=09';
+
+//#1b import del wrapper a Meridian
+// las facturas se leen y se guardan contra el backend de Meridian, no contra
+// el schema "inv" del Supabase de Planillas. Las funciones legacy que
+// hablaban con Supabase (`fetchPendientesDirecto` / `fetchReclamadasMiasDirecto`)
+// se mantienen abajo por trazabilidad pero ya no se invocan.
+import {
+  fetchPendientesMeridian,
+  fetchReclamadasMiasMeridian,
+} from './meridian-api.js?v=01';
 
 //#2 constantes del módulo
 // define tamaños, estados e ids usados por la vista principal
@@ -1277,10 +1287,13 @@ export async function loadFacturasLiquidacionView({
     const employeeName = getLoggedEmployeeName();
     let facturas = [];
 
+    // Las dos vistas leen del backend de Meridian. El backend resuelve la
+    // identidad del empleado por su email del JWT, así que no le pasamos
+    // employeeName — Meridian ya sabe quién está logueado.
     if (moduleState.currentView === "mias") {
-      facturas = await fetchReclamadasMiasDirecto(supabaseClient, employeeName);
+      facturas = await fetchReclamadasMiasMeridian(supabaseClient, { limit: MAX_FACTURAS_PENDIENTES });
     } else {
-      facturas = await fetchPendientesDirecto(supabaseClient);
+      facturas = await fetchPendientesMeridian(supabaseClient, { limit: MAX_FACTURAS_PENDIENTES });
     }
 
     setEstadoMessage(buildHeaderMessage(facturas.length, employeeName));
