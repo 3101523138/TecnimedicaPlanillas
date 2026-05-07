@@ -10,25 +10,30 @@ const urlsToCache = [
   "/assets/icons/web-app-manifest-512x512.png"
 ];
 
-// Instalación
+// Instalación: cachea los archivos base y se salta la espera para activarse
+// inmediatamente. skipWaiting asegura que un SW nuevo no quede en estado
+// "waiting" hasta que el usuario cierre todas las pestañas.
 self.addEventListener("install", event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(urlsToCache);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
   );
 });
 
-// Activación
+// Activación: borra caches antiguos y reclama control sobre los clients ya
+// abiertos (clients.claim) para que la próxima petición ya use este SW.
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(cacheNames =>
-      Promise.all(
-        cacheNames
-          .filter(name => name !== CACHE_NAME)
-          .map(name => caches.delete(name))
-      )
-    )
+    Promise.all([
+      caches.keys().then(cacheNames =>
+        Promise.all(
+          cacheNames
+            .filter(name => name !== CACHE_NAME)
+            .map(name => caches.delete(name))
+        )
+      ),
+      self.clients.claim(),
+    ])
   );
 });
 
