@@ -2,7 +2,7 @@
 
 //#1 import del modal de liquidación
 // mueve la lógica pesada del modal interno a un archivo aparte
-import { createFacturasLiquidacionModalController } from './facturas-liquidacion-modal.js?v=10';
+import { createFacturasLiquidacionModalController } from './facturas-liquidacion-modal.js?v=11';
 
 //#1b import del wrapper a Meridian
 // las facturas se leen y se guardan contra el backend de Meridian, no contra

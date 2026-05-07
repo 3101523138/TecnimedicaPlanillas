@@ -1,4 +1,4 @@
-// Ruta: assets/facturas-liquidacion-modal.js  [v=10]
+// Ruta: assets/facturas-liquidacion-modal.js  [v=11]
 // Modal de reclamo (paso 2) — adaptado al patrón de Meridian:
 //   1. Resumen del documento
 //   2. Destino del gasto         (combo destino + combo capa)
@@ -11,7 +11,7 @@
 // frontend de Meridian (LiqPanel.jsx — sección "Reclamar factura").
 //
 // Backend: complete-claim del backend de Meridian (vía meridian-api.js).
-console.error("🟢 MODAL v10 (filtro tipo_uso restaurado + highlight siguiente campo) CARGADO", new Date().toISOString());
+console.error("🟢 MODAL v11 (responsive móvil + box-shadow highlight) CARGADO", new Date().toISOString());
 
 // Wrapper a Meridian — los catálogos del paso 2 y el guardado se hacen
 // contra el backend de Meridian, no contra el Supabase de Planillas.
@@ -183,7 +183,7 @@ export function createFacturasLiquidacionModalController({
     const link = document.createElement("link");
     link.id = LIQ_MODAL_CSS_ID;
     link.rel = "stylesheet";
-    link.href = new URL("./facturas-liquidacion-modal.css?v=03", import.meta.url).href;
+    link.href = new URL("./facturas-liquidacion-modal.css?v=04", import.meta.url).href;
     document.head.appendChild(link);
     log("css externo del modal enlazado");
   }
